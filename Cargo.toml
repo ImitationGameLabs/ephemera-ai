@@ -1,0 +1,8 @@
+[workspace]
+members = [ 
+    "ephemera-ai",
+    "ephemera-mcp", 
+    "ephemera-memory"
+]
+
+resolver = "3"

@@ -1,0 +1,20 @@
+
+[package]
+name = "ephemera-mcp"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0"
+chrono = "0.4.40"
+meilisearch-sdk = "0.28.0"
+rmcp = { version = "0.1", features = ["server", "transport-sse-server"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3", features = [
+    "env-filter",
+    "std",
+    "fmt",
+] }
