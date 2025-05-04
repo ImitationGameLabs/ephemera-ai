@@ -1,5 +1,6 @@
 
 use rig::completion::CompletionModel;
+use tracing::info;
 
 use std::io;
 
@@ -11,7 +12,7 @@ pub struct Cli<M: CompletionModel> {
 
 impl <M: CompletionModel> Cli<M> {
     pub async fn run(&mut self) -> anyhow::Result<()> {
-        println!("Start running");
+        info!("Start running");
 
         loop {
             println!("Please input you prompt: ");

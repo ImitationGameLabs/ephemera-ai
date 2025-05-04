@@ -5,13 +5,7 @@ mod interface;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // tracing_subscriber::registry()
-    //     .with(
-    //         tracing_subscriber::EnvFilter::try_from_default_env()
-    //             .unwrap_or_else(|_| "stdout=info".into()),
-    //     )
-    //     .with(tracing_subscriber::fmt::layer())
-    //     .init();
+    tracing_subscriber::fmt::init();
 
     // Create Deepseek client
     let deepseek_client = deepseek::Client::from_env();
