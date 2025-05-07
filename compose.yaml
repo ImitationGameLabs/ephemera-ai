@@ -1,18 +1,5 @@
 services:
-  web:
-    # build: ./web
-    # ports:
-    #   - "8080:8080"
-  ephemora-ai:
-    build: ./ephemera-ai
-    ports:
-      - "8000:8000"
-  ephemora-mcp:
-    build: ./ephemera-mcp
-    ports:
-      - "8000:8000"
   meilisearch:
     image: "getmeili/meilisearch:latest"
     ports:
       - "7700:7700"
-
