@@ -17,8 +17,16 @@ For further reading, see [BACKGROUND.md](docs/BACKGROUND.md)
 For implementation details of these features, please refer to [ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Quick Start
+
+Edit .env file
+```
+DEEPSEEK_API_KEY=<your-api-key>
+```
+
+Run
 ```bash
-export DEEPSEEK_API_KEY=<your-api-key>
+# Run components (e.g. meilisearch) in background.
+docker compose up -d
 
 cargo run --bin ephemera-ai
 ```
