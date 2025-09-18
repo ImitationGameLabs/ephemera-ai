@@ -7,7 +7,9 @@
  - **Subjective Metadata**: The AI can attach subjective metadata to memory fragments, such as the importance of the memory or its sentiment. When reviewing memories, especially if a topic is linked to thousands of records, the system can sort and filter using these subjective tags.
  - **Complex Views**: For instance, if memories are stored sequentially by time, we might generate a graph view when performing associative recall to better connect related memories. In practice, this could mean creating a specialized index in the database.
 
-Because of the advanced requirements time-based queries, sorting/filtering by subjective metadata, etc. I’m currently considering using a search engine for indexing rather than a vector database.
+The system uses a hybrid database architecture with MySQL for structured metadata storage and Qdrant for vector-based semantic search. This combines relational database integrity with specialized vector search capabilities.
+
+For detailed database implementation, see [DATABASE_ARCHITECTURE.md](DATABASE_ARCHITECTURE.md).
 
 Memory management will be encapsulated behind an interface, allowing the underlying implementation to be swapped out as the project evolves.
 

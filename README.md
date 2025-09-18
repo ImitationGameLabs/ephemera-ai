@@ -25,13 +25,16 @@ DEEPSEEK_API_KEY=<your-api-key>
 
 Run
 ```bash
-# Run components (e.g. meilisearch) in background.
+# Run database components (MySQL and Qdrant) in background.
 docker compose up -d
 
 cargo run --bin ephemera-ai
 ```
 
 Currently, there is no built-in support for different model providers. If you wish to use a different LLM provider, you can modify the relevant code sections in [ephemera-ai/src/main.rs](ephemera-ai/src/main.rs).
+
+## Database Architecture
+Ephemera uses a hybrid database approach with MySQL for structured metadata and Qdrant for vector-based semantic search. For detailed architecture information, see [DATABASE_ARCHITECTURE.md](docs/DATABASE_ARCHITECTURE.md).
 
 ## Contributing
 

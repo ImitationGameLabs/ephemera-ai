@@ -1,5 +1,26 @@
 services:
-  meilisearch:
-    image: "getmeili/meilisearch:latest"
+  mysql:
+    image: "mysql:8.0"
+    restart: always
     ports:
-      - "7700:7700"
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: ephemera_memory
+      MYSQL_USER: ephemera_ai
+      MYSQL_PASSWORD: 123456
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+
+  qdrant:
+    image: "qdrant/qdrant:latest"
+    restart: always
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    expose:
+      - 6333
+      - 6334
+      - 6335
+    volumes:
+      - ./qdrant_data:/qdrant/storage
