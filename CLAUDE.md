@@ -94,3 +94,7 @@ Required environment variables in `.env`:
 3. For MCP development: `cargo run --bin ephemera-mcp`
 4. Use `cargo test` to verify changes
 5. Run `cargo clippy` and `cargo fmt` before committing
+
+## Important Notes
+
+- **Avoid reading database volumes**: Claude Code should avoid reading or analyzing the `mysql_data/` and `qdrant_data/` directories as these contain database volumes that should not be committed or analyzed

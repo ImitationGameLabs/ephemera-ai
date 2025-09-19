@@ -1,2 +1,4 @@
 target/
 .env
+mysql_data/
+qdrant_data/
