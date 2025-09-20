@@ -1,7 +1,6 @@
 [workspace]
 members = [ 
     "ephemera-ai",
-    "ephemera-mcp", 
     "ephemera-memory"
 ]
 

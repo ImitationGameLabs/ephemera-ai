@@ -10,8 +10,7 @@ Ephemera AI is a Rust-based AI system with a focus on long-term memory, reflecti
 
 - **ephemera-ai/**: Main application binary
 - **ephemera-memory/**: Memory management library with SeaORM for MySQL
-- **ephemera-mcp/**: Model Context Protocol server implementation
-- **Workspace**: Cargo workspace managing all three crates
+- **Workspace**: Cargo workspace managing both crates
 
 ## Development Commands
 
@@ -23,7 +22,6 @@ cargo build
 # Build specific crate
 cargo build -p ephemera-ai
 cargo build -p ephemera-memory
-cargo build -p ephemera-mcp
 
 # Build with release optimizations
 cargo build --release
@@ -37,7 +35,6 @@ cargo test
 # Run tests for specific crate
 cargo test -p ephemera-ai
 cargo test -p ephemera-memory
-cargo test -p ephemera-mcp
 
 # Run specific test
 cargo test --testname
@@ -62,9 +59,6 @@ docker compose up -d
 
 # Run main application
 cargo run --bin ephemera-ai
-
-# Run MCP server
-cargo run --bin ephemera-mcp
 ```
 
 ## Database Architecture
@@ -77,7 +71,6 @@ cargo run --bin ephemera-mcp
 
 - **SeaORM**: MySQL ORM for structured data
 - **Meilisearch**: Search functionality (though README mentions Qdrant)
-- **RMCP**: Model Context Protocol implementation
 - **Tokio**: Async runtime
 - **Tracing**: Structured logging
 
@@ -91,8 +84,7 @@ Required environment variables in `.env`:
 
 1. Start databases: `docker compose up -d`
 2. Build and run: `cargo run --bin ephemera-ai`
-3. For MCP development: `cargo run --bin ephemera-mcp`
-4. Use `cargo test` to verify changes
+3. Use `cargo test` to verify changes
 5. Run `cargo clippy` and `cargo fmt` before committing
 
 ## Important Notes
