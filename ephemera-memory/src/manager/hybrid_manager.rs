@@ -5,7 +5,7 @@ use super::{
     mysql_manager::{MysqlError, MysqlMemoryManager},
     qdrant_manager::{QdrantError, QdrantMemoryManager},
 };
-use crate::{Manager, MemoryFragment, MemoryQuery, MemoryQueryResult};
+use crate::{Manager, MemoryFragment, MemoryQuery, MemoryQueryResult, TimeRange};
 
 /// Filter criteria for memory queries
 #[derive(Debug)]
@@ -26,6 +26,9 @@ pub enum HybridError {
 
     #[error("Embedding service error: {0}")]
     Embedding(String),
+
+    #[error("Reflection error: {0}")]
+    Reflection(String),
 
     #[error(
         "Transaction failed: MySQL succeeded but Qdrant failed, MySQL record with id {0} was rolled back"
@@ -51,6 +54,80 @@ impl HybridMemoryManager {
         // For now, return a dummy embedding
         Ok(vec![0.1; 384])
     }
+
+    /// Calculate importance score for a memory based on various factors
+    fn calculate_importance(&self, memory: &MemoryFragment) -> u8 {
+        let mut score = 0;
+
+        // Content length factor (longer content is more important)
+        score += (memory.content.len().min(1000) / 100) as u8;
+
+        // Confidence factor
+        score += memory.subjective_metadata.confidence;
+
+        // Tags factor (more tags = more important)
+        score += memory.subjective_metadata.tags.len().min(5) as u8 * 2;
+
+        score.min(100)
+    }
+
+    /// Analyze recent memories (last 24 hours) for immediate patterns
+    async fn analyze_recent_memories(&self) -> Result<Vec<String>, HybridError> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let one_day_ago = now - 24 * 60 * 60;
+
+        // Use a broad query to find recent memories
+        let query = MemoryQuery {
+            keywords: "recent today now current".to_string(),
+            time_range: Some(TimeRange {
+                start: one_day_ago,
+                end: now,
+            }),
+        };
+
+        let result = self.recall(&query).await?;
+
+        if result.memories.len() > 5 {
+            Ok(vec![format!("Found {} recent memories from the last 24 hours", result.memories.len())])
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// Analyze important memories for significant insights
+    async fn analyze_important_memories(&self) -> Result<Vec<String>, HybridError> {
+        let important_memories = self.get_important_memories(80).await?;
+
+        if !important_memories.is_empty() {
+            Ok(vec![format!("Found {} high-importance memories (importance >= 80)", important_memories.len())])
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// Analyze thematic patterns through semantic search
+    async fn analyze_thematic_patterns(&self) -> Result<Vec<String>, HybridError> {
+        // Use common themes to detect patterns
+        let themes = ["learning", "problem", "solution", "idea", "goal"];
+        let mut thematic_insights = Vec::new();
+
+        for theme in themes {
+            let query = MemoryQuery {
+                keywords: theme.to_string(),
+                time_range: None,
+            };
+
+            let result = self.recall(&query).await?;
+            if result.memories.len() >= 3 {
+                thematic_insights.push(format!("Theme '{}' appears in {} memories", theme, result.memories.len()));
+            }
+        }
+
+        Ok(thematic_insights)
+    }
 }
 
 #[async_trait]
@@ -58,28 +135,37 @@ impl Manager for HybridMemoryManager {
     type Error = HybridError;
 
     async fn append(&mut self, memory: &MemoryFragment) -> Result<(), HybridError> {
+        // Calculate and update importance score before saving
+        let mut memory_with_importance = memory.clone();
+        memory_with_importance.subjective_metadata.importance = self.calculate_importance(memory);
+
         // Save to MySQL first
-        self.mysql_manager.save(memory).await?;
+        self.mysql_manager.save(&memory_with_importance).await?;
 
         // Generate embedding and save to Qdrant
         let embedding = self
-            .generate_embedding(&memory.content)
+            .generate_embedding(&memory_with_importance.content)
             .await
             .map_err(|e| HybridError::Embedding(e.to_string()))?;
 
-        match self.qdrant_manager.save_embedding(memory, embedding).await {
+        match self
+            .qdrant_manager
+            .save_embedding(&memory_with_importance, embedding)
+            .await
+        {
             Ok(_) => Ok(()),
             Err(_qdrant_error) => {
                 // Qdrant failed, roll back MySQL transaction
-                if let Err(mysql_error) = self.mysql_manager.delete(memory.id).await {
+                if let Err(mysql_error) = self.mysql_manager.delete(memory_with_importance.id).await
+                {
                     // If rollback also fails, we have a bigger problem
                     // Log this situation for manual intervention
                     eprintln!(
                         "CRITICAL: Failed to rollback MySQL record {} after Qdrant failure: {}",
-                        memory.id, mysql_error
+                        memory_with_importance.id, mysql_error
                     );
                 }
-                Err(HybridError::TransactionRollback(memory.id))
+                Err(HybridError::TransactionRollback(memory_with_importance.id))
             }
         }
     }
@@ -123,5 +209,59 @@ impl HybridMemoryManager {
         // For now, skip complex filtering to avoid Qdrant API compatibility issues
         // TODO: Implement proper filtering when Qdrant API is more stable
         Ok(None)
+    }
+
+    /// Perform reflection on stored memories to identify patterns and insights
+    pub async fn reflect(&self) -> Result<Vec<String>, HybridError> {
+        let mut insights = Vec::new();
+
+        // Analyze recent memories for immediate patterns
+        insights.extend(self.analyze_recent_memories().await?);
+
+        // Analyze important memories for significant insights
+        insights.extend(self.analyze_important_memories().await?);
+
+        // Analyze thematic patterns through semantic search
+        insights.extend(self.analyze_thematic_patterns().await?);
+
+        if insights.is_empty() {
+            Ok(vec![
+                "No significant patterns detected yet. Keep building memories.".to_string(),
+            ])
+        } else {
+            Ok(insights)
+        }
+    }
+
+    /// Get memories with high importance for review using targeted queries
+    pub async fn get_important_memories(
+        &self,
+        min_importance: u8,
+    ) -> Result<Vec<MemoryFragment>, HybridError> {
+        // Use a broad query to find important memories
+        // In a real implementation, this would use proper database filtering
+        let query = MemoryQuery {
+            keywords: "important significant crucial critical".to_string(),
+            time_range: None,
+        };
+
+        let result = self.recall(&query).await?;
+
+        // Filter locally for importance (temporary until proper DB filtering)
+        let important_memories = result.memories
+            .into_iter()
+            .filter(|m| m.subjective_metadata.importance >= min_importance)
+            .collect();
+
+        Ok(important_memories)
+    }
+
+    /// Prune low-importance memories to maintain database efficiency
+    /// This is a placeholder - proper pruning would require database-level operations
+    pub async fn prune_memories(&self, _max_memories: usize) -> Result<usize, HybridError> {
+        // Pruning should be implemented at the database level with proper queries
+        // rather than loading all memories into memory
+        // For now, return 0 (no pruning) until proper implementation
+        Ok(0)
     }
 }

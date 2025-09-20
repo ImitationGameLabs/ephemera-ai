@@ -70,7 +70,6 @@ cargo run --bin ephemera-ai
 ## Key Dependencies
 
 - **SeaORM**: MySQL ORM for structured data
-- **Meilisearch**: Search functionality (though README mentions Qdrant)
 - **Tokio**: Async runtime
 - **Tracing**: Structured logging
 
