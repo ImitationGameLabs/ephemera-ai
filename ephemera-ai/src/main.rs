@@ -1,7 +1,7 @@
-use ephemera_memory::MeiliMemoryManager;
-use rig::providers::deepseek;
-use tracing::info;
 use dotenv::dotenv;
+use ephemera_memory::HybridMemoryManager;
+use qdrant_client::config::QdrantConfig;
+use rig::providers::deepseek;
 
 mod ephemera;
 mod interface;
@@ -25,16 +25,23 @@ async fn main() -> anyhow::Result<()> {
         .preamble("Extract keywords from the context. Return keywords only, separated by spaces.")
         .build();
 
-    let meili_url = std::env::var("MEILISEARCH_URL")
-        .expect("MEILISEARCH_URL not set");
-    let meili_api_key = std::env::var("MEILI_MASTER_KEY")
-        .expect("MEILI_MASTER_KEY not set");
-    let meili_client = meilisearch_sdk::client::Client::new(meili_url, Some(meili_api_key)).unwrap();
+    // Setup MySQL connection
+    let mysql_url = std::env::var("MYSQL_URL").expect("MYSQL_URL not set");
+    let conn = sea_orm::Database::connect(&mysql_url).await?;
 
-    let stats = meili_client.get_stats().await?;
-    info!("Hello, meilisearch stats info: {:?}", stats);
+    // Setup Qdrant connection
+    let qdrant_url = std::env::var("QDRANT_URL").expect("QDRANT_URL not set");
+    let qdrant_config = QdrantConfig {
+        uri: qdrant_url.clone(),
+        ..Default::default()
+    };
+    let qdrant_client =
+        qdrant_client::Qdrant::new(qdrant_config).expect("Failed to create Qdrant client");
 
-    let memory_manager = MeiliMemoryManager::new(meili_client);
+    let memory_manager = HybridMemoryManager::new(
+        ephemera_memory::MysqlMemoryManager::new(conn),
+        ephemera_memory::QdrantMemoryManager::new(qdrant_client),
+    );
 
     let agent = ephemera::Ephemera {
         chat_agent,
@@ -44,9 +51,7 @@ async fn main() -> anyhow::Result<()> {
         memory_manager,
     };
 
-    let mut ui= interface::Cli{
-        agent,
-    };
+    let mut ui = interface::Cli { agent };
 
     ui.run().await
 }

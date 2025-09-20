@@ -3,10 +3,13 @@ name = "ephemera-ai"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "db_test"
+path = "src/db_test.rs"
+
 [dependencies]
 anyhow = "1.0"
-chrono = "0.4.40"
-meilisearch-sdk = "0.28.0"
+time = "0.3"
 rig-core = "0.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -21,3 +24,7 @@ tracing-subscriber = { version = "0.3", features = [
 
 ephemera-memory = { path = "../ephemera-memory" }
 dotenv = "0.15"
+
+# Database dependencies for testing
+qdrant-client = { version = "1.15" }
+sea-orm = { version = "1.1", features = ["runtime-tokio", "sqlx-mysql"] }

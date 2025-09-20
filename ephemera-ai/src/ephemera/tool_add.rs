@@ -1,12 +1,8 @@
 // Tool example from https://github.com/0xPlaygrounds/rig/tree/main/rig-core/examples
 
-use rig::{
-    completion::ToolDefinition,
-    tool::Tool,
-};
+use rig::{completion::ToolDefinition, tool::Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-
 
 #[derive(Deserialize)]
 pub struct OperationArgs {
