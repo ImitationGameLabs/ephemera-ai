@@ -1,5 +1,6 @@
-mod types;
+mod entity;
 mod manager;
+mod types;
 
-pub use types::*;
 pub use manager::*;
+pub use types::*;

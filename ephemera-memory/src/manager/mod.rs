@@ -1,31 +1,42 @@
-mod manager;
+mod hybrid_manager;
+mod mysql_manager;
+mod qdrant_manager;
 
-pub use manager::*;
+pub use hybrid_manager::*;
+pub use mysql_manager::*;
+pub use qdrant_manager::*;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::MemoryFragment;
 
+/// Represents a time range for memory queries
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeRange {
     pub start: i64,
     pub end: i64,
 }
 
+/// Query parameters for memory retrieval operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueryArgs  {
+pub struct MemoryQuery {
     pub keywords: String,
     pub time_range: Option<TimeRange>,
 }
 
-
+/// Result of a memory query operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueryResult {
-    pub memories: Vec<MemoryFragment>
+pub struct MemoryQueryResult {
+    pub memories: Vec<MemoryFragment>,
 }
 
-#[allow(async_fn_in_trait)]
+use async_trait::async_trait;
+
+/// Trait defining the interface for memory management operations
+#[async_trait]
 pub trait Manager {
-    async fn append(&mut self, memory: &MemoryFragment) -> anyhow::Result<()>;
-    async fn recall(&self, query: &QueryArgs) -> anyhow::Result<QueryResult>;
+    type Error;
+
+    async fn append(&mut self, memory: &MemoryFragment) -> Result<(), Self::Error>;
+    async fn recall(&self, query: &MemoryQuery) -> Result<MemoryQueryResult, Self::Error>;
 }
