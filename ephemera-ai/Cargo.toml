@@ -24,6 +24,7 @@ tracing-subscriber = { version = "0.3", features = [
 
 ephemera-memory = { path = "../ephemera-memory" }
 dotenv = "0.15"
+fastembed = "5.2"
 
 # Database dependencies for testing
 qdrant-client = { version = "1.15" }
