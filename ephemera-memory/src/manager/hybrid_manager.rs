@@ -1,4 +1,7 @@
 use async_trait::async_trait;
+use fastembed::TextEmbedding;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use thiserror::Error;
 
 use super::{
@@ -39,20 +42,28 @@ pub enum HybridError {
 pub struct HybridMemoryManager {
     mysql_manager: MysqlMemoryManager,
     qdrant_manager: QdrantMemoryManager,
+    embedding_model: Arc<Mutex<TextEmbedding>>,
 }
 
 impl HybridMemoryManager {
-    pub fn new(mysql_manager: MysqlMemoryManager, qdrant_manager: QdrantMemoryManager) -> Self {
+    pub fn new(
+        mysql_manager: MysqlMemoryManager,
+        qdrant_manager: QdrantMemoryManager,
+        embedding_model: TextEmbedding,
+    ) -> Self {
         Self {
             mysql_manager,
             qdrant_manager,
+            embedding_model: Arc::new(Mutex::new(embedding_model)),
         }
     }
 
-    async fn generate_embedding(&self, _text: &str) -> Result<Vec<f32>, HybridError> {
-        // TODO: Implement actual embedding generation
-        // For now, return a dummy embedding
-        Ok(vec![0.1; 384])
+    async fn generate_embedding(&self, text: &str) -> Result<Vec<f32>, HybridError> {
+        let mut embedding_model = self.embedding_model.lock().await;
+        let embeddings = embedding_model.embed(vec![text], None)
+            .map_err(|e| HybridError::Embedding(format!("Failed to generate embedding: {e}")))?;
+
+        Ok(embeddings[0].clone())
     }
 
     /// Calculate importance score for a memory based on various factors
