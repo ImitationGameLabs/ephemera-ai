@@ -19,11 +19,15 @@ const QDRANT_COLLECTION_NAME: &str = "ephemera_memory";
 
 pub struct QdrantMemoryManager {
     client: Qdrant,
+    vector_dimensions: usize,
 }
 
 impl QdrantMemoryManager {
-    pub fn new(client: Qdrant) -> Self {
-        Self { client }
+    pub fn new(client: Qdrant, vector_dimensions: usize) -> Self {
+        Self {
+            client,
+            vector_dimensions,
+        }
     }
 
     pub async fn ensure_collection(&self) -> Result<(), QdrantError> {
@@ -37,7 +41,7 @@ impl QdrantMemoryManager {
                 .create_collection(
                     qdrant_client::qdrant::CreateCollectionBuilder::new(QDRANT_COLLECTION_NAME)
                         .vectors_config(qdrant_client::qdrant::VectorParamsBuilder::new(
-                            384,
+                            self.vector_dimensions as u64,
                             qdrant_client::qdrant::Distance::Cosine,
                         )),
                 )

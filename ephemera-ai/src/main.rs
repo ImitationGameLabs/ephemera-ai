@@ -1,8 +1,8 @@
 use dotenv::dotenv;
 use ephemera_memory::HybridMemoryManager;
-use fastembed::{EmbeddingModel, TextEmbedding, InitOptions};
+use rig::providers::openai;
 use qdrant_client::config::QdrantConfig;
-use rig::providers::deepseek;
+use sea_orm_migration::MigratorTrait;
 
 mod ephemera;
 mod interface;
@@ -12,23 +12,37 @@ async fn main() -> anyhow::Result<()> {
     dotenv().ok();
     tracing_subscriber::fmt::init();
 
-    // Create Deepseek client
-    let deepseek_client = deepseek::Client::from_env();
+    // Create LLM client (OpenAI-compatible)
+    let api_key = std::env::var("API_KEY")
+        .expect("API_KEY not set");
+    let base_url = std::env::var("BASE_URL")
+        .expect("BASE_URL not set");
+    let model_name = std::env::var("MODEL_NAME")
+        .expect("MODEL_NAME not set");
 
-    let chat_agent = deepseek_client
-        .agent(deepseek::DEEPSEEK_CHAT)
+    let llm_client = openai::Client::from_url(&api_key, &base_url);
+
+    let chat_agent = llm_client
+        .agent(&model_name)
         .preamble("You are a Super AI with persistent memory capabilities.")
         .tool(ephemera::Add)
         .build();
 
-    let keyword_agent = deepseek_client
-        .agent(deepseek::DEEPSEEK_CHAT)
+    let keyword_agent = llm_client
+        .agent(&model_name)
         .preamble("Extract keywords from the context. Return keywords only, separated by spaces.")
         .build();
 
     // Setup MySQL connection
     let mysql_url = std::env::var("MYSQL_URL").expect("MYSQL_URL not set");
     let conn = sea_orm::Database::connect(&mysql_url).await?;
+
+    // Run database migrations
+    println!("Running database migrations...");
+    ephemera_memory::Migrator::up(&conn, None)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to run migrations: {}", e))?;
+    println!("Migrations completed successfully!");
 
     // Setup Qdrant connection
     let qdrant_url = std::env::var("QDRANT_URL").expect("QDRANT_URL not set");
@@ -41,20 +55,26 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize embedding model
     let model_name = std::env::var("EMBEDDING_MODEL")
-        .unwrap_or_else(|_| "BGESmallENV15".to_string());
-    let embedding_model_enum: EmbeddingModel = model_name.parse()
-        .map_err(|_| anyhow::anyhow!("Invalid embedding model name: {}", model_name))?;
+        .expect("EMBEDDING_MODEL not set");
+    let embedding_api_key = std::env::var("EMBEDDING_MODEL_API_KEY")
+        .expect("EMBEDDING_MODEL_API_KEY not set");
+    let embedding_url = std::env::var("EMBEDDING_MODEL_URL")
+        .expect("EMBEDDING_MODEL_URL not set");
 
-    let mut init_options = InitOptions::default();
-    init_options.model_name = embedding_model_enum;
-    init_options.show_download_progress = true;
+    // Create OpenAI-compatible client for custom embedding service
+    let openai_client = openai::Client::from_url(&embedding_api_key, &embedding_url);
 
-    let embedding_model = TextEmbedding::try_new(init_options)
-    .map_err(|e| anyhow::anyhow!("Failed to initialize embedding model {}: {}", model_name, e))?;
+    // Get embedding dimensions (required)
+    let embedding_dimensions: usize = std::env::var("EMBEDDING_MODEL_DIMENSIONS")
+        .expect("EMBEDDING_MODEL_DIMENSIONS not set")
+        .parse()
+        .expect("EMBEDDING_MODEL_DIMENSIONS must be a valid number");
+
+    let embedding_model = openai_client.embedding_model_with_ndims(&model_name, embedding_dimensions);
 
     let memory_manager = HybridMemoryManager::new(
         ephemera_memory::MysqlMemoryManager::new(conn),
-        ephemera_memory::QdrantMemoryManager::new(qdrant_client),
+        ephemera_memory::QdrantMemoryManager::new(qdrant_client, embedding_dimensions),
         embedding_model,
     );
 

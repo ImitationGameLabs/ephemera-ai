@@ -1,15 +1,16 @@
 use rig::completion::CompletionModel;
+use rig::embeddings::embedding::EmbeddingModel;
 use tracing::info;
 
 use std::io;
 
 use crate::ephemera::Ephemera;
 
-pub struct Cli<M: CompletionModel> {
-    pub agent: Ephemera<M>,
+pub struct Cli<M: CompletionModel, T: EmbeddingModel + Send + Sync> {
+    pub agent: Ephemera<M, T>,
 }
 
-impl<M: CompletionModel> Cli<M> {
+impl<M: CompletionModel, T: EmbeddingModel + Send + Sync> Cli<M, T> {
     pub async fn run(&mut self) -> anyhow::Result<()> {
         info!("Start running");
 

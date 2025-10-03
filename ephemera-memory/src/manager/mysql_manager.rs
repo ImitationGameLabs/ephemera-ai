@@ -1,4 +1,4 @@
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, NotSet};
 use thiserror::Error;
 
 use crate::MemoryFragment;
@@ -26,10 +26,11 @@ impl MysqlMemoryManager {
         Self { conn }
     }
 
-    pub async fn save(&self, memory: &MemoryFragment) -> Result<(), MysqlError> {
+    pub async fn save(&self, memory: &MemoryFragment) -> Result<i64, MysqlError> {
         let model: memory::Model = memory.clone().into();
         let active_model = memory::ActiveModel {
-            id: Set(model.id),
+            // Let database auto-generate ID
+            id: NotSet,
             content: Set(model.content),
             created_at: Set(model.created_at),
             source: Set(model.source),
@@ -42,8 +43,8 @@ impl MysqlMemoryManager {
             assessed_identity: Set(model.assessed_identity),
         };
 
-        active_model.insert(&self.conn).await?;
-        Ok(())
+        let inserted_model = active_model.insert(&self.conn).await?;
+        Ok(inserted_model.id)
     }
 
     pub async fn get(&self, id: i64) -> Result<MemoryFragment, MysqlError> {

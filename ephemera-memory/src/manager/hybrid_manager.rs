@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use fastembed::TextEmbedding;
+use rig::embeddings::embedding::EmbeddingModel;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use thiserror::Error;
@@ -39,17 +39,17 @@ pub enum HybridError {
     TransactionRollback(i64),
 }
 
-pub struct HybridMemoryManager {
+pub struct HybridMemoryManager<T: EmbeddingModel> {
     mysql_manager: MysqlMemoryManager,
     qdrant_manager: QdrantMemoryManager,
-    embedding_model: Arc<Mutex<TextEmbedding>>,
+    embedding_model: Arc<Mutex<T>>,
 }
 
-impl HybridMemoryManager {
+impl<T: EmbeddingModel> HybridMemoryManager<T> {
     pub fn new(
         mysql_manager: MysqlMemoryManager,
         qdrant_manager: QdrantMemoryManager,
-        embedding_model: TextEmbedding,
+        embedding_model: T,
     ) -> Self {
         Self {
             mysql_manager,
@@ -59,11 +59,12 @@ impl HybridMemoryManager {
     }
 
     async fn generate_embedding(&self, text: &str) -> Result<Vec<f32>, HybridError> {
-        let mut embedding_model = self.embedding_model.lock().await;
-        let embeddings = embedding_model.embed(vec![text], None)
+        let embedding_model = self.embedding_model.lock().await;
+        let embedding = embedding_model.embed_text(text)
+            .await
             .map_err(|e| HybridError::Embedding(format!("Failed to generate embedding: {e}")))?;
 
-        Ok(embeddings[0].clone())
+        Ok(embedding.vec.into_iter().map(|x| x as f32).collect())
     }
 
     /// Calculate importance score for a memory based on various factors
@@ -142,7 +143,7 @@ impl HybridMemoryManager {
 }
 
 #[async_trait]
-impl Manager for HybridMemoryManager {
+impl<T: EmbeddingModel + Send + Sync> Manager for HybridMemoryManager<T> {
     type Error = HybridError;
 
     async fn append(&mut self, memory: &MemoryFragment) -> Result<(), HybridError> {
@@ -150,8 +151,11 @@ impl Manager for HybridMemoryManager {
         let mut memory_with_importance = memory.clone();
         memory_with_importance.subjective_metadata.importance = self.calculate_importance(memory);
 
-        // Save to MySQL first
-        self.mysql_manager.save(&memory_with_importance).await?;
+        // Save to MySQL first and get the generated ID
+        let generated_id = self.mysql_manager.save(&memory_with_importance).await?;
+
+        // Update the memory object with the generated ID for Qdrant storage
+        memory_with_importance.id = generated_id;
 
         // Generate embedding and save to Qdrant
         let embedding = self
@@ -212,7 +216,7 @@ impl Manager for HybridMemoryManager {
     }
 }
 
-impl HybridMemoryManager {
+impl<T: EmbeddingModel + Send + Sync> HybridMemoryManager<T> {
     async fn build_qdrant_filter(
         &self,
         _query: &MemoryQuery,

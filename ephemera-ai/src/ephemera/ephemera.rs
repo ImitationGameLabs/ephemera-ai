@@ -2,6 +2,7 @@ use ephemera_memory::{
     Manager, MemoryFragment, MemoryQuery, MemorySource, ObjectiveMetadata, Speaker,
     SubjectiveMetadata,
 };
+use rig::embeddings::embedding::EmbeddingModel;
 use time::OffsetDateTime;
 use rig::{
     OneOrMany,
@@ -13,19 +14,19 @@ use rig::{
 
 use tracing::debug;
 
-pub struct Ephemera<M: CompletionModel> {
+pub struct Ephemera<M: CompletionModel, T: EmbeddingModel> {
     pub chat_agent: Agent<M>,
     pub keyword_agent: Agent<M>,
 
     pub chat_history: Vec<Message>,
-    pub memory_manager: ephemera_memory::HybridMemoryManager,
+    pub memory_manager: ephemera_memory::HybridMemoryManager<T>,
 }
 
-impl<M: CompletionModel> Ephemera<M> {
+impl<M: CompletionModel, T: EmbeddingModel + Send + Sync> Ephemera<M, T> {
     pub async fn prompt(&mut self, prompt: String) -> anyhow::Result<String> {
         let now_timestamp = OffsetDateTime::now_utc().unix_timestamp() * 1000;
         let memory_fragment = MemoryFragment {
-            id: now_timestamp,
+            id: 0, // Will be set by database after insertion
             content: prompt.clone(),
             subjective_metadata: SubjectiveMetadata {
                 importance: 50,
@@ -56,7 +57,7 @@ impl<M: CompletionModel> Ephemera<M> {
 
         let response_timestamp = OffsetDateTime::now_utc().unix_timestamp() * 1000;
         let response_memory = MemoryFragment {
-            id: response_timestamp,
+            id: 0, // Will be set by database after insertion
             content: response.clone(),
             subjective_metadata: SubjectiveMetadata {
                 importance: 60,
