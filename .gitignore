@@ -1,4 +1,6 @@
+# Rust build artifacts
 target/
+
+# Environment files
 .env
-mysql_data/
-qdrant_data/
+.env.local

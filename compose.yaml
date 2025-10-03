@@ -10,7 +10,7 @@ services:
       MYSQL_USER: ephemera_ai
       MYSQL_PASSWORD: 123456
     volumes:
-      - ./mysql_data:/var/lib/mysql
+      - mysql_data:/var/lib/mysql
 
   qdrant:
     image: "qdrant/qdrant:latest"
@@ -23,4 +23,8 @@ services:
       - 6334
       - 6335
     volumes:
-      - ./qdrant_data:/qdrant/storage
+      - qdrant_data:/qdrant/storage
+
+volumes:
+  mysql_data:
+  qdrant_data:
