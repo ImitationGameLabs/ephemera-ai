@@ -1,7 +1,7 @@
 [workspace]
-members = [ 
-    "ephemera-ai",
-    "ephemera-memory"
+members = [
+    "epha-ai",
+    "epha-memory",
 ]
 
 resolver = "3"

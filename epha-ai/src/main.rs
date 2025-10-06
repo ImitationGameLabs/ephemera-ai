@@ -1,5 +1,5 @@
 use dotenv::dotenv;
-use ephemera_memory::HybridMemoryManager;
+use epha_memory::HybridMemoryManager;
 use rig::providers::openai;
 use qdrant_client::config::QdrantConfig;
 use sea_orm_migration::MigratorTrait;
@@ -34,18 +34,18 @@ async fn main() -> anyhow::Result<()> {
         .build();
 
     // Setup MySQL connection
-    let mysql_url = std::env::var("MYSQL_URL").expect("MYSQL_URL not set");
+    let mysql_url = std::env::var("EPHA_MEMORY_MYSQL_URL").expect("EPHA_MEMORY_MYSQL_URL not set");
     let conn = sea_orm::Database::connect(&mysql_url).await?;
 
     // Run database migrations
     println!("Running database migrations...");
-    ephemera_memory::Migrator::up(&conn, None)
+    epha_memory::Migrator::up(&conn, None)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to run migrations: {}", e))?;
     println!("Migrations completed successfully!");
 
     // Setup Qdrant connection
-    let qdrant_url = std::env::var("QDRANT_URL").expect("QDRANT_URL not set");
+    let qdrant_url = std::env::var("EPHA_MEMORY_QDRANT_URL").expect("EPHA_MEMORY_QDRANT_URL not set");
     let qdrant_config = QdrantConfig {
         uri: qdrant_url.clone(),
         ..Default::default()
@@ -73,8 +73,8 @@ async fn main() -> anyhow::Result<()> {
     let embedding_model = openai_client.embedding_model_with_ndims(&model_name, embedding_dimensions);
 
     let memory_manager = HybridMemoryManager::new(
-        ephemera_memory::MysqlMemoryManager::new(conn),
-        ephemera_memory::QdrantMemoryManager::new(qdrant_client, embedding_dimensions),
+        epha_memory::MysqlMemoryManager::new(conn),
+        epha_memory::QdrantMemoryManager::new(qdrant_client, embedding_dimensions),
         embedding_model,
     );
 

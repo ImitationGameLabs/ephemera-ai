@@ -1,5 +1,5 @@
 [package]
-name = "ephemera-ai"
+name = "epha-ai"
 version = "0.1.0"
 edition = "2024"
 
@@ -22,7 +22,7 @@ tracing-subscriber = { version = "0.3", features = [
     "fmt",
 ] }
 
-ephemera-memory = { path = "../ephemera-memory" }
+epha-memory = { path = "../epha-memory" }
 dotenv = "0.15"
 
 # Database dependencies for testing

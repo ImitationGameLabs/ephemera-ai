@@ -1,4 +1,4 @@
-use ephemera_memory::{
+use epha_memory::{
     Manager, MemoryFragment, MemoryQuery, MemorySource, ObjectiveMetadata, Speaker,
     SubjectiveMetadata,
 };
@@ -19,7 +19,7 @@ pub struct Ephemera<M: CompletionModel, T: EmbeddingModel> {
     pub keyword_agent: Agent<M>,
 
     pub chat_history: Vec<Message>,
-    pub memory_manager: ephemera_memory::HybridMemoryManager<T>,
+    pub memory_manager: epha_memory::HybridMemoryManager<T>,
 }
 
 impl<M: CompletionModel, T: EmbeddingModel + Send + Sync> Ephemera<M, T> {

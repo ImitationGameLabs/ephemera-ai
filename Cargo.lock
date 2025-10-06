@@ -681,12 +681,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "ephemera-ai"
+name = "epha-ai"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "dotenv",
- "ephemera-memory",
+ "epha-memory",
  "qdrant-client",
  "rig-core",
  "sea-orm",
@@ -701,7 +701,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ephemera-memory"
+name = "epha-memory"
 version = "0.1.0"
 dependencies = [
  "anyhow",

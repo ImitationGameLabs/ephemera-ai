@@ -40,7 +40,7 @@ Edit `.env` with your API keys and configurations. See [Environment Configuratio
 ### 4. Build and Run
 
 ```bash
-cargo run --bin ephemera-ai
+cargo run --bin epha-ai
 ```
 
 ## Environment Configuration
@@ -58,8 +58,8 @@ BASE_URL=https://api.deepseek.com/v1
 MODEL_NAME=deepseek-chat
 
 # Database Configuration
-MYSQL_URL=mysql://ephemera_ai:123456@localhost:3306/ephemera_memory
-QDRANT_URL=http://localhost:6334
+EPHA_MEMORY_MYSQL_URL=mysql://epha:123456@localhost:3306/epha_memory
+EPHA_MEMORY_QDRANT_URL=http://localhost:6334
 
 # Embedding Configuration (OpenAI-compatible API)
 EMBEDDING_MODEL=embedding-3

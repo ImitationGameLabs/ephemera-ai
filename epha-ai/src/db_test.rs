@@ -10,7 +10,7 @@ use std::env;
 async fn test_qdrant() -> Result<()> {
     println!("Testing Qdrant connection...");
 
-    let qdrant_url = env::var("QDRANT_URL").unwrap();
+    let qdrant_url = env::var("EPHA_MEMORY_QDRANT_URL").unwrap();
     let client = Qdrant::from_url(&qdrant_url).build()?;
 
     // Test connection
@@ -70,7 +70,7 @@ async fn test_qdrant() -> Result<()> {
 async fn test_mysql() -> Result<()> {
     println!("Testing MySQL connection...");
 
-    let mysql_url = env::var("MYSQL_URL").unwrap();
+    let mysql_url = env::var("EPHA_MEMORY_MYSQL_URL").unwrap();
     let db = Database::connect(&mysql_url).await?;
 
     // Test simple query

@@ -8,8 +8,8 @@ Ephemera AI is an AI system with a focus on long-term memory, reflection, and me
 
 ## Codebase Structure
 
-- **ephemera-ai/**: Main application binary
-- **ephemera-memory/**: Memory management library with SeaORM for MySQL
+- **epha-ai/**: Main application binary
+- **epha-memory/**: Memory management library with SeaORM for MySQL
 - **Workspace**: Cargo workspace managing both crates
 
 ## Development Commands
@@ -20,8 +20,8 @@ Ephemera AI is an AI system with a focus on long-term memory, reflection, and me
 cargo build
 
 # Build specific crate
-cargo build -p ephemera-ai
-cargo build -p ephemera-memory
+cargo build -p epha-ai
+cargo build -p epha-memory
 
 # Build with release optimizations
 cargo build --release
@@ -33,8 +33,8 @@ cargo build --release
 cargo test
 
 # Run tests for specific crate
-cargo test -p ephemera-ai
-cargo test -p ephemera-memory
+cargo test -p epha-ai
+cargo test -p epha-memory
 
 # Run specific test
 cargo test --testname
@@ -58,12 +58,12 @@ cargo fmt
 docker compose up -d
 
 # Run main application
-cargo run --bin ephemera-ai
+cargo run --bin epha-ai
 ```
 
 ## Database Architecture
 
-- **MySQL**: Stores structured memory metadata (ephemera_memory database)
+- **MySQL**: Stores structured memory metadata (epha_memory database)
 - **Qdrant**: Vector database for semantic search and embeddings
 - **Connection**: Services run on localhost:3306 (MySQL) and localhost:6333 (Qdrant)
 
@@ -82,10 +82,6 @@ Required environment variables in `.env`:
 ## Development Workflow
 
 1. Start databases: `docker compose up -d`
-2. Build and run: `cargo run --bin ephemera-ai`
+2. Build and run: `cargo run --bin epha-ai`
 3. Use `cargo test` to verify changes
 5. Run `cargo clippy` and `cargo fmt` before committing
-
-## Important Notes
-
-- **Avoid reading database volumes**: AI agents should avoid reading or analyzing the `mysql_data/` and `qdrant_data/` directories as these contain database volumes that should not be committed or analyzed

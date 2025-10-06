@@ -1,18 +1,18 @@
 services:
-  mysql:
+  epha-memory-mysql:
     image: "mysql:8.0"
     restart: always
     ports:
       - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: 123456
-      MYSQL_DATABASE: ephemera_memory
-      MYSQL_USER: ephemera_ai
+      MYSQL_DATABASE: epha_memory
+      MYSQL_USER: epha
       MYSQL_PASSWORD: 123456
     volumes:
-      - mysql_data:/var/lib/mysql
+      - epha-memory-mysql-data:/var/lib/mysql
 
-  qdrant:
+  epha-memory-qdrant:
     image: "qdrant/qdrant:latest"
     restart: always
     ports:
@@ -23,8 +23,8 @@ services:
       - 6334
       - 6335
     volumes:
-      - qdrant_data:/qdrant/storage
+      - epha-memory-qdrant-data:/qdrant/storage
 
 volumes:
-  mysql_data:
-  qdrant_data:
+  epha-memory-mysql-data:
+  epha-memory-qdrant-data:

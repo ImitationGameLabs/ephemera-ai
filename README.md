@@ -45,7 +45,7 @@ Edit `.env` with your actual API keys and configurations. See [CONTRIBUTING.md](
 ### 4. Build and Run
 
 ```bash
-cargo run --bin ephemera-ai
+cargo run --bin epha-ai
 ```
 
 ## Documentation
