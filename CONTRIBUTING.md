@@ -86,7 +86,7 @@ docker compose restart
 
 #### 3. Embedding Dimension Mismatch
 - Ensure `EMBEDDING_MODEL_DIMENSIONS` matches your model's output
-- Common dimensions: 1024 (some models), 2048 (智谱 embedding-3)
+- Common dimensions: 2048
 - Check API documentation for your chosen model
 
 #### 4. Function Calling Errors

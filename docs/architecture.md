@@ -9,7 +9,7 @@
 
 The system uses a hybrid database architecture with MySQL for structured metadata storage and Qdrant for vector-based semantic search. This combines relational database integrity with specialized vector search capabilities.
 
-For detailed database implementation, see [DATABASE_ARCHITECTURE.md](DATABASE_ARCHITECTURE.md).
+For detailed database implementation, see [database-architecture.md](database-architecture.md).
 
 Memory management will be encapsulated behind an interface, allowing the underlying implementation to be swapped out as the project evolves.
 
