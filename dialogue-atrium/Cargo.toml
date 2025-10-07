@@ -1,0 +1,43 @@
+
+[package]
+name = "dialogue-atrium"
+version = "0.1.0"
+edition = "2024"
+description = "Asynchronous communication interface for Ephemera AI autonomous agent interactions, providing MCP protocol for AI agents and HTTP interface for users"
+
+[lib]
+name = "dialogue_atrium"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0"
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["full"] }
+sea-orm = { version = "1.1", features = ["runtime-tokio", "sqlx-mysql", "macros", "with-json", "with-time", "with-uuid"] }
+sea-orm-migration = "1.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+time = { version = "0.3", features = ["serde", "macros"] }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "std", "fmt"] }
+thiserror = "2.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+dotenv = "0.15"
+
+# CLI client dependencies
+reqwest = { version = "0.12", features = ["json"] }
+rpassword = "7.3"
+clap = { version = "4.0", features = ["derive"] }
+
+[[bin]]
+name = "atrium"
+path = "src/bin/atrium.rs"
+
+[[bin]]
+name = "atrium-cli"
+path = "src/bin/atrium-cli.rs"
+
+[dev-dependencies]
+tokio-test = "0.4"

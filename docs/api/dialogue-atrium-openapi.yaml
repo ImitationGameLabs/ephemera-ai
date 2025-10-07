@@ -1,0 +1,520 @@
+openapi: 3.1.0
+info:
+  title: Dialogue Atrium API
+  description: |
+    Simple RESTful API for messaging in a shared chat space with user management.
+
+    ## Core Design Principles
+
+    Dialogue Atrium emphasizes simplicity and clarity:
+    - **Simple Communication**: Basic messaging with user profiles
+    - **User Management**: Simple authentication with passwords
+    - **Online Status**: Real-time presence tracking
+    - **Clean Architecture**: Straightforward RESTful design
+  version: 1.0.0
+  contact:
+    name: Dialogue Atrium Team
+    email: team@dialogue-atrium.example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://127.0.0.1:3000/api/v1
+    description: Development server
+
+paths:
+  /users:
+    get:
+      summary: Get All Users
+      description: Retrieve a list of all users with their online status
+      operationId: getAllUsers
+      tags:
+        - Users
+      responses:
+        '200':
+          description: Successful response with users list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsersList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      summary: Create User
+      description: Register a new user in the dialogue atrium
+      operationId: createUser
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /users/{username}:
+    get:
+      summary: Get User Profile
+      description: Retrieve public user information and online status
+      operationId: getUserProfile
+      tags:
+        - Users
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: Username
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response with user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /profile:
+    get:
+      summary: Get Own Profile
+      description: Retrieve your own profile information
+      operationId: getOwnProfile
+      tags:
+        - Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordAuth'
+      responses:
+        '200':
+          description: Successful response with own profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      summary: Update Profile
+      description: Update your own profile information
+      operationId: updateProfile
+      tags:
+        - Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /heartbeat:
+    post:
+      summary: Update Online Status
+      description: Update your online status and last activity timestamp
+      operationId: updateHeartbeat
+      tags:
+        - Status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCredentials'
+      responses:
+        '200':
+          description: Status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnlineStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /messages:
+    get:
+      summary: Get Messages
+      description: Retrieve a list of messages with filtering and pagination
+      operationId: getMessages
+      tags:
+        - Messages
+      parameters:
+        - name: sender
+          in: query
+          description: Filter by sender name
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Number of messages to return
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          description: Number of messages to skip
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Successful response with message list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Send Message
+      description: Create a new message in the atrium
+      operationId: sendMessage
+      tags:
+        - Messages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMessageRequest'
+      responses:
+        '201':
+          description: Message created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /messages/{messageId}:
+    get:
+      summary: Get Message
+      description: Retrieve a single message by ID
+      operationId: getMessage
+      tags:
+        - Messages
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          description: Message ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response with message details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete Message
+      description: Remove a message from the atrium
+      operationId: deleteMessage
+      tags:
+        - Messages
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          description: Message ID
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Message deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  
+components:
+  schemas:
+    User:
+      type: object
+      required:
+        - name
+        - bio
+        - status
+        - message_height
+        - created_at
+      properties:
+        name:
+          type: string
+          description: Username
+        bio:
+          type: string
+          description: User biography
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        message_height:
+          type: integer
+          description: Last read message position for unread detection
+        created_at:
+          type: string
+          format: date-time
+          description: When the user was created
+
+    UserStatus:
+      type: object
+      required:
+        - online
+        - last_seen
+      properties:
+        online:
+          type: boolean
+          description: Whether the user is currently online
+        last_seen:
+          type: string
+          format: date-time
+          description: Last time the user was active
+
+    OnlineStatus:
+      type: object
+      required:
+        - online
+        - last_seen
+      properties:
+        online:
+          type: boolean
+          description: Whether the user is currently online
+        last_seen:
+          type: string
+          format: date-time
+          description: Last activity timestamp
+
+    CreateUserRequest:
+      type: object
+      required:
+        - name
+        - bio
+        - password
+      properties:
+        name:
+          type: string
+          description: Username
+        bio:
+          type: string
+          description: User biography
+        passkey:
+          type: string
+          description: User password for authentication
+
+    UpdateProfileRequest:
+      type: object
+      required:
+        - current_passkey
+      properties:
+        current_password:
+          type: string
+          description: Current password for authentication
+        bio:
+          type: string
+          description: Updated biography
+        new_password:
+          type: string
+          description: New password
+
+    PasswordAuth:
+      type: object
+      required:
+        - password
+      properties:
+        passkey:
+          type: string
+          description: User password
+
+    UserCredentials:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: Username
+        passkey:
+          type: string
+          description: User password
+
+    UsersList:
+      type: object
+      required:
+        - users
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+          description: List of all users
+
+    Message:
+      type: object
+      required:
+        - id
+        - content
+        - sender
+        - created_at
+      properties:
+        id:
+          type: integer
+          description: Auto-increment message identifier
+        content:
+          type: string
+          description: Message content
+        sender:
+          type: string
+          description: Sender username
+        created_at:
+          type: string
+          format: date-time
+          description: When the message was created
+
+  
+    CreateMessageRequest:
+      type: object
+      required:
+        - content
+        - username
+        - password
+      properties:
+        content:
+          type: string
+          description: Message content
+        username:
+          type: string
+          description: Sender username
+        passkey:
+          type: string
+          description: Sender password
+
+    MessageListResponse:
+      type: object
+      required:
+        - messages
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+
+    
+  
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Error code
+            message:
+              type: string
+              description: Error message
+            details:
+              type: object
+              description: Additional error details
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized - invalid or missing password
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ValidationError:
+      description: Validation error - invalid request data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+tags:
+  - name: Users
+    description: User management operations
+  - name: Profile
+    description: Profile management operations
+  - name: Status
+    description: Status and heartbeat operations
+  - name: Messages
+    description: Message management operations

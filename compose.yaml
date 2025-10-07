@@ -25,6 +25,19 @@ services:
     volumes:
       - epha-memory-qdrant-data:/qdrant/storage
 
+  dialogue-atrium-mysql:
+    image: "mysql:8.0"
+    restart: always
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: dialogue_atrium
+      MYSQL_USER: epha
+      MYSQL_PASSWORD: 123456
+    volumes:
+      - dialogue-atrium-data:/var/lib/mysql
 volumes:
   epha-memory-mysql-data:
   epha-memory-qdrant-data:
+  dialogue-atrium-data:
