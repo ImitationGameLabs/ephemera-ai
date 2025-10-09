@@ -8,9 +8,10 @@ Ephemera AI is an AI system with a focus on long-term memory, reflection, and me
 
 ## Codebase Structure
 
-- **epha-ai/**: Main application binary
-- **epha-memory/**: Memory management library with SeaORM for MySQL
-- **Workspace**: Cargo workspace managing both crates
+- **epha-ai/**: Main application binary.
+- **epha-memory/**: Memory management library for handling memory operations and persistence.
+- **epha-frontend/**: Web interface providing visual interaction and management for all ephemera-ai related components and features.
+- **dialogue-atrium/**: Simple chatroom designed for human/AI-agnostic integration.
 
 ## Development Commands
 
@@ -61,27 +62,13 @@ docker compose up -d
 cargo run --bin epha-ai
 ```
 
-## Database Architecture
-
-- **MySQL**: Stores structured memory metadata (epha_memory database)
-- **Qdrant**: Vector database for semantic search and embeddings
-- **Connection**: Services run on localhost:3306 (MySQL) and localhost:6333 (Qdrant)
-
-## Key Dependencies
-
-- **SeaORM**: MySQL ORM for structured data
-- **Tokio**: Async runtime
-- **Tracing**: Structured logging
-
-## Environment Configuration
-
-Required environment variables in `.env`:
-- `DEEPSEEK_API_KEY`: API key for DeepSeek LLM provider
-- Database credentials are hardcoded in compose.yaml
-
 ## Development Workflow
 
 1. Start databases: `docker compose up -d`
 2. Build and run: `cargo run --bin epha-ai`
 3. Use `cargo test` to verify changes
-5. Run `cargo clippy` and `cargo fmt` before committing
+4. Run `cargo clippy` and `cargo fmt` before committing
+
+### Frontend Development
+
+When working on frontend development in `epha-frontend/`, please read the documentation in `docs/conventions/frontend/` to understand our tech stack, color system, and development guidelines.
