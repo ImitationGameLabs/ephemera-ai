@@ -9,7 +9,8 @@ use std::sync::Arc;
 use crate::agent::EphemeraAI;
 
 mod agent;
-mod tools;  
+mod tools;
+mod context;  
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -25,7 +26,8 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Failed to init memory manager");
 
-    let mut ai = EphemeraAI::new(llm_client, Arc::new(memory_manager), &model_name);
+    let memory_manager = Arc::new(memory_manager);
+    let mut ai = EphemeraAI::new(llm_client, memory_manager, &model_name);
     ai.run().await?;
 
     Ok(())

@@ -4,7 +4,8 @@ use rig::{completion::ToolDefinition, tool::Tool};
 use serde::Deserialize;
 use serde_json::json;
 use epha_memory::{MemoryQuery, Manager, HybridMemoryManager, MemoryFragment};
-use time::{OffsetDateTime, format_description};
+use epha_agent::context::ContextSerialize;
+use crate::context::{MemoryFragmentList, EphemeraContext};
 
 #[derive(Deserialize)]
 pub struct MemoryRecallArgs {
@@ -17,31 +18,27 @@ pub struct MemoryRecallArgs {
 pub struct MemoryRecallError;
 
 /// Simple memory cache that stores recalled memories for selection
-#[derive(Debug)]
-pub struct MemoryCache {
-    memories: Arc<Mutex<HashMap<i64, MemoryFragment>>>,
+#[derive(Debug, Default)]
+pub struct RecallCacheHelper {
+    memories: HashMap<i64, MemoryFragment>,
 }
 
-impl MemoryCache {
+impl RecallCacheHelper {
     pub fn new() -> Self {
-        Self {
-            memories: Arc::new(Mutex::new(HashMap::new())),
-        }
+        Self::default()
     }
 
-    pub fn store(&self, memories: Vec<MemoryFragment>) {
-        let mut cache = self.memories.lock().unwrap();
-        cache.clear();
+    pub fn store(&mut self, memories: Vec<MemoryFragment>) {
+        self.memories.clear();
         for memory in memories {
-            cache.insert(memory.id, memory);
+            self.memories.insert(memory.id, memory);
         }
     }
 
     pub fn get(&self, ids: &[i64]) -> Option<Vec<MemoryFragment>> {
-        let cache = self.memories.lock().unwrap();
         let mut result = Vec::new();
         for &id in ids {
-            if let Some(memory) = cache.get(&id) {
+            if let Some(memory) = self.memories.get(&id) {
                 result.push(memory.clone());
             } else {
                 return None; // Return None if any ID not found
@@ -50,49 +47,23 @@ impl MemoryCache {
         Some(result)
     }
 
-    pub fn clear(&self) {
-        let mut cache = self.memories.lock().unwrap();
-        cache.clear();
+    pub fn clear(&mut self) {
+        self.memories.clear();
     }
 
     pub fn is_empty(&self) -> bool {
-        let cache = self.memories.lock().unwrap();
-        cache.is_empty()
+        self.memories.is_empty()
     }
 }
 
 pub struct MemoryRecall {
     memory_manager: Arc<HybridMemoryManager>,
-    cache: Arc<MemoryCache>,
+    cache: Arc<Mutex<RecallCacheHelper>>,
 }
 
 impl MemoryRecall {
-    pub fn new(memory_manager: Arc<HybridMemoryManager>, cache: Arc<MemoryCache>) -> Self {
+    pub fn new(memory_manager: Arc<HybridMemoryManager>, cache: Arc<Mutex<RecallCacheHelper>>) -> Self {
         Self { memory_manager, cache }
-    }
-
-    fn format_timestamp(&self, timestamp: i64) -> String {
-        let datetime = OffsetDateTime::from_unix_timestamp(timestamp)
-            .unwrap_or_else(|_| OffsetDateTime::now_utc());
-
-        let format = format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]")
-            .unwrap_or_else(|_| format_description::parse("[year]-[month]-[day]T[hour]:[minute]:[second]Z").unwrap());
-
-        datetime.format(&format)
-            .unwrap_or_else(|_| timestamp.to_string())
-    }
-
-    fn serialize_memory(&self, memory: &MemoryFragment) -> String {
-        format!(
-            "Memory ID: {}\nCreated: {}\nSource: {}\nImportance: {}/255\nConfidence: {}/255\nTags: {}\nContent: {}",
-            memory.id,
-            self.format_timestamp(memory.objective_metadata.created_at),
-            memory.objective_metadata.source.channel,
-            memory.subjective_metadata.importance,
-            memory.subjective_metadata.confidence,
-            memory.subjective_metadata.tags.join(", "),
-            memory.content
-        )
     }
 }
 
@@ -139,49 +110,46 @@ impl Tool for MemoryRecall {
             Ok("No relevant memories found.".to_string())
         } else {
             // Store memories in cache for selection
-            self.cache.store(recall_result.memories.clone());
+            self.cache.lock().unwrap().store(recall_result.memories.clone());
 
-            // Serialize memories with full information
-            let memories_text: Vec<String> = recall_result.memories
-                .iter()
-                .map(|m| self.serialize_memory(m))
-                .collect();
+            // Use unified serialization
+            let serialized_memories = MemoryFragmentList::from(recall_result.memories.clone()).serialize();
 
             Ok(format!(
                 "Recalled {} memories (cached for selection):\n\n{}\n\nUse select_memories tool to add specific memories to context.",
                 recall_result.memories.len(),
-                memories_text.join("\n---\n")
+                serialized_memories
             ))
         }
     }
 }
 
 #[derive(Deserialize)]
-pub struct SelectMemoriesArgs {
+pub struct MemorySelectionArgs {
     pub memory_ids: Vec<i64>,
     pub summary: String,
 }
 
 #[derive(Debug, thiserror::Error)]
 #[error("Memory selection error")]
-pub struct SelectMemoriesError;
+pub struct MemorySelectionError;
 
-pub struct SelectMemories {
-    cache: Arc<MemoryCache>,
-    context: Arc<Mutex<crate::agent::EphemeraContext>>,
+pub struct MemorySelection {
+    cache: Arc<Mutex<RecallCacheHelper>>,
+    context: Arc<Mutex<EphemeraContext>>,
 }
 
-impl SelectMemories {
-    pub fn new(cache: Arc<MemoryCache>, context: Arc<Mutex<crate::agent::EphemeraContext>>) -> Self {
+impl MemorySelection {
+    pub fn new(cache: Arc<Mutex<RecallCacheHelper>>, context: Arc<Mutex<EphemeraContext>>) -> Self {
         Self { cache, context }
     }
 }
 
-impl Tool for SelectMemories {
+impl Tool for MemorySelection {
     const NAME: &'static str = "select_memories";
 
-    type Error = SelectMemoriesError;
-    type Args = SelectMemoriesArgs;
+    type Error = MemorySelectionError;
+    type Args = MemorySelectionArgs;
     type Output = String;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
@@ -211,12 +179,15 @@ impl Tool for SelectMemories {
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
         // Check if cache has memories
-        if self.cache.is_empty() {
-            return Err(SelectMemoriesError);
-        }
+        {
+            let cache = self.cache.lock().unwrap();
+            if cache.is_empty() {
+                return Err(MemorySelectionError);
+            }
+        } // Release lock before get operation
 
         // Get memories from cache
-        match self.cache.get(&args.memory_ids) {
+        match self.cache.lock().unwrap().get(&args.memory_ids) {
             Some(memories) => {
                 // Add memories to context
                 {
@@ -226,7 +197,7 @@ impl Tool for SelectMemories {
 
                 // Clear cache after successful selection
                 let count = memories.len();
-                self.cache.clear();
+                self.cache.lock().unwrap().clear();
 
                 Ok(format!(
                     "Successfully added {} memories to context.\nSummary: {}\n\nMemory IDs: {}",
@@ -236,7 +207,7 @@ impl Tool for SelectMemories {
                 ))
             }
             None => {
-                Err(SelectMemoriesError)
+                Err(MemorySelectionError)
             }
         }
     }

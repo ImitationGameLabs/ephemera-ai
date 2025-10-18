@@ -846,6 +846,7 @@ dependencies = [
  "dotenv",
  "epha-agent",
  "epha-memory",
+ "log",
  "qdrant-client",
  "rig-core",
  "sea-orm",

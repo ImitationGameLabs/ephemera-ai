@@ -22,6 +22,7 @@ tracing-subscriber = { version = "0.3", features = [
     "std",
     "fmt",
 ] }
+log = "0.4"
 
 epha-agent = { path = "../epha-agent" }
 epha-memory = { path = "../epha-memory" }

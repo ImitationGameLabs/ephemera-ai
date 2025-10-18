@@ -206,7 +206,7 @@ impl HybridMemoryManager {
 impl Manager for HybridMemoryManager {
     type Error = HybridError;
 
-    async fn append(&mut self, memory: &MemoryFragment) -> Result<(), HybridError> {
+    async fn append(&self, memory: &MemoryFragment) -> Result<(), HybridError> {
         // Calculate and update importance score before saving
         let mut memory_with_importance = memory.clone();
         memory_with_importance.subjective_metadata.importance = self.calculate_importance(memory);

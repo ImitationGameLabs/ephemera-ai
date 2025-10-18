@@ -37,6 +37,6 @@ use async_trait::async_trait;
 pub trait Manager {
     type Error;
 
-    async fn append(&mut self, memory: &MemoryFragment) -> Result<(), Self::Error>;
+    async fn append(&self, memory: &MemoryFragment) -> Result<(), Self::Error>;
     async fn recall(&self, query: &MemoryQuery) -> Result<MemoryQueryResult, Self::Error>;
 }

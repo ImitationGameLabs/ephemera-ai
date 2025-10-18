@@ -6,11 +6,11 @@ use rig::{
     client::CompletionClient,
     providers::deepseek::CompletionModel,
 };
-use time::OffsetDateTime;
+use epha_memory::{HybridMemoryManager, MemorySource, MemoryFragmentBuilder};
 use std::sync::{Arc, Mutex};
-use epha_memory::{HybridMemoryManager, MemoryFragment, SubjectiveMetadata, ObjectiveMetadata, MemorySource};
-use crate::agent::{EphemeraContext, CommonPrompt, StateMachineExecutor, MemoryFragmentBuilder};
-use crate::tools::{GetMessages, MemoryRecall, SelectMemories, MemoryCache, SendMessage, StateTransition};
+use crate::agent::{CommonPrompt, StateMachineExecutor};
+use crate::context::EphemeraContext;
+use crate::tools::{GetMessages, MemoryRecall, MemorySelection, RecallCacheHelper, SendMessage, StateTransition};
 
 pub struct EphemeraAI {
     state_machine: Arc<Mutex<StateMachine>>,
@@ -19,7 +19,7 @@ pub struct EphemeraAI {
     memory_manager: Arc<HybridMemoryManager>,
     common_prompt: CommonPrompt,
     executor: StateMachineExecutor,
-    memory_cache: Arc<MemoryCache>,
+    memory_cache: Arc<Mutex<RecallCacheHelper>>,
 }
 
 impl EphemeraAI {
@@ -46,10 +46,10 @@ impl EphemeraAI {
             .expect("Failed to create StateMachine");
 
         // Stage 2.5: Create shared memory cache
-        let memory_cache = Arc::new(MemoryCache::new());
+        let memory_cache = Arc::new(Mutex::new(RecallCacheHelper::new()));
 
         // Create shared context first
-        let context_data = Arc::new(Mutex::new(EphemeraContext::new()));
+        let context_data = Arc::new(Mutex::new(EphemeraContext::new(memory_manager.clone())));
 
         // Stage 3: Create agents and assign them to states
         init_agents(&completion_client, model, memory_manager.clone(), &state_machine, &common_prompt, &memory_cache, &context_data)
@@ -90,50 +90,15 @@ impl EphemeraAI {
     
     async fn update_context(&mut self, result: String) -> anyhow::Result<()> {
         // Application-specific context update logic
-        let activity_fragment = MemoryFragmentBuilder::action("state_execution".to_string(), result).build();
+        let activity_fragment = MemoryFragmentBuilder::new()
+            .content(format!("state_execution: {}", result))
+            .importance(100)
+            .confidence(255)
+            .add_tag("activity".to_string())
+            .add_tag("state_execution".to_string())
+            .source(MemorySource::action("execution".to_string()))
+            .build();
         self.context.data().lock().unwrap().add_activity(activity_fragment);
-        Ok(())
-    }
-
-    // Memory-related methods
-    pub async fn save_response_memory(
-        &mut self,
-        response: String,
-        additional_tags: Vec<String>
-    ) -> anyhow::Result<()> {
-        let response_timestamp = OffsetDateTime::now_utc();
-
-        let mut tags = vec!["response".to_string()];
-        tags.extend(additional_tags);
-
-        let response_memory = MemoryFragment {
-            id: 0, // Will be set by database after insertion
-            content: response.clone(),
-            subjective_metadata: SubjectiveMetadata {
-                importance: 60,
-                confidence: 90,
-                tags,
-                notes: String::new(),
-            },
-            objective_metadata: ObjectiveMetadata {
-                created_at: response_timestamp.unix_timestamp(),
-                source: MemorySource::dialogue_response(),
-            },
-            associations: vec![],
-        };
-
-        // Note: This requires mutable access to memory_manager
-        // For now, we'll need to handle this differently or use interior mutability
-        // TODO: Implement proper mutable access pattern
-        println!("Would save memory: {}", response_memory.content);
-
-        // Update context
-        let activity_fragment = MemoryFragmentBuilder::action(
-            "memory_save".to_string(),
-            format!("Saved response memory with {} characters", response.len())
-        ).build();
-        self.context.data().lock().unwrap().add_activity(activity_fragment);
-
         Ok(())
     }
 }
@@ -145,7 +110,7 @@ fn init_agents(
     memory_manager: Arc<HybridMemoryManager>,
     state_machine: &Arc<Mutex<StateMachine>>,
     common_prompt: &CommonPrompt,
-    memory_cache: &Arc<MemoryCache>,
+    memory_cache: &Arc<Mutex<RecallCacheHelper>>,
     context_data: &Arc<Mutex<EphemeraContext>>,
 ) -> anyhow::Result<()> {
     let state_names: Vec<String> = state_machine.lock().unwrap().get_state_names();
@@ -184,7 +149,7 @@ fn create_agent_for_state(
     state_machine: &Arc<Mutex<StateMachine>>,
     state: &State,
     common_prompt: &CommonPrompt,
-    memory_cache: &Arc<MemoryCache>,
+    memory_cache: &Arc<Mutex<RecallCacheHelper>>,
     context_data: &Arc<Mutex<EphemeraContext>>,
 ) -> anyhow::Result<Agent<CompletionModel>> {
     // Get state prompt for combined prompt creation
@@ -202,7 +167,7 @@ fn create_agent_for_state(
         "recall" => {
             agent_builder
                 .tool(MemoryRecall::new(memory_manager.clone(), memory_cache.clone()))
-                .tool(SelectMemories::new(memory_cache.clone(), context_data.clone()))
+                .tool(MemorySelection::new(memory_cache.clone(), context_data.clone()))
                 .build()
         },
         "reasoning" => agent_builder.tool(StateTransition::new(state_machine.clone())).build(),
