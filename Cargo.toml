@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "epha-ai",
+    "epha-agent",
     "epha-memory",
     "dialogue-atrium"
 ]
