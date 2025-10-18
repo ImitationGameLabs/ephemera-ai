@@ -3,5 +3,5 @@ mod memory;
 mod state_machine;
 
 pub use dialogue::{GetMessages, SendMessage};
-pub use memory::MemoryRecall;
+pub use memory::{MemoryRecall, SelectMemories, MemoryCache};
 pub use state_machine::StateTransition;

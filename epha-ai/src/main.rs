@@ -1,9 +1,10 @@
 use dotenv::dotenv;
 use epha_memory::HybridMemoryManager;
-use rig::providers::openai;
+use rig::providers::{deepseek, openai};
 use rig::client::embeddings::EmbeddingsClientDyn;
 use qdrant_client::config::QdrantConfig;
 use sea_orm_migration::MigratorTrait;
+use tracing::info;
 use std::sync::Arc;
 use crate::agent::EphemeraAI;
 
@@ -30,14 +31,14 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn init_llm_client() -> openai::Client {
+fn init_llm_client() -> deepseek::Client {
     // Create LLM client (OpenAI-compatible)
     let api_key = std::env::var("API_KEY")
         .expect("API_KEY not set");
     let base_url = std::env::var("BASE_URL")
         .expect("BASE_URL not set");
 
-    let llm_client = openai::Client::builder(&api_key)
+    let llm_client = deepseek::Client::builder(&api_key)
         .base_url(&base_url)
         .build();
 
@@ -50,11 +51,11 @@ async fn init_memory_manager() -> anyhow::Result<HybridMemoryManager> {
     let conn = sea_orm::Database::connect(&mysql_url).await?;
 
     // Run database migrations
-    println!("Running database migrations...");
+    info!("Running database migrations...");
     epha_memory::Migrator::up(&conn, None)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to run migrations: {}", e))?;
-    println!("Migrations completed successfully!");
+    info!("Migrations completed successfully!");
 
     // Setup Qdrant connection
     let qdrant_url = std::env::var("EPHA_MEMORY_QDRANT_URL").expect("EPHA_MEMORY_QDRANT_URL not set");

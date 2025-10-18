@@ -4,12 +4,15 @@ use serde_json::json;
 
 #[derive(Deserialize)]
 pub struct GetMessagesArgs {
-    pub room_id: String,
+    pub sender: Option<String>,
+    pub limit: Option<u64>,
+    pub offset: Option<u64>,
 }
 
 #[derive(Deserialize)]
 pub struct SendMessageArgs {
-    pub room_id: String,
+    pub username: String,
+    pub password: String,
     pub message: String,
 }
 
@@ -30,16 +33,24 @@ impl Tool for GetMessages {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         serde_json::from_value(json!({
             "name": "get_messages",
-            "description": "Get unread messages from Dialogue Atrium room",
+            "description": "Get messages from Dialogue Atrium",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "room_id": {
+                    "sender": {
                         "type": "string",
-                        "description": "The ID of the room to get messages from"
+                        "description": "Optional filter to get messages only from specific sender"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of messages to retrieve"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Number of messages to skip for pagination"
                     }
                 },
-                "required": ["room_id"]
+                "required": []
             }
         }))
         .expect("Tool Definition")
@@ -47,7 +58,10 @@ impl Tool for GetMessages {
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
         // TODO: Implement actual Dialogue Atrium client
-        Ok(format!("Retrieved messages from room {}", args.room_id))
+        let sender_desc = args.sender.map(|s| format!("from sender: {}", s)).unwrap_or_else(|| "from all senders".to_string());
+        let limit_desc = args.limit.map(|l| format!("limit: {}", l)).unwrap_or_else(|| "no limit".to_string());
+        Ok(format!("Retrieved messages {} ({}, {})", sender_desc, limit_desc,
+                   args.offset.map(|o| format!("offset: {}", o)).unwrap_or_else(|| "no offset".to_string())))
     }
 }
 
@@ -64,20 +78,24 @@ impl Tool for SendMessage {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         serde_json::from_value(json!({
             "name": "send_message",
-            "description": "Send message to Dialogue Atrium room",
+            "description": "Send message to Dialogue Atrium",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "room_id": {
+                    "username": {
                         "type": "string",
-                        "description": "The ID of the room to send message to"
+                        "description": "Your username for authentication"
+                    },
+                    "password": {
+                        "type": "string",
+                        "description": "Your password for authentication"
                     },
                     "message": {
                         "type": "string",
                         "description": "The message to send"
                     }
                 },
-                "required": ["room_id", "message"]
+                "required": ["username", "password", "message"]
             }
         }))
         .expect("Tool Definition")
@@ -85,6 +103,6 @@ impl Tool for SendMessage {
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
         // TODO: Implement actual Dialogue Atrium client
-        Ok(format!("Sent message '{}' to room {}", args.message, args.room_id))
+        Ok(format!("Sent message '{}' as user '{}'", args.message, args.username))
     }
 }

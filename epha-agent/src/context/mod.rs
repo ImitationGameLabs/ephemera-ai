@@ -1,29 +1,28 @@
 
 
+use std::sync::{Arc, Mutex};
+
 pub trait ContextSerialize {
     fn serialize(&self) -> String;
 }
 
 pub struct Context<T> {
-    data: T,
+    data: Arc<Mutex<T>>,
 }
 
 impl<T: ContextSerialize> Context<T> {
-    pub fn new(data: T) -> Self {
+    pub fn new(data: Arc<Mutex<T>>) -> Self {
         Self { data }
     }
 
-    pub fn data(&self) -> &T {
-        &self.data
-    }
-
-    pub fn data_mut(&mut self) -> &mut T {
-        &mut self.data
+    pub fn data(&self) -> Arc<Mutex<T>> {
+        self.data.clone()
     }
 
     pub fn serialize(&self) -> String {
-        let content = self.data.serialize();
-        let escaped_content = self.escape_system_tags(content);
+        let guard = self.data.lock().unwrap();
+        let content = guard.serialize();
+        let escaped_content = Self::escape_system_tags(content);
 
         format!(
             "<context>\n{}\n</context>",
@@ -31,7 +30,7 @@ impl<T: ContextSerialize> Context<T> {
         )
     }
 
-    fn escape_system_tags(&self, content: String) -> String {
+    fn escape_system_tags(content: String) -> String {
         let system_tags = vec!["context", "sys.memory", "sys.agent", "sys.state"];
 
         let mut escaped_content = content;

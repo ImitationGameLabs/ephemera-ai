@@ -39,8 +39,6 @@ impl MysqlMemoryManager {
             tags: Set(model.tags),
             notes: Set(model.notes),
             associations: Set(model.associations),
-            claimed_identity: Set(model.claimed_identity),
-            assessed_identity: Set(model.assessed_identity),
         };
 
         let inserted_model = active_model.insert(&self.conn).await?;

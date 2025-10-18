@@ -1,22 +1,10 @@
 use std::collections::HashMap;
 use std::fmt;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
-use rig::agent::Agent;
-use rig::message::Message;
-use rig::completion::Completion;
-use rig::providers::openai::responses_api::ResponsesCompletionModel;
-
-/// Errors related to state management
-#[derive(Debug, Error)]
-pub enum StateError {
-    #[error("State '{0}' not found")]
-    StateNotFound(String),
-    #[error("Invalid state transition: {0}")]
-    InvalidTransition(String),
-    #[error("State configuration error: {0}")]
-    ConfigurationError(String),
-}
+use rig::{
+    agent::Agent,
+    providers::deepseek::CompletionModel,
+};
 
 /// Represents a state in the agent's reasoning cycle
 #[derive(Clone, Serialize, Deserialize)]
@@ -27,7 +15,7 @@ pub struct State {
 
     // Runtime execution agent (not serialized)
     #[serde(skip)]
-    pub completion_agent: Option<Agent<ResponsesCompletionModel>>,
+    pub completion_agent: Option<Agent<CompletionModel>>,
 }
 
 impl State {
@@ -49,38 +37,16 @@ impl State {
     }
 
     /// Set the completion agent for this state (builder pattern)
-    pub fn with_completion_agent(mut self, agent: Agent<ResponsesCompletionModel>) -> Self {
+    pub fn with_completion_agent(mut self, agent: Agent<CompletionModel>) -> Self {
         self.completion_agent = Some(agent);
         self
     }
 
     /// Set the completion agent for this state (mutable reference)
-    pub fn with_agent(&mut self, agent: Agent<ResponsesCompletionModel>) {
+    pub fn with_agent(&mut self, agent: Agent<CompletionModel>) {
         self.completion_agent = Some(agent);
     }
 
-    /// Execute the state with the given context
-    pub async fn execute(&self, context: &str) -> anyhow::Result<String> {
-        let agent = self.completion_agent.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("State '{}' has no completion agent configured", self.prompt_data.name))?;
-
-        // Build the full prompt with context
-        let full_prompt = format!("{}\n\nCurrent Context:\n{}", self.prompt_data.prompt, context);
-
-        // Convert context to message format (for now, empty - can be enhanced later)
-        let context_messages: Vec<Message> = vec![];
-
-        // Execute the state
-        let completion_result = agent
-            .completion(full_prompt, context_messages)
-            .await?;
-
-        let result = completion_result.send().await?;
-
-        // Extract text content from the response
-        let response_text = format!("{:?}", result.choice);
-        Ok(response_text)
-    }
 }
 
 impl fmt::Debug for State {

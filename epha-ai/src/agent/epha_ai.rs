@@ -1,12 +1,16 @@
 use epha_agent::state_machine::{StateMachine, State, load_state_prompts_from_directory};
 use epha_agent::context::Context;
-use rig::providers::openai::Client;
-use rig::client::CompletionClient;
+use rig::{
+    agent::Agent,
+    providers::deepseek::Client,
+    client::CompletionClient,
+    providers::deepseek::CompletionModel,
+};
 use time::OffsetDateTime;
 use std::sync::{Arc, Mutex};
 use epha_memory::{HybridMemoryManager, MemoryFragment, SubjectiveMetadata, ObjectiveMetadata, MemorySource};
-use crate::agent::{EphemeraContext, CommonPrompt};
-use crate::tools::{GetMessages, MemoryRecall, SendMessage, StateTransition};
+use crate::agent::{EphemeraContext, CommonPrompt, StateMachineExecutor, MemoryFragmentBuilder};
+use crate::tools::{GetMessages, MemoryRecall, SelectMemories, MemoryCache, SendMessage, StateTransition};
 
 pub struct EphemeraAI {
     state_machine: Arc<Mutex<StateMachine>>,
@@ -14,6 +18,8 @@ pub struct EphemeraAI {
     context: Context<EphemeraContext>,
     memory_manager: Arc<HybridMemoryManager>,
     common_prompt: CommonPrompt,
+    executor: StateMachineExecutor,
+    memory_cache: Arc<MemoryCache>,
 }
 
 impl EphemeraAI {
@@ -39,16 +45,26 @@ impl EphemeraAI {
             .map(|sm| Arc::new(Mutex::new(sm)))
             .expect("Failed to create StateMachine");
 
+        // Stage 2.5: Create shared memory cache
+        let memory_cache = Arc::new(MemoryCache::new());
+
+        // Create shared context first
+        let context_data = Arc::new(Mutex::new(EphemeraContext::new()));
+
         // Stage 3: Create agents and assign them to states
-        init_agents(&completion_client, model, memory_manager.clone(), &state_machine, &common_prompt)
+        init_agents(&completion_client, model, memory_manager.clone(), &state_machine, &common_prompt, &memory_cache, &context_data)
             .expect("Failed to initialize agents");
+
+        let executor = StateMachineExecutor::new(state_machine.clone());
 
         Self {
             state_machine,
             completion_client: Arc::new(completion_client),
-            context: Context::new(EphemeraContext::new()),
+            context: Context::new(context_data),
             memory_manager,
             common_prompt,
+            executor,
+            memory_cache,
         }
     }
 
@@ -63,9 +79,8 @@ impl EphemeraAI {
         // Prepare context for current state
         let context_str = self.context.serialize();
 
-        // Execute current state through StateMachine
-        let result = self.state_machine.lock().unwrap()
-            .execute_current_state(&context_str).await?;
+        // Execute current state through StateMachineExecutor
+        let result = self.executor.execute_current_state(&context_str).await?;
 
         // Update context with execution result
         self.update_context(result).await?;
@@ -75,7 +90,8 @@ impl EphemeraAI {
     
     async fn update_context(&mut self, result: String) -> anyhow::Result<()> {
         // Application-specific context update logic
-        self.context.data_mut().add_activity("state_execution".to_string(), result);
+        let activity_fragment = MemoryFragmentBuilder::action("state_execution".to_string(), result).build();
+        self.context.data().lock().unwrap().add_activity(activity_fragment);
         Ok(())
     }
 
@@ -101,7 +117,7 @@ impl EphemeraAI {
             },
             objective_metadata: ObjectiveMetadata {
                 created_at: response_timestamp.unix_timestamp(),
-                source: MemorySource::StatementBySelf,
+                source: MemorySource::dialogue_response(),
             },
             associations: vec![],
         };
@@ -112,10 +128,11 @@ impl EphemeraAI {
         println!("Would save memory: {}", response_memory.content);
 
         // Update context
-        self.context.data_mut().add_activity(
+        let activity_fragment = MemoryFragmentBuilder::action(
             "memory_save".to_string(),
             format!("Saved response memory with {} characters", response.len())
-        );
+        ).build();
+        self.context.data().lock().unwrap().add_activity(activity_fragment);
 
         Ok(())
     }
@@ -128,6 +145,8 @@ fn init_agents(
     memory_manager: Arc<HybridMemoryManager>,
     state_machine: &Arc<Mutex<StateMachine>>,
     common_prompt: &CommonPrompt,
+    memory_cache: &Arc<MemoryCache>,
+    context_data: &Arc<Mutex<EphemeraContext>>,
 ) -> anyhow::Result<()> {
     let state_names: Vec<String> = state_machine.lock().unwrap().get_state_names();
 
@@ -144,7 +163,9 @@ fn init_agents(
             &memory_manager,
             state_machine,
             &state,
-            common_prompt
+            common_prompt,
+            memory_cache,
+            context_data
         )?;
 
         if let Some(state) = sm.get_state_mut(&state_name) {
@@ -163,18 +184,27 @@ fn create_agent_for_state(
     state_machine: &Arc<Mutex<StateMachine>>,
     state: &State,
     common_prompt: &CommonPrompt,
-) -> anyhow::Result<rig::agent::Agent<rig::providers::openai::responses_api::ResponsesCompletionModel>> {
+    memory_cache: &Arc<MemoryCache>,
+    context_data: &Arc<Mutex<EphemeraContext>>,
+) -> anyhow::Result<Agent<CompletionModel>> {
     // Get state prompt for combined prompt creation
     let prompt = &state.prompt_data;
 
     let combined_prompt = common_prompt.combine_with_state_prompt(&prompt.prompt);
 
     // Build agent with appropriate tools based on state name
-    let agent_builder = completion_client.agent(model).preamble(&combined_prompt);
+    let agent_builder = completion_client
+        .agent(model)
+        .preamble(&combined_prompt);
 
     let agent = match prompt.name.as_str() {
         "perception" => agent_builder.tool(GetMessages).build(),
-        "recall" => agent_builder.tool(MemoryRecall::new(memory_manager.clone())).build(),
+        "recall" => {
+            agent_builder
+                .tool(MemoryRecall::new(memory_manager.clone(), memory_cache.clone()))
+                .tool(SelectMemories::new(memory_cache.clone(), context_data.clone()))
+                .build()
+        },
         "reasoning" => agent_builder.tool(StateTransition::new(state_machine.clone())).build(),
         "output" => agent_builder.tool(SendMessage).build(),
         _ => agent_builder.build(),

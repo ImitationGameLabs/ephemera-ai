@@ -1,5 +1,17 @@
 use std::fmt;
-use super::state::{State, StateError, StateRoundTracker, StateTransition};
+use thiserror::Error;
+use super::state::{State, StateRoundTracker, StateTransition};
+
+/// Errors related to state machine operations
+#[derive(Debug, Error)]
+pub enum StateError {
+    #[error("State '{0}' not found")]
+    StateNotFound(String),
+    #[error("Invalid state transition: {0}")]
+    InvalidTransition(String),
+    #[error("State configuration error: {0}")]
+    ConfigurationError(String),
+}
 
 /// State machine for agent states and transitions
 #[derive(Debug)]
@@ -175,12 +187,7 @@ impl StateMachine {
         self.tracker.transition_history()
     }
 
-    /// Execute current state with given context
-    pub async fn execute_current_state(&self, context: &str) -> anyhow::Result<String> {
-        let current_state = self.current_state()?;
-        current_state.execute(context).await
-    }
-
+    
     /// Get state information for LLM tools
     pub fn get_state_info(&self) -> Vec<StateInfo> {
         self.states.iter().map(|state| {
