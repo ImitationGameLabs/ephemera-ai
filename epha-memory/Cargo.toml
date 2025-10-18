@@ -19,6 +19,6 @@ tracing-subscriber = { version = "0.3", features = [
     "fmt",
 ] }
 qdrant-client = { version = "1.15" }
-rig-core = "0.12"
+rig-core = "0.22"
 sea-orm-migration = "1.1"
 

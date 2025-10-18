@@ -1,7 +1,5 @@
 use async_trait::async_trait;
-use rig::embeddings::embedding::EmbeddingModel;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use rig::embeddings::embedding::EmbeddingModelDyn;
 use thiserror::Error;
 
 use super::{
@@ -39,28 +37,27 @@ pub enum HybridError {
     TransactionRollback(i64),
 }
 
-pub struct HybridMemoryManager<T: EmbeddingModel> {
+pub struct HybridMemoryManager {
     mysql_manager: MysqlMemoryManager,
     qdrant_manager: QdrantMemoryManager,
-    embedding_model: Arc<Mutex<T>>,
+    embedding_model: Box<dyn EmbeddingModelDyn>,
 }
 
-impl<T: EmbeddingModel> HybridMemoryManager<T> {
+impl HybridMemoryManager {
     pub fn new(
         mysql_manager: MysqlMemoryManager,
         qdrant_manager: QdrantMemoryManager,
-        embedding_model: T,
+        embedding_model: Box<dyn EmbeddingModelDyn>,
     ) -> Self {
         Self {
             mysql_manager,
             qdrant_manager,
-            embedding_model: Arc::new(Mutex::new(embedding_model)),
+            embedding_model,
         }
     }
 
     async fn generate_embedding(&self, text: &str) -> Result<Vec<f32>, HybridError> {
-        let embedding_model = self.embedding_model.lock().await;
-        let embedding = embedding_model.embed_text(text)
+        let embedding = self.embedding_model.embed_text(text)
             .await
             .map_err(|e| HybridError::Embedding(format!("Failed to generate embedding: {e}")))?;
 
@@ -140,10 +137,73 @@ impl<T: EmbeddingModel> HybridMemoryManager<T> {
 
         Ok(thematic_insights)
     }
+
+        async fn build_qdrant_filter(
+        &self,
+        _query: &MemoryQuery,
+    ) -> Result<Option<qdrant_client::qdrant::Filter>, HybridError> {
+        // For now, skip complex filtering to avoid Qdrant API compatibility issues
+        // TODO: Implement proper filtering when Qdrant API is more stable
+        Ok(None)
+    }
+
+    /// Perform reflection on stored memories to identify patterns and insights
+    pub async fn reflect(&self) -> Result<Vec<String>, HybridError> {
+        let mut insights = Vec::new();
+
+        // Analyze recent memories for immediate patterns
+        insights.extend(self.analyze_recent_memories().await?);
+
+        // Analyze important memories for significant insights
+        insights.extend(self.analyze_important_memories().await?);
+
+        // Analyze thematic patterns through semantic search
+        insights.extend(self.analyze_thematic_patterns().await?);
+
+        if insights.is_empty() {
+            Ok(vec![
+                "No significant patterns detected yet. Keep building memories.".to_string(),
+            ])
+        } else {
+            Ok(insights)
+        }
+    }
+
+    /// Get memories with high importance for review using targeted queries
+    pub async fn get_important_memories(
+        &self,
+        min_importance: u8,
+    ) -> Result<Vec<MemoryFragment>, HybridError> {
+        // Use a broad query to find important memories
+        // In a real implementation, this would use proper database filtering
+        let query = MemoryQuery {
+            keywords: "important significant crucial critical".to_string(),
+            time_range: None,
+        };
+
+        let result = self.recall(&query).await?;
+
+        // Filter locally for importance (temporary until proper DB filtering)
+        let important_memories = result.memories
+            .into_iter()
+            .filter(|m| m.subjective_metadata.importance >= min_importance)
+            .collect();
+
+        Ok(important_memories)
+    }
+
+    /// Prune low-importance memories to maintain database efficiency
+    /// This is a placeholder - proper pruning would require database-level operations
+    pub async fn prune_memories(&self, _max_memories: usize) -> Result<usize, HybridError> {
+        // Pruning should be implemented at the database level with proper queries
+        // rather than loading all memories into memory
+        // For now, return 0 (no pruning) until proper implementation
+        Ok(0)
+    }
 }
 
 #[async_trait]
-impl<T: EmbeddingModel + Send + Sync> Manager for HybridMemoryManager<T> {
+impl Manager for HybridMemoryManager {
     type Error = HybridError;
 
     async fn append(&mut self, memory: &MemoryFragment) -> Result<(), HybridError> {
@@ -213,70 +273,5 @@ impl<T: EmbeddingModel + Send + Sync> Manager for HybridMemoryManager<T> {
         };
 
         Ok(MemoryQueryResult { memories })
-    }
-}
-
-impl<T: EmbeddingModel + Send + Sync> HybridMemoryManager<T> {
-    async fn build_qdrant_filter(
-        &self,
-        _query: &MemoryQuery,
-    ) -> Result<Option<qdrant_client::qdrant::Filter>, HybridError> {
-        // For now, skip complex filtering to avoid Qdrant API compatibility issues
-        // TODO: Implement proper filtering when Qdrant API is more stable
-        Ok(None)
-    }
-
-    /// Perform reflection on stored memories to identify patterns and insights
-    pub async fn reflect(&self) -> Result<Vec<String>, HybridError> {
-        let mut insights = Vec::new();
-
-        // Analyze recent memories for immediate patterns
-        insights.extend(self.analyze_recent_memories().await?);
-
-        // Analyze important memories for significant insights
-        insights.extend(self.analyze_important_memories().await?);
-
-        // Analyze thematic patterns through semantic search
-        insights.extend(self.analyze_thematic_patterns().await?);
-
-        if insights.is_empty() {
-            Ok(vec![
-                "No significant patterns detected yet. Keep building memories.".to_string(),
-            ])
-        } else {
-            Ok(insights)
-        }
-    }
-
-    /// Get memories with high importance for review using targeted queries
-    pub async fn get_important_memories(
-        &self,
-        min_importance: u8,
-    ) -> Result<Vec<MemoryFragment>, HybridError> {
-        // Use a broad query to find important memories
-        // In a real implementation, this would use proper database filtering
-        let query = MemoryQuery {
-            keywords: "important significant crucial critical".to_string(),
-            time_range: None,
-        };
-
-        let result = self.recall(&query).await?;
-
-        // Filter locally for importance (temporary until proper DB filtering)
-        let important_memories = result.memories
-            .into_iter()
-            .filter(|m| m.subjective_metadata.importance >= min_importance)
-            .collect();
-
-        Ok(important_memories)
-    }
-
-    /// Prune low-importance memories to maintain database efficiency
-    /// This is a placeholder - proper pruning would require database-level operations
-    pub async fn prune_memories(&self, _max_memories: usize) -> Result<usize, HybridError> {
-        // Pruning should be implemented at the database level with proper queries
-        // rather than loading all memories into memory
-        // For now, return 0 (no pruning) until proper implementation
-        Ok(0)
     }
 }
