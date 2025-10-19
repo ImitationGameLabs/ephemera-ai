@@ -9,9 +9,21 @@ Ephemera AI is an AI system with a focus on long-term memory, reflection, and me
 ## Codebase Structure
 
 - **epha-ai/**: Main application binary.
+- **epha-agent/**: Agent system with state machine and context management capabilities.
 - **epha-memory/**: Memory management library for handling memory operations and persistence.
 - **epha-frontend/**: Web interface providing visual interaction and management for all ephemera-ai related components and features.
-- **dialogue-atrium/**: Simple chatroom designed for human/AI-agnostic integration.
+- **dialogue/**: Modular chat system designed for human/AI-agnostic integration.
+  - **atrium/**: Server implementation with database and API logic.
+  - **atrium-client/**: Reusable HTTP client library.
+  - **atrium-cli/**: CLI tool for interacting with the chat system.
+
+### Workspace Configuration
+
+All workspace members are defined in:
+- Root `Cargo.toml` (Rust workspace members)
+- `pnpm-workspace.yaml` (Frontend workspace members, if applicable)
+
+See these files for complete list of available projects.
 
 ## Development Commands
 
@@ -20,9 +32,10 @@ Ephemera AI is an AI system with a focus on long-term memory, reflection, and me
 # Build all workspace members
 cargo build
 
-# Build specific crate
+# Build specific crate (examples)
 cargo build -p epha-ai
-cargo build -p epha-memory
+cargo build -p atrium
+# See workspace configuration above for all available projects
 
 # Build with release optimizations
 cargo build --release
@@ -33,9 +46,10 @@ cargo build --release
 # Run all tests
 cargo test
 
-# Run tests for specific crate
+# Run tests for specific crate (examples)
 cargo test -p epha-ai
-cargo test -p epha-memory
+cargo test -p atrium
+# See workspace configuration above for all available projects
 
 # Run specific test
 cargo test --testname
