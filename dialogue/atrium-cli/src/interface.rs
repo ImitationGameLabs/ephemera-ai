@@ -4,10 +4,9 @@ use std::time::Duration;
 use tokio::time::interval;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use crate::cli::client::DialogueClient;
-use crate::cli::auth::{AuthManager, AuthSession};
-use crate::cli::commands::{CommandHandler, CommandContext, CommandError};
-use crate::models::UserCredentials;
+use atrium_client::{DialogueClient, AuthManager, AuthSession};
+use crate::commands::{CommandHandler, CommandContext, CommandError};
+use atrium::models::UserCredentials;
 
 pub struct CliInterface {
     client: DialogueClient,

@@ -1,7 +1,6 @@
 use std::fmt;
-use crate::cli::client::DialogueClient;
-use crate::cli::auth::AuthSession;
-use crate::models::UserResponse;
+use atrium_client::{DialogueClient, AuthSession};
+use atrium::models::UserResponse;
 
 #[derive(Debug)]
 pub enum CommandError {

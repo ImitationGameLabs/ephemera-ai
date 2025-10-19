@@ -3,7 +3,10 @@ members = [
     "epha-ai",
     "epha-agent",
     "epha-memory",
-    "dialogue-atrium"
+
+    "dialogue/atrium",
+    "dialogue/atrium-client",
+    "dialogue/atrium-cli"
 ]
 
 resolver = "3"

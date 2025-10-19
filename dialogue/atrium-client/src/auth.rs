@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 use rpassword::read_password;
-use crate::cli::client::{DialogueClient, ClientError};
-use crate::models::{CreateUserRequest, UserResponse};
+use atrium::models::{CreateUserRequest, UserResponse};
+use crate::client::{DialogueClient, ClientError};
 
 #[derive(Debug, Clone)]
 pub struct AuthSession {

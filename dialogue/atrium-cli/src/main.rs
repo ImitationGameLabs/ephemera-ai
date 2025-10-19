@@ -1,3 +1,6 @@
+mod commands;
+mod interface;
+
 use clap::Parser;
 use dotenv::dotenv;
 use std::env;
@@ -6,8 +9,8 @@ use tracing_subscriber::{
     util::SubscriberInitExt
 };
 
-// Import the CLI modules from the parent directory
-use dialogue_atrium::cli::CliInterface;
+use crate::interface::CliInterface;
+use atrium_client::DialogueClient;
 
 #[derive(Parser)]
 #[command(name = "dialogue-cli")]
@@ -54,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Connecting to Dialogue Atrium server at: {}", server_url);
 
     // Create CLI client
-    let client = dialogue_atrium::cli::DialogueClient::new(server_url);
+    let client = DialogueClient::new(server_url);
     let mut interface = CliInterface::new(client);
 
     // Run the CLI interface with optional pre-auth credentials

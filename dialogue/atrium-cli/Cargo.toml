@@ -1,0 +1,21 @@
+[package]
+name = "atrium-cli"
+version = "0.1.0"
+edition = "2024"
+description = "CLI client for Dialogue Atrium chat system"
+
+[dependencies]
+# Atrium client dependency
+atrium-client = { path = "../atrium-client" }
+# Atrium server dependency for shared types
+atrium = { path = "../atrium" }
+
+anyhow = "1.0"
+rpassword = "7.3"
+clap = { version = "4.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "std", "fmt"] }
+dotenv = "0.15"

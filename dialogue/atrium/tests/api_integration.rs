@@ -90,7 +90,7 @@ impl TestClient {
         });
 
         self.client
-            .post(&format!("{}/heartbeat", self.base_url))
+            .put(&format!("{}/heartbeat", self.base_url))
             .json(&heartbeat_data)
             .send()
             .await

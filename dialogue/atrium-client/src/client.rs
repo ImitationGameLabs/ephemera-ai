@@ -1,8 +1,8 @@
 use reqwest::{Client, Response, Error as ReqwestError};
 use serde::de::DeserializeOwned;
 use std::fmt;
-use crate::models::{CreateUserRequest, UserCredentials, UserResponse, UsersListResponse};
-use crate::models::{CreateMessageRequest, MessageResponse, MessagesResponse};
+use atrium::models::{CreateUserRequest, UserCredentials, UserResponse, UsersListResponse};
+use atrium::models::{CreateMessageRequest, MessageResponse, MessagesResponse};
 
 #[derive(Debug)]
 pub enum ClientError {

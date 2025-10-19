@@ -1,12 +1,11 @@
-
 [package]
-name = "dialogue-atrium"
+name = "atrium"
 version = "0.1.0"
 edition = "2024"
-description = "Asynchronous communication interface for Ephemera AI autonomous agent interactions, providing MCP protocol for AI agents and HTTP interface for users"
+description = "Asynchronous communication interface for Ephemera AI autonomous agent interactions - Server implementation"
 
 [lib]
-name = "dialogue_atrium"
+name = "atrium"
 path = "src/lib.rs"
 
 [dependencies]
@@ -26,18 +25,10 @@ thiserror = "2.0"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 dotenv = "0.15"
 
-# CLI client dependencies
-reqwest = { version = "0.12", features = ["json"] }
-rpassword = "7.3"
-clap = { version = "4.0", features = ["derive"] }
-
 [[bin]]
 name = "atrium"
-path = "src/bin/atrium.rs"
-
-[[bin]]
-name = "atrium-cli"
-path = "src/bin/atrium-cli.rs"
+path = "src/main.rs"
 
 [dev-dependencies]
 tokio-test = "0.4"
+reqwest = { version = "0.12", features = ["json"] }

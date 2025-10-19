@@ -1,3 +1,10 @@
+mod db;
+mod entity;
+mod handlers;
+mod migration;
+mod models;
+mod routes;
+
 use dotenv::dotenv;
 use sea_orm::{Database, DatabaseConnection};
 use sea_orm_migration::MigratorTrait;
@@ -7,9 +14,9 @@ use tracing_subscriber::{
 };
 use std::env;
 
-use dialogue_atrium::db::{UserManager, MessageManager};
-use dialogue_atrium::migration::Migrator;
-use dialogue_atrium::routes::create_routes;
+use crate::db::{UserManager, MessageManager};
+use crate::migration::Migrator;
+use crate::routes::create_routes;
 
 const BIND_ADDRESS: &str = "127.0.0.1:3000";
 
