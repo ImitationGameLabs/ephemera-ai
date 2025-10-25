@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { UI_CONFIG } from '$lib/config/app';
+
 	interface Props {
 		onRetry: () => void;
 	}
@@ -10,7 +12,7 @@
 	async function handleRetry() {
 		isRetrying = true;
 		await onRetry();
-		setTimeout(() => isRetrying = false, 2000);
+		setTimeout(() => isRetrying = false, UI_CONFIG.RETRY_BUTTON_DELAY);
 	}
 </script>
 

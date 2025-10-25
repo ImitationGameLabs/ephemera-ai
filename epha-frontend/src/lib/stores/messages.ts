@@ -1,16 +1,16 @@
 import { writable, derived } from 'svelte/store';
 import { dialogueAtriumAPI } from '$lib/api/dialogue-atrium';
 import type { Message, User } from '$lib/api/types';
+import { MESSAGE_CONFIG, STORAGE_CONFIG } from '$lib/config/app';
 
 // Message persistence functions
 const MESSAGES_STORAGE_KEY = 'atrium_messages';
-const MAX_STORED_MESSAGES = 1000;
 
 function saveMessagesToStorage(messages: Message[]): void {
 	if (typeof window === 'undefined') return;
 
 	try {
-		const limitedMessages = messages.slice(-MAX_STORED_MESSAGES);
+		const limitedMessages = messages.slice(-STORAGE_CONFIG.MAX_STORED_MESSAGES);
 		localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(limitedMessages));
 	} catch (error) {
 		console.warn('Failed to save messages to localStorage:', error);
@@ -311,7 +311,7 @@ function createMessagesStore() {
 				if (currentState.messages.length > 0) {
 					checkForNewMessages(null); // Pass null since we just sent a message
 				}
-			}, 100);
+			}, MESSAGE_CONFIG.SEND_RETRY_DELAY);
 
 			return result;
 		} catch (error) {
@@ -337,7 +337,7 @@ function createMessagesStore() {
 
 		pollingInterval = setInterval(() => {
 			checkForNewMessages(currentUser);
-		}, 3000);
+		}, MESSAGE_CONFIG.POLLING_INTERVAL);
 	}
 
 	function stopPolling() {

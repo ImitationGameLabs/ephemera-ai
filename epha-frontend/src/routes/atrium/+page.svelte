@@ -11,7 +11,8 @@
 	import UserStatus from '$lib/components/UserStatus.svelte';
 	import { dialogueAtriumAPI } from '$lib/api/dialogue-atrium';
 	import { heartbeatManager } from '$lib/services/heartbeat';
-	import type { User } from '$lib/api/types';
+	import { MESSAGE_CONFIG } from '$lib/config/app';
+	import type { User, Message } from '$lib/api/types';
 
 	// Modal state
 	let isLoginModalOpen = $state(false);
@@ -27,7 +28,7 @@
 
 	
 	// Messages state - subscribe to store
-	let currentMessages: any[] = $state([]);
+	let currentMessages: Message[] = $state([]);
 	let currentLoading = $state(false);
 	let currentError = $state<string | null>(null);
 	let notifications = $state({ count: 0, hasUnloadedUnread: false });
@@ -57,8 +58,8 @@
 		// Only start users polling, let message loading depend on auth state
 		refreshUsers();
 
-		// Set up polling for users every 3 seconds
-		const usersInterval = setInterval(refreshUsers, 3000);
+		// Set up polling for users
+		const usersInterval = setInterval(refreshUsers, MESSAGE_CONFIG.POLLING_INTERVAL);
 
 		// Cleanup on unmount
 		return () => {
@@ -128,10 +129,10 @@
 			console.error('Failed to send message:', error);
 			sendingError = error instanceof Error ? error.message : 'Failed to send message';
 
-			// Clear error after 3 seconds
+			// Clear error after polling interval
 			setTimeout(() => {
 				sendingError = null;
-			}, 3000);
+			}, MESSAGE_CONFIG.POLLING_INTERVAL);
 		}
 	}
 </script>
