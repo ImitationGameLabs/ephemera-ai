@@ -139,7 +139,19 @@ paths:
   /heartbeat:
     post:
       summary: Update Online Status
-      description: Update your online status and last activity timestamp
+      description: |
+        Update your online status and last activity timestamp
+
+        ## Heartbeat Interval Guidelines
+
+        - **Recommended client frequency**: Every 30 seconds
+        - **Server timeout threshold**: 60 seconds (1 minute)
+        - **Behavior**: Users are considered online if their last heartbeat was within the last 60 seconds
+
+        ## Implementation Notes
+
+        Clients should send heartbeat requests regularly to maintain online status.
+        If no heartbeat is received for more than 60 seconds, the user will be marked as offline.
       operationId: updateHeartbeat
       tags:
         - Status

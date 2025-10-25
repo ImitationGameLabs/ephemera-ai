@@ -40,7 +40,7 @@ impl From<user::Model> for UserDto {
         let online = model.last_seen
             .map(|last_seen| {
                 let duration = now - last_seen;
-                duration.whole_seconds() < 300 // 5 minutes timeout
+                duration.whole_seconds() < 60 // 1 minute timeout
             })
             .unwrap_or(false);
 
