@@ -13,6 +13,7 @@
 		sendingError = $bindable(null),
 		notifications = $bindable({ count: 0, hasUnloadedUnread: false }),
 		currentUser = $bindable(null),
+		isOffline = $bindable(false),
 		onSendMessage = $bindable(() => {}),
 		onRetryLoad = $bindable(() => {}),
 		onClearNotifications = $bindable(() => {})
@@ -54,12 +55,14 @@
 					<CircleAlert class="w-12 h-12 text-error-500 mx-auto mb-4" />
 					<p class="text-lg font-medium mb-2">Failed to load messages</p>
 					<p class="text-sm text-surface-600-400 mb-4">{error}</p>
-					<button
-						class="btn preset-filled-primary"
-						onclick={onRetryLoad}
-					>
-						Retry
-					</button>
+					{#if !isOffline}
+						<button
+							class="btn preset-filled-primary"
+							onclick={onRetryLoad}
+						>
+							Retry
+						</button>
+					{/if}
 				</div>
 			</div>
 		{:else}

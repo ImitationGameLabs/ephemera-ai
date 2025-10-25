@@ -13,6 +13,7 @@ export interface ChatInterfaceProps {
 	sendingError: string | null;
 	notifications: NotificationState;
 	currentUser: User | null;
+	isOffline?: boolean; // Add optional offline state flag
 	onSendMessage: (content: string) => void;
 	onRetryLoad: () => void;
 	onClearNotifications: () => void;

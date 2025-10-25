@@ -2,6 +2,46 @@ import { writable, derived } from 'svelte/store';
 import { dialogueAtriumAPI } from '$lib/api/dialogue-atrium';
 import type { Message, User } from '$lib/api/types';
 
+// Message persistence functions
+const MESSAGES_STORAGE_KEY = 'atrium_messages';
+const MAX_STORED_MESSAGES = 1000;
+
+function saveMessagesToStorage(messages: Message[]): void {
+	if (typeof window === 'undefined') return;
+
+	try {
+		const limitedMessages = messages.slice(-MAX_STORED_MESSAGES);
+		localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(limitedMessages));
+	} catch (error) {
+		console.warn('Failed to save messages to localStorage:', error);
+	}
+}
+
+function loadMessagesFromStorage(): Message[] {
+	if (typeof window === 'undefined') return [];
+
+	try {
+		const stored = localStorage.getItem(MESSAGES_STORAGE_KEY);
+		if (stored) {
+			return JSON.parse(stored);
+		}
+	} catch (error) {
+		console.warn('Failed to load messages from localStorage:', error);
+		localStorage.removeItem(MESSAGES_STORAGE_KEY);
+	}
+	return [];
+}
+
+function clearMessagesFromStorage(): void {
+	if (typeof window === 'undefined') return;
+
+	try {
+		localStorage.removeItem(MESSAGES_STORAGE_KEY);
+	} catch (error) {
+		console.warn('Failed to clear messages from localStorage:', error);
+	}
+}
+
 interface MessagesState {
 	messages: Message[];
 	loading: boolean;
@@ -18,13 +58,16 @@ interface NewMessagesNotification {
 }
 
 function createMessagesStore() {
+	// Load messages from localStorage on initialization
+	const storedMessages = loadMessagesFromStorage();
+
 	const { subscribe, set, update } = writable<MessagesState>({
-		messages: [],
+		messages: storedMessages,
 		loading: false,
 		error: null,
 		lastFetched: null,
 		hasMore: true,
-		currentOffset: 0,
+		currentOffset: storedMessages.length,
 		totalCount: null
 	});
 
@@ -52,28 +95,47 @@ function createMessagesStore() {
 				return false;
 			}
 
-			
+
 			// Sort messages by created_at ascending (oldest first)
 			const sortedMessages = result.messages.sort((a, b) =>
 				new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
 			);
 
-			update(state => ({
-				...state,
-				messages: sortedMessages,
-				loading: false,
-				lastFetched: Date.now(),
-				currentOffset: result.messages.length,
-				hasMore: result.messages.length === 50
-			}));
+			update(state => {
+				const newState = {
+					...state,
+					messages: sortedMessages,
+					loading: false,
+					lastFetched: Date.now(),
+					currentOffset: result.messages.length,
+					hasMore: result.messages.length === 50
+				};
+
+				// Save to localStorage
+				saveMessagesToStorage(sortedMessages);
+
+				return newState;
+			});
 
 			return true;
 		} catch (error) {
-			update(state => ({
-				...state,
-				loading: false,
-				error: 'Failed to fetch messages'
-			}));
+			// Check if we already have messages to preserve
+			const currentState = get();
+			if (currentState.messages.length > 0) {
+				// Preserve existing messages, just show loading error
+				update(state => ({
+					...state,
+					loading: false,
+					error: 'Connection failed. Showing cached messages. Some messages may be missing.'
+				}));
+			} else {
+				// No messages to show, show generic error
+				update(state => ({
+					...state,
+					loading: false,
+					error: 'Failed to fetch messages'
+				}));
+			}
 			return false;
 		}
 	}
@@ -117,13 +179,18 @@ function createMessagesStore() {
 			update(state => {
 				// Prepend older messages to existing ones
 				const allMessages = [...sortedOlderMessages, ...state.messages];
-				return {
+				const newState = {
 					...state,
 					messages: allMessages,
 					loading: false,
 					currentOffset: state.currentOffset + result.messages.length,
 					hasMore: result.messages.length === 50
 				};
+
+				// Save updated messages to localStorage
+				saveMessagesToStorage(allMessages);
+
+				return newState;
 			});
 
 			return true;
@@ -175,11 +242,16 @@ function createMessagesStore() {
 
 				update(state => {
 					const allMessages = [...state.messages, ...sortedNewMessages];
-					return {
+					const newState = {
 						...state,
 						messages: allMessages,
 						lastFetched: Date.now()
 					};
+
+					// Save updated messages to localStorage
+					saveMessagesToStorage(allMessages);
+
+					return newState;
 				});
 
 				// Update notification - only show notification if these are messages from others
@@ -303,6 +375,7 @@ function createMessagesStore() {
 			totalCount: null
 		});
 		clearNotifications();
+		clearMessagesFromStorage(); // Clear persisted messages on reset
 	}
 
 	return {

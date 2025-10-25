@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { auth } from '$lib/stores/auth';
+	import { auth, AuthMode } from '$lib/stores/auth';
 	import { messagesStore } from '$lib/stores/messages';
 	import { onMount } from 'svelte';
 	import LoginModal from '$lib/components/LoginModal.svelte';
@@ -54,9 +54,8 @@
 	onMount(() => {
 		auth.restoreSession();
 
-		// Initial load of users and messages
+		// Only start users polling, let message loading depend on auth state
 		refreshUsers();
-		loadInitialMessages();
 
 		// Set up polling for users every 3 seconds
 		const usersInterval = setInterval(refreshUsers, 3000);
@@ -75,9 +74,10 @@
 				// User is online, start messages polling and reload messages
 				messagesStore.startPolling($auth.authenticatedUser.user);
 				loadInitialMessages(); // Reload messages when coming back online
-			} else {
+			} else if ($auth.authMode === 'offline') {
 				// User is offline, stop polling but keep messages visible
 				messagesStore.stopPolling();
+				// Don't try to load messages when offline
 			}
 		} else {
 			// User is not authenticated, stop polling and reset messages
@@ -186,6 +186,7 @@
 				sendingError={sendingError}
 				notifications={notifications}
 				currentUser={$auth.authenticatedUser?.user}
+				isOffline={$auth.authMode === AuthMode.OFFLINE}
 				onSendMessage={handleSendMessage}
 				onRetryLoad={loadInitialMessages}
 				onClearNotifications={() => messagesStore.clearNotifications()}
@@ -201,6 +202,7 @@
 			sendingError={sendingError}
 			notifications={notifications}
 			currentUser={$auth.authenticatedUser?.user}
+			isOffline={false}
 			onSendMessage={handleSendMessage}
 			onRetryLoad={loadInitialMessages}
 			onClearNotifications={() => messagesStore.clearNotifications()}
