@@ -1,6 +1,6 @@
 <script lang="ts">
-	import MessageList from '$lib/components/MessageList.svelte';
-	import MessageInput from '$lib/components/MessageInput.svelte';
+	import MessageList from '$lib/components/atrium/chat/MessageList.svelte';
+	import MessageInput from '$lib/components/atrium/chat/MessageInput.svelte';
 	import { CircleAlert, MessageSquare, Users } from '@lucide/svelte';
 	import type { ChatInterfaceProps } from '$lib/types/chat';
 	import { chatScrollManager } from '$lib/actions/chatScrollManager';
