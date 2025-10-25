@@ -3,6 +3,12 @@ import { dialogueAtriumAPI } from '$lib/api/dialogue-atrium';
 import type { User, CreateUserRequest, UserCredentials } from '$lib/api/types';
 import { heartbeatManager } from '$lib/services/heartbeat';
 
+export enum AuthMode {
+	ONLINE = 'online',
+	OFFLINE = 'offline',
+	UNKNOWN = 'unknown'
+}
+
 export interface AuthenticatedUser {
 	user: User;
 	credentials: UserCredentials;
@@ -10,10 +16,12 @@ export interface AuthenticatedUser {
 
 export interface AuthState {
 	authenticatedUser: AuthenticatedUser | null;
+	authMode: AuthMode;
 }
 
 const defaultAuthState: AuthState = {
 	authenticatedUser: null,
+	authMode: AuthMode.UNKNOWN,
 };
 
 // Create Svelte store
@@ -54,7 +62,8 @@ export const auth = {
 			authenticatedUser: {
 				user,
 				credentials
-			}
+			},
+			authMode: AuthMode.ONLINE
 		}));
 
 		// Store in localStorage for persistence
@@ -84,15 +93,15 @@ export const auth = {
 
 		authStore.update(state => ({
 			...state,
-			authenticatedUser: null
+			authenticatedUser: null,
+			authMode: AuthMode.UNKNOWN
 		}));
 
-		// Clear localStorage and stop heartbeat
+		// Clear localStorage
 		if (typeof window !== 'undefined') {
 			localStorage.removeItem('auth_user');
 			localStorage.removeItem('auth_password');
 		}
-		heartbeatManager.stopHeartbeat();
 	},
 
 	async restoreSession(): Promise<void> {
@@ -106,18 +115,52 @@ export const auth = {
 				const user = JSON.parse(storedUser);
 				const username = user.name;
 
-				// Verify credentials are still valid
-				const error = await this.login(username, storedPassword);
-				if (error) {
-					// Clear invalid stored data
-					this.logout();
-				} else {
-					// Session restored successfully, heartbeat already started by login()
-				}
+				// Set authenticated state immediately in offline mode
+				const credentials: UserCredentials = { username, password: storedPassword };
+				authStore.update(state => ({
+					...state,
+					authenticatedUser: {
+						user,
+						credentials
+					},
+					authMode: AuthMode.OFFLINE
+				}));
+
+				// Start heartbeat service to attempt reconnection
+				heartbeatManager.startHeartbeat(credentials);
+
+				// Verify connection in background without clearing auth state on failure
+				this.verifyConnectionInBackground(username, storedPassword);
 			} catch (error) {
 				// Clear corrupted stored data
 				this.logout();
 			}
 		}
+	},
+
+	/**
+	 * Verify connection in background without clearing auth state on failure
+	 */
+	async verifyConnectionInBackground(username: string, password: string): Promise<void> {
+		try {
+			const error = await this.login(username, password);
+			if (!error) {
+				// Connection restored, auth state already updated by login()
+				console.log('Connection restored successfully');
+			}
+		} catch (error) {
+			// Keep offline state, don't logout
+			console.log('Still offline, will retry later');
+		}
+	},
+
+	/**
+	 * Set auth mode to online (called by heartbeat when connection is restored)
+	 */
+	setOnlineMode(): void {
+		authStore.update(state => ({
+			...state,
+			authMode: AuthMode.ONLINE
+		}));
 	},
 };

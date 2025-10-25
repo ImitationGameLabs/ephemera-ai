@@ -2,6 +2,7 @@ import { writable } from 'svelte/store';
 import { dialogueAtriumAPI } from '$lib/api/dialogue-atrium';
 import type { UserCredentials } from '$lib/api/types';
 import { HEARTBEAT_CONFIG, type HeartbeatStatus } from '$lib/config/heartbeat';
+import { auth } from '$lib/stores/auth';
 
 export class HeartbeatManager {
 	private intervalId: ReturnType<typeof setInterval> | null = null;
@@ -82,6 +83,9 @@ export class HeartbeatManager {
 			this.currentRetryDelay = 0;
 			this.status.set('connected');
 
+			// Notify auth store that we're online
+			auth.setOnlineMode();
+
 			if (HEARTBEAT_CONFIG.debug) {
 				console.log('Heartbeat successful:', response);
 			}
@@ -107,10 +111,18 @@ export class HeartbeatManager {
 	 */
 	private handleTooManyFailures(): void {
 		if (HEARTBEAT_CONFIG.debug) {
-			console.log(`Too many heartbeat failures (${this.failureCount}), stopping heartbeat`);
+			console.log(`Too many heartbeat failures (${this.failureCount}), switching to offline mode`);
 		}
 
-		this.stopHeartbeat();
+		// Don't stop completely, just set status to disconnected and continue retrying
+		this.status.set('disconnected');
+
+		// Schedule a retry with maximum backoff delay instead of stopping
+		setTimeout(() => {
+			if (this.credentials) {
+				this.sendHeartbeat();
+			}
+		}, HEARTBEAT_CONFIG.maxBackoffDelay);
 	}
 
 	/**
@@ -147,6 +159,19 @@ export class HeartbeatManager {
 	 */
 	public get consecutiveFailures(): number {
 		return this.failureCount;
+	}
+
+	/**
+	 * Reset failure count and retry immediately
+	 */
+	public resetAndRetry(): void {
+		if (HEARTBEAT_CONFIG.debug) {
+			console.log('Manual retry requested, resetting failure count');
+		}
+
+		this.failureCount = 0;
+		this.currentRetryDelay = 0;
+		this.sendHeartbeat();
 	}
 }
 

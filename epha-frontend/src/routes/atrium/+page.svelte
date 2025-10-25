@@ -6,9 +6,11 @@
 	import WelcomeContent from '$lib/components/WelcomeContent.svelte';
 	import ChatInterface from '$lib/components/ChatInterface.svelte';
 	import StatusIndicators from '$lib/components/StatusIndicators.svelte';
+	import DisconnectedBanner from '$lib/components/DisconnectedBanner.svelte';
 	import OnlineUsersCount from '$lib/components/OnlineUsersCount.svelte';
 	import UserStatus from '$lib/components/UserStatus.svelte';
 	import { dialogueAtriumAPI } from '$lib/api/dialogue-atrium';
+	import { heartbeatManager } from '$lib/services/heartbeat';
 	import type { User } from '$lib/api/types';
 
 	// Modal state
@@ -69,8 +71,14 @@
 	// React to auth state changes
 	$effect(() => {
 		if ($auth.authenticatedUser) {
-			// User is authenticated, start messages polling
-			messagesStore.startPolling($auth.authenticatedUser.user);
+			if ($auth.authMode === 'online') {
+				// User is online, start messages polling and reload messages
+				messagesStore.startPolling($auth.authenticatedUser.user);
+				loadInitialMessages(); // Reload messages when coming back online
+			} else {
+				// User is offline, stop polling but keep messages visible
+				messagesStore.stopPolling();
+			}
 		} else {
 			// User is not authenticated, stop polling and reset messages
 			messagesStore.stopPolling();
@@ -166,7 +174,25 @@
 	<!-- Chat Area -->
 	{#if !$auth.authenticatedUser}
 		<WelcomeContent onSignIn={() => isLoginModalOpen = true} />
+	{:else if $auth.authMode === 'offline'}
+		<!-- Offline mode: Show chat interface with disconnected banner -->
+		<div class="flex flex-col flex-1 min-h-0">
+			<DisconnectedBanner onRetry={() => heartbeatManager.resetAndRetry()} />
+			<ChatInterface
+				messages={currentMessages}
+				loading={currentLoading}
+				error={currentError}
+				initialLoadDone={initialLoadDone}
+				sendingError={sendingError}
+				notifications={notifications}
+				currentUser={$auth.authenticatedUser?.user}
+				onSendMessage={handleSendMessage}
+				onRetryLoad={loadInitialMessages}
+				onClearNotifications={() => messagesStore.clearNotifications()}
+			/>
+		</div>
 	{:else}
+		<!-- Online mode: Normal chat interface -->
 		<ChatInterface
 			messages={currentMessages}
 			loading={currentLoading}
