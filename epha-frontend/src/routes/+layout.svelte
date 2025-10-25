@@ -1,51 +1,49 @@
 <script lang="ts">
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
-	import { page } from '$app/state';
 	import { Navigation } from '@skeletonlabs/skeleton-svelte';
-	import { MessageSquare, Users, Menu, Settings, Brain } from '@lucide/svelte';
-	// import UserStatus from '$lib/components/UserStatus.svelte'; // Temporarily disabled
-	// import { auth } from '$lib/stores/auth'; // Temporarily disabled
+	import { MessageSquare, Menu, Settings, Brain } from '@lucide/svelte';
 
 	let { children } = $props();
 
-	const navLinks = [
-		{
-			label: 'Atrium',
-			href: '/atrium',
-			icon: MessageSquare
-		},
-
-		{
-			label: 'Memory',
-			href: '/memory',
-			icon: Brain
-		}
+	const links = [
+		{ label: 'Atrium', href: '/atrium', icon: MessageSquare },
+		{ label: 'Memory', href: '/memory', icon: Brain }
 	];
 
-	// Restore auth session on app load
-	// auth.restoreSession(); // Temporarily disabled
+	let anchorRail = 'btn hover:preset-tonal aspect-square w-full max-w-[84px] flex flex-col items-center gap-0.5';
 </script>
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-<div class="card border-surface-100-900 grid h-screen w-full grid-cols-[auto_1fr] border-[1px]">
-  <!-- Component -->
-  <Navigation.Rail>
-    {#snippet header()}
-      <Navigation.Tile href="#" title="Menu"><Menu /></Navigation.Tile>
-    {/snippet}
-    {#snippet tiles()}
-      <Navigation.Tile label="Atrium" href="/atrium"><MessageSquare /></Navigation.Tile>
-      <Navigation.Tile label="Memory" href="/memory"><Brain /></Navigation.Tile>
-    {/snippet}
-    {#snippet footer()}
-      <Navigation.Tile labelExpanded="Settings" href="/settings" title="settings"><Settings /></Navigation.Tile>
-    {/snippet}
-  </Navigation.Rail>
-  <!-- Content -->
+<div class="w-full h-screen grid grid-cols-[auto_1fr] border border-surface-200-800">
+  <!-- --- -->
+  <Navigation layout="rail">
+    <Navigation.Header>
+      <a href="/" class={anchorRail} title="Menu" aria-label="Menu">
+        <Menu class="size-5" />
+      </a>
+    </Navigation.Header>
+    <Navigation.Content>
+      <Navigation.Menu>
+        {#each links as link (link)}
+          {@const Icon = link.icon}
+          <a href={link.href} class={anchorRail}>
+            <Icon class="size-5" />
+            <span class="text-xs">{link.label}</span>
+          </a>
+        {/each}
+      </Navigation.Menu>
+    </Navigation.Content>
+    <Navigation.Footer>
+      <a href="/settings" class={anchorRail} title="Settings" aria-label="Settings">
+        <Settings class="size-5" />
+      </a>
+    </Navigation.Footer>
+  </Navigation>
+  <!-- --- -->
   <div class="h-full">
 	{@render children()}
   </div>
