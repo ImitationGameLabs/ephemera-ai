@@ -24,6 +24,21 @@
 		resetForm();
 	}
 
+	// Handle click on backdrop to close modal
+	function handleBackdropClick(event: MouseEvent) {
+		// Only close if clicking the backdrop itself, not its children
+		if (event.target === event.currentTarget) {
+			closeModal();
+		}
+	}
+
+	// Handle keyboard events for accessibility
+	function handleBackdropKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape') {
+			closeModal();
+		}
+	}
+
 	function resetForm() {
 		username = '';
 		password = '';
@@ -90,8 +105,16 @@
 </script>
 
 {#if isOpen}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onclick={closeModal}>
-		<div class="card bg-surface-100-900 w-full max-w-md mx-4 shadow-2xl" onclick={e => e.stopPropagation()}>
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="modal-title"
+		tabindex="-1"
+		onclick={handleBackdropClick}
+		onkeydown={handleBackdropKeydown}
+	>
+		<div class="card bg-surface-100-900 w-full max-w-md mx-4 shadow-2xl" role="document">
 			<!-- Header -->
 			<div class="flex items-center justify-between p-6 border-b border-surface-200-800">
 				<div class="flex items-center gap-3">
@@ -103,7 +126,7 @@
 						{/if}
 					</div>
 					<div>
-						<h2 class="text-xl font-semibold">
+						<h2 id="modal-title" class="text-xl font-semibold">
 							{mode === 'register' ? 'Join Atrium' : 'Welcome Back'}
 						</h2>
 						<p class="text-sm">
@@ -131,13 +154,13 @@
 							Username
 						</label>
 						<div class="relative">
-							<User class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-surface-400" />
+							<User class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4" />
 							<input
 								id="username"
 								type="text"
 								bind:value={username}
 								placeholder="Enter your username"
-								class="input preset-filled w-full pl-10"
+								class="input w-full pl-10"
 								required
 								disabled={isSubmitting}
 							/>
@@ -150,13 +173,13 @@
 							Password
 						</label>
 						<div class="relative">
-							<Lock class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-surface-400" />
+							<Lock class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4" />
 							<input
 								id="password"
 								type="password"
 								bind:value={password}
 								placeholder="Enter your password"
-								class="input preset-filled w-full pl-10"
+								class="input w-full pl-10"
 								required
 								disabled={isSubmitting}
 							/>
@@ -184,7 +207,7 @@
 					<!-- Submit Button -->
 					<button
 						type="submit"
-						class="btn preset-filled-primary w-full"
+						class="btn preset-filled-primary-300-700 w-full"
 						disabled={isSubmitting || !username || !password || (mode === 'register' && !bio)}
 					>
 						{#if isSubmitting}

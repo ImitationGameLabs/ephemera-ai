@@ -1,8 +1,13 @@
 <script lang="ts">
 	import { auth } from '$lib/stores/auth';
+	import { messagesStore } from '$lib/stores/messages';
 	import { onMount } from 'svelte';
 	import LoginModal from '$lib/components/LoginModal.svelte';
-	import { MessageSquare, Users, Circle } from '@lucide/svelte';
+	import WelcomeContent from '$lib/components/WelcomeContent.svelte';
+	import ChatInterface from '$lib/components/ChatInterface.svelte';
+	import StatusIndicators from '$lib/components/StatusIndicators.svelte';
+	import OnlineUsersCount from '$lib/components/OnlineUsersCount.svelte';
+	import UserStatus from '$lib/components/UserStatus.svelte';
 	import { dialogueAtriumAPI } from '$lib/api/dialogue-atrium';
 	import type { User } from '$lib/api/types';
 
@@ -11,46 +16,119 @@
 
 	// Online users state
 	let users = $state<User[]>([]);
-	let loading = $state(true);
-	let error = $state<string | null>(null);
+	let usersLoading = $state(true);
+	let usersError = $state<string | null>(null);
 
-	// Derived online user count
-	let onlineUsersCount = $derived(users.filter(u => u.status.online).length);
+	// Chat state
+	let initialLoadDone = $state(false);
+	let sendingError = $state<string | null>(null);
+
+	
+	// Messages state - subscribe to store
+	let currentMessages: any[] = $state([]);
+	let currentLoading = $state(false);
+	let currentError = $state<string | null>(null);
+	let notifications = $state({ count: 0, hasUnloadedUnread: false });
+
+	// Subscribe to messages store
+	$effect(() => {
+		const unsubscribeMessages = messagesStore.subscribe(state => {
+			currentMessages = state.messages;
+			currentLoading = state.loading;
+			currentError = state.error;
+		});
+
+		const unsubscribeNotifications = messagesStore.notifications.subscribe(value => {
+			notifications = value;
+		});
+
+		return () => {
+			unsubscribeMessages();
+			unsubscribeNotifications();
+		};
+	});
+
+	// Initialize on mount
+	onMount(() => {
+		auth.restoreSession();
+
+		// Initial load of users and messages
+		refreshUsers();
+		loadInitialMessages();
+
+		// Set up polling for users every 3 seconds
+		const usersInterval = setInterval(refreshUsers, 3000);
+
+		// Cleanup on unmount
+		return () => {
+			clearInterval(usersInterval);
+			messagesStore.stopPolling();
+		};
+	});
+
+	// React to auth state changes
+	$effect(() => {
+		if ($auth.authenticatedUser) {
+			// User is authenticated, start messages polling
+			messagesStore.startPolling($auth.authenticatedUser.user);
+		} else {
+			// User is not authenticated, stop polling and reset messages
+			messagesStore.stopPolling();
+			messagesStore.reset();
+		}
+	});
 
 	// Refresh users function
 	async function refreshUsers() {
 		try {
-			error = null;
+			usersError = null;
 			const result = await dialogueAtriumAPI.getAllUsers();
 			if (result instanceof Error) {
-				error = result.message;
+				usersError = result.message;
 			} else {
 				users = result;
 			}
 		} catch (e) {
-			error = 'Failed to fetch users';
+			usersError = 'Failed to fetch users';
 			console.error('Error fetching users:', e);
 		} finally {
-			loading = false;
+			usersLoading = false;
 		}
 	}
 
-	// Restore session on mount and start polling
-	onMount(() => {
-		auth.restoreSession();
+	// Load initial messages
+	async function loadInitialMessages() {
+		try {
+			const success = await messagesStore.loadInitialMessages();
+			initialLoadDone = true;
+			return success;
+		} catch (error) {
+			console.error('Failed to load initial messages:', error);
+			initialLoadDone = true;
+			return false;
+		}
+	}
 
-		// Initial load
-		refreshUsers();
+	// Handle send message
+	async function handleSendMessage(content: string) {
+		if (!$auth.authenticatedUser) return;
 
-		// Set up polling every 3 seconds
-		const interval = setInterval(refreshUsers, 3000);
+		try {
+			sendingError = null;
+			await messagesStore.sendMessage(content, $auth.authenticatedUser.credentials);
+		} catch (error) {
+			console.error('Failed to send message:', error);
+			sendingError = error instanceof Error ? error.message : 'Failed to send message';
 
-		// Cleanup on unmount
-		return () => clearInterval(interval);
-	});
+			// Clear error after 3 seconds
+			setTimeout(() => {
+				sendingError = null;
+			}, 3000);
+		}
+	}
 </script>
 
-<div class="flex flex-col h-full bg-surface-50-950">
+<div class="flex flex-col flex-1 bg-surface-50-950 min-h-0 h-full">
 	<!-- Header -->
 	<div class="bg-surface-100-900 border-b border-surface-200-800 px-6 py-4">
 		<div class="max-w-6xl mx-auto">
@@ -64,56 +142,44 @@
 					</p>
 				</div>
 
-				<!-- Online Users Count -->
-				<div class="flex items-center gap-2 px-4 py-2 rounded-full bg-surface-50-950 border border-surface-200-800">
-					<Circle class="w-3 h-3 text-green-500 fill-green-500" />
-					<Users class="w-4 h-4 text-surface-600-400" />
-					<span class="text-sm font-medium">
-						{#if loading}
-							Loading...
-						{:else if error}
-							Error
-						{:else}
-							{onlineUsersCount} Online
-						{/if}
-					</span>
+				<!-- Status Indicators & Online Users -->
+				<div class="flex items-center gap-6">
+					<StatusIndicators
+						currentUser={$auth.authenticatedUser?.user}
+						messages={currentMessages}
+						loading={currentLoading}
+					/>
+
+					<OnlineUsersCount
+						onlineUsers={users.filter(u => u.status?.online || false)}
+						currentUser={$auth.authenticatedUser?.user}
+						loading={usersLoading}
+					/>
+
+					<!-- User Status with Logout -->
+					<UserStatus />
 				</div>
 			</div>
 		</div>
 	</div>
 
-	<!-- Welcome Content -->
-	<div class="flex-1 flex items-center justify-center">
-		<div class="text-center max-w-md mx-6">
-			<div class="mb-8">
-				<div class="w-16 h-16 bg-primary-100-900 rounded-full flex items-center justify-center mx-auto mb-4">
-					<MessageSquare class="w-8 h-8 text-primary-500" />
-				</div>
-				<h2 class="text-3xl font-bold mb-4">Welcome to Atrium</h2>
-				<p class="text-surface-600-400 mb-8">
-					Join the conversation and connect with others in this shared space.
-				</p>
-			</div>
-
-			{#if !$auth.authenticatedUser}
-				<button
-					class="btn preset-filled-primary w-full max-w-xs mx-auto"
-					onclick={() => isLoginModalOpen = true}
-				>
-					Sign In to Continue
-				</button>
-			{:else}
-				<div class="space-y-4">
-					<p class="text-lg">
-						Welcome back, <span class="font-semibold">{$auth.authenticatedUser?.user.name}</span>!
-					</p>
-					<p class="text-sm text-surface-600-400">
-						Chat interface coming soon...
-					</p>
-				</div>
-			{/if}
-		</div>
-	</div>
+	<!-- Chat Area -->
+	{#if !$auth.authenticatedUser}
+		<WelcomeContent onSignIn={() => isLoginModalOpen = true} />
+	{:else}
+		<ChatInterface
+			messages={currentMessages}
+			loading={currentLoading}
+			error={currentError}
+			initialLoadDone={initialLoadDone}
+			sendingError={sendingError}
+			notifications={notifications}
+			currentUser={$auth.authenticatedUser?.user}
+			onSendMessage={handleSendMessage}
+			onRetryLoad={loadInitialMessages}
+			onClearNotifications={() => messagesStore.clearNotifications()}
+		/>
+	{/if}
 </div>
 
 <!-- Login Modal -->

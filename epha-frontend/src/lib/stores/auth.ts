@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store';
 import { dialogueAtriumAPI } from '$lib/api/dialogue-atrium';
 import type { User, CreateUserRequest, UserCredentials } from '$lib/api/types';
+import { heartbeatManager } from '$lib/services/heartbeat';
 
 export interface AuthenticatedUser {
 	user: User;
@@ -62,6 +63,9 @@ export const auth = {
 			localStorage.setItem('auth_password', password);
 		}
 
+		// Start heartbeat service
+		heartbeatManager.startHeartbeat(credentials);
+
 		return null;
 	},
 
@@ -75,16 +79,20 @@ export const auth = {
 	},
 
 	logout(): void {
+		// Stop heartbeat service
+		heartbeatManager.stopHeartbeat();
+
 		authStore.update(state => ({
 			...state,
 			authenticatedUser: null
 		}));
 
-		// Clear localStorage
+		// Clear localStorage and stop heartbeat
 		if (typeof window !== 'undefined') {
 			localStorage.removeItem('auth_user');
 			localStorage.removeItem('auth_password');
 		}
+		heartbeatManager.stopHeartbeat();
 	},
 
 	async restoreSession(): Promise<void> {
@@ -103,6 +111,8 @@ export const auth = {
 				if (error) {
 					// Clear invalid stored data
 					this.logout();
+				} else {
+					// Session restored successfully, heartbeat already started by login()
 				}
 			} catch (error) {
 				// Clear corrupted stored data

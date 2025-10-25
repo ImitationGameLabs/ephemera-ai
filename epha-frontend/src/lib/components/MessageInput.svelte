@@ -2,10 +2,13 @@
 	import { auth } from '$lib/stores/auth';
 	import { dialogueAtriumAPI } from '$lib/api/dialogue-atrium';
 	import { Send } from '@lucide/svelte';
+	import { autoResize } from '$lib/actions/autoResize';
+
+	let { onSendMessage } = $props();
 
 	let messageText = $state('');
 	let isSending = $state(false);
-	let textArea: HTMLTextAreaElement;
+	let textArea = $state<HTMLTextAreaElement>();
 
 	const canSend = $derived(
 		$auth.authenticatedUser &&
@@ -21,11 +24,16 @@
 		messageText = '';
 
 		try {
-			await dialogueAtriumAPI.sendMessage({
-				content,
-				username: $auth.authenticatedUser!.credentials.username,
-				password: $auth.authenticatedUser!.credentials.password
-			});
+			if (onSendMessage) {
+				await onSendMessage(content);
+			} else {
+				// Fallback to direct API call
+				await dialogueAtriumAPI.sendMessage({
+					content,
+					username: $auth.authenticatedUser!.credentials.username,
+					password: $auth.authenticatedUser!.credentials.password
+				});
+			}
 
 			// Focus back to textarea after sending
 			textArea?.focus();
@@ -38,14 +46,7 @@
 		}
 	}
 
-	// Auto-resize textarea based on content
-	$effect(() => {
-		if (textArea) {
-			textArea.style.height = 'auto';
-			textArea.style.height = Math.min(textArea.scrollHeight, 120) + 'px';
-		}
-	});
-
+	
 	function handleKeyDown(event: KeyboardEvent) {
 		// Send on Enter, new line on Shift+Enter
 		if (event.key === 'Enter' && !event.shiftKey) {
@@ -62,16 +63,17 @@
 		</div>
 	{:else}
 		<div class="max-w-4xl mx-auto">
-			<div class="flex gap-2">
+			<div class="flex items-end gap-2">
 				<!-- Message Input -->
 				<div class="flex-1 relative">
 					<textarea
 						bind:this={textArea}
 						bind:value={messageText}
 						placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
-						class="input preset-filled w-full resize-none min-h-[44px] max-h-[120px] pr-12"
+						class="input w-full resize-none min-h-[44px] max-h-[120px] pl-4 pr-12"
 						disabled={isSending}
 						onkeydown={handleKeyDown}
+						use:autoResize={{ minHeight: 44, maxHeight: 120 }}
 					></textarea>
 
 					<!-- Character counter (optional) -->
@@ -84,7 +86,7 @@
 
 				<!-- Send Button -->
 				<button
-					class="btn preset-filled-primary h-[44px] px-4 flex items-center justify-center"
+					class="btn preset-filled-primary-300-700 h-[44px] px-4"
 					disabled={!canSend}
 					onclick={sendMessage}
 					title="Send message"

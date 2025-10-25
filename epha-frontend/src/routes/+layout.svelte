@@ -46,7 +46,7 @@
     {/snippet}
   </Navigation.Rail>
   <!-- Content -->
-  <div class="h-screen m-2">
+  <div class="h-full">
 	{@render children()}
   </div>
 </div>

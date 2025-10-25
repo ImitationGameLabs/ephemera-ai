@@ -30,49 +30,28 @@
 	}
 </script>
 
-<div class="flex items-center gap-3">
-	{#if browser && isAuthenticated && currentUser}
-		<!-- User Status for logged in users -->
-		<div class="flex items-center gap-2 px-3 py-2 rounded-full bg-surface-100-900 border border-surface-200-800">
-			<!-- Online Status Indicator -->
-			<div class="relative">
-				<Circle class="w-3 h-3 text-green-500 fill-green-500" />
-			</div>
-
-			<!-- Username and Bio -->
-			<div class="hidden sm:block">
-				<p class="text-sm font-medium">
-					{currentUser.name}
-				</p>
-				{#if currentUser.bio}
-					<p class="text-xs truncate max-w-32">
-						{currentUser.bio}
-					</p>
-				{/if}
-			</div>
-
-			<!-- Logout Button -->
-			<button
-				class="btn-icon preset-ghost hover:text-red-500"
-				onclick={handleLogout}
-				title="Logout"
-			>
-				<LogOut class="w-4 h-4" />
-			</button>
+{#if browser && isAuthenticated && currentUser}
+	<!-- User Status for logged in users -->
+	<div class="flex items-center gap-2 px-3 py-2 rounded-full hover:bg-surface-200-800 transition-colors">
+		<!-- Username -->
+		<div class="hidden sm:block">
+			<p class="text-sm font-medium text-surface-700-300">
+				{currentUser.name}
+			</p>
 		</div>
-	{:else}
-		<!-- Login Button for anonymous users -->
-		<button
-			class="btn preset-filled-primary flex items-center gap-2 px-4 py-2"
-			onclick={openLoginModal}
-		>
-			<LogIn class="w-4 h-4" />
-			<span class="hidden sm:inline">Sign In</span>
-		</button>
-	{/if}
 
-	<!-- Login Modal -->
-	{#if browser}
-		<LoginModal bind:isOpen={isLoginModalOpen} />
-	{/if}
-</div>
+		<!-- Logout Button -->
+		<button
+			class="btn-icon preset-ghost text-surface-600-400 hover:text-red-500"
+			onclick={handleLogout}
+			title="Logout"
+		>
+			<LogOut class="w-4 h-4" />
+		</button>
+	</div>
+{/if}
+
+<!-- Login Modal -->
+{#if browser}
+	<LoginModal bind:isOpen={isLoginModalOpen} />
+{/if}
