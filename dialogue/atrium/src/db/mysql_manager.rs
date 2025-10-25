@@ -1,6 +1,6 @@
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, NotSet, QueryOrder, QuerySelect};
 use thiserror::Error;
-use time::{OffsetDateTime, PrimitiveDateTime};
+use time::OffsetDateTime;
 
 use crate::entity::{MessageEntity};
 use crate::entity::message;
@@ -22,7 +22,7 @@ pub struct MessageDto {
     pub id: i32,
     pub content: String,
     pub sender: String,
-    pub created_at: PrimitiveDateTime,
+    pub created_at: OffsetDateTime,
 }
 
 impl From<message::Model> for MessageDto {
@@ -53,7 +53,7 @@ impl MessageManager {
     }
 
     pub async fn create_message(&self, message_dto: &CreateMessageDto) -> Result<MessageDto, DbError> {
-        let now = PrimitiveDateTime::new(OffsetDateTime::now_utc().date(), OffsetDateTime::now_utc().time());
+        let now = OffsetDateTime::now_utc();
         let active_model = message::ActiveModel {
             id: NotSet,
             content: Set(message_dto.content.clone()),

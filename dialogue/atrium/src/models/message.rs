@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use time::PrimitiveDateTime;
+use time::OffsetDateTime;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateMessageRequest {
@@ -13,7 +13,8 @@ pub struct MessageResponse {
     pub id: i32,
     pub content: String,
     pub sender: String,
-    pub created_at: PrimitiveDateTime,
+    #[serde(with = "time::serde::iso8601")]
+    pub created_at: OffsetDateTime,
 }
 
 #[derive(Debug, Deserialize)]

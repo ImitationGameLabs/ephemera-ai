@@ -1,6 +1,6 @@
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, NotSet, QueryOrder};
 use thiserror::Error;
-use time::{OffsetDateTime, PrimitiveDateTime};
+use time::OffsetDateTime;
 
 use crate::entity::{UserEntity};
 use crate::entity::user;
@@ -29,8 +29,8 @@ pub struct UserDto {
     pub name: String,
     pub bio: String,
     pub message_height: i32,
-    pub last_seen: Option<PrimitiveDateTime>,
-    pub created_at: PrimitiveDateTime,
+    pub last_seen: Option<OffsetDateTime>,
+    pub created_at: OffsetDateTime,
     pub online: bool,
 }
 
@@ -39,7 +39,7 @@ impl From<user::Model> for UserDto {
         let now = OffsetDateTime::now_utc();
         let online = model.last_seen
             .map(|last_seen| {
-                let duration = now - last_seen.assume_utc();
+                let duration = now - last_seen;
                 duration.whole_seconds() < 300 // 5 minutes timeout
             })
             .unwrap_or(false);
@@ -90,7 +90,7 @@ impl UserManager {
             return Err(UserError::UserAlreadyExists(user_dto.name.clone()));
         }
 
-        let now = PrimitiveDateTime::new(OffsetDateTime::now_utc().date(), OffsetDateTime::now_utc().time());
+        let now = OffsetDateTime::now_utc();
         let active_model = user::ActiveModel {
             id: NotSet,
             name: Set(user_dto.name.clone()),
@@ -167,7 +167,7 @@ impl UserManager {
             .await?
             .ok_or(UserError::UserNotFound(name.to_string()))?;
 
-        let now = PrimitiveDateTime::new(OffsetDateTime::now_utc().date(), OffsetDateTime::now_utc().time());
+        let now = OffsetDateTime::now_utc();
         let mut active_model: user::ActiveModel = model.into();
         active_model.last_seen = Set(Some(now));
 

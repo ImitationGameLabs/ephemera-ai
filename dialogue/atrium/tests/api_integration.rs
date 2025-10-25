@@ -122,6 +122,15 @@ async fn test_user_lifecycle() {
     assert_eq!(user_data["name"].as_str().unwrap(), test_username);
     assert_eq!(user_data["bio"].as_str().unwrap(), test_bio);
 
+    // Verify timestamp is in ISO 8601 format (string, not array)
+    let created_at = &user_data["created_at"];
+    assert!(created_at.is_string(), "created_at should be a string in ISO 8601 format, got: {:?}", created_at);
+
+    // Try to parse as ISO 8601 datetime
+    let timestamp_str = created_at.as_str().unwrap();
+    assert!(timestamp_str.contains('T') && timestamp_str.contains('Z'),
+           "Timestamp should be in ISO 8601 format, got: {}", timestamp_str);
+
     // 3. Get all users (should include our test user)
     println!("Getting all users");
     let all_users_response = client.get_all_users().await.unwrap();
@@ -168,6 +177,15 @@ async fn test_message_lifecycle() {
     assert_eq!(retrieved_message["id"], message_id);
     assert_eq!(retrieved_message["content"].as_str().unwrap(), test_content);
     assert_eq!(retrieved_message["sender"].as_str().unwrap(), test_sender);
+
+    // Verify timestamp is in ISO 8601 format (string, not array)
+    let created_at = &retrieved_message["created_at"];
+    assert!(created_at.is_string(), "created_at should be a string in ISO 8601 format, got: {:?}", created_at);
+
+    // Try to parse as ISO 8601 datetime
+    let timestamp_str = created_at.as_str().unwrap();
+    assert!(timestamp_str.contains('T') && timestamp_str.contains('Z'),
+           "Timestamp should be in ISO 8601 format, got: {}", timestamp_str);
 
     // 3. Get all messages
     println!("Getting all messages");

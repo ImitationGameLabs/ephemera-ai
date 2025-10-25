@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use time::PrimitiveDateTime;
+use time::OffsetDateTime;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateUserRequest {
@@ -14,7 +14,8 @@ pub struct UserResponse {
     pub bio: String,
     pub status: UserStatus,
     pub message_height: i32,
-    pub created_at: PrimitiveDateTime,
+    #[serde(with = "time::serde::iso8601")]
+    pub created_at: OffsetDateTime,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,13 +39,14 @@ pub struct UserCredentials {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OnlineStatus {
     pub online: bool,
-    pub last_seen: Option<PrimitiveDateTime>,
+    pub last_seen: Option<OffsetDateTime>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserStatus {
     pub online: bool,
-    pub last_seen: Option<PrimitiveDateTime>,
+    #[serde(with = "time::serde::iso8601::option")]
+    pub last_seen: Option<OffsetDateTime>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
