@@ -2,11 +2,11 @@ pub mod message;
 pub mod user;
 
 pub use message::{
-    CreateMessageRequest, MessageResponse, MessagesResponse,
+    CreateMessageRequest, Message, Messages,
     GetMessagesQuery
 };
 
 pub use user::{
-    CreateUserRequest, UserResponse, UpdateProfileRequest,
-    PasswordAuth, UserCredentials, OnlineStatus, UserStatus, UsersListResponse
+    CreateUserRequest, User, UpdateProfileRequest,
+    PasswordAuth, UserCredentials, OnlineStatus, UserStatus, UsersList
 };

@@ -61,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
     let mut interface = CliInterface::new(client);
 
     // Run the CLI interface with optional pre-auth credentials
-    if let Err(e) = interface.run_with_credentials(args.user, args.password).await {
+    if let Err(e) = interface.run(args.user, args.password).await {
         eprintln!("CLI error: {}", e);
         std::process::exit(1);
     }

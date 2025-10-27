@@ -9,7 +9,7 @@ pub struct CreateUserRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct UserResponse {
+pub struct User {
     pub name: String,
     pub bio: String,
     pub status: UserStatus,
@@ -50,6 +50,6 @@ pub struct UserStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct UsersListResponse {
-    pub users: Vec<UserResponse>,
+pub struct UsersList {
+    pub users: Vec<User>,
 }

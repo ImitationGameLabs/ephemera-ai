@@ -1,6 +1,6 @@
 use std::fmt;
-use atrium_client::{DialogueClient, AuthSession};
-use atrium::models::UserResponse;
+use atrium_client::{DialogueClient, User};
+use atrium_client::auth::AuthSession;
 
 #[derive(Debug)]
 pub enum CommandError {
@@ -84,7 +84,7 @@ Chat:
         tokio::spawn(async move {
             match client.get_all_users().await {
                 Ok(users_response) => {
-                    let active_users: Vec<&UserResponse> = users_response.users
+                    let active_users: Vec<&User> = users_response.users
                         .iter()
                         .filter(|user| user.status.online)
                         .collect();

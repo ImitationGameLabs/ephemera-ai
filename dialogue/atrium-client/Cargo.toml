@@ -4,10 +4,6 @@ version = "0.1.0"
 edition = "2024"
 description = "Client library for Dialogue Atrium chat system"
 
-[lib]
-name = "atrium_client"
-path = "src/lib.rs"
-
 [dependencies]
 # Atrium server dependency for shared types
 atrium = { path = "../atrium" }

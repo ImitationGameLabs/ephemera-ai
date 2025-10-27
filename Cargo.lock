@@ -233,7 +233,6 @@ name = "atrium-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "atrium",
  "atrium-client",
  "clap",
  "dotenv",

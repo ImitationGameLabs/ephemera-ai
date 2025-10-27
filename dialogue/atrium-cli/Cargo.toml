@@ -7,8 +7,6 @@ description = "CLI client for Dialogue Atrium chat system"
 [dependencies]
 # Atrium client dependency
 atrium-client = { path = "../atrium-client" }
-# Atrium server dependency for shared types
-atrium = { path = "../atrium" }
 
 anyhow = "1.0"
 rpassword = "7.3"

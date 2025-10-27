@@ -1,5 +1,7 @@
 mod client;
-mod auth;
+pub mod auth;
 
 pub use client::*;
-pub use auth::*;
+
+// Re-export commonly used types from atrium
+pub use atrium::models::*;

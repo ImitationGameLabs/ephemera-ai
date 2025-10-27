@@ -7,14 +7,14 @@ use serde_json::json;
 
 use crate::db::{MessageManager, UserManager, CreateMessageDto};
 use crate::models::{
-    CreateMessageRequest, MessageResponse, MessagesResponse,
+    CreateMessageRequest, Message, Messages,
     GetMessagesQuery
 };
 
 pub async fn create_message(
     State((message_manager, user_manager)): State<(MessageManager, UserManager)>,
     Json(request): Json<CreateMessageRequest>,
-) -> Result<(StatusCode, Json<MessageResponse>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<Message>), (StatusCode, Json<serde_json::Value>)> {
     // First authenticate user
     match user_manager.authenticate_by_credentials(&request.username, &request.password).await {
         Ok(user) => {
@@ -25,7 +25,7 @@ pub async fn create_message(
 
             match message_manager.create_message(&create_dto).await {
                 Ok(message) => {
-                    let response = MessageResponse {
+                    let response = Message {
                         id: message.id,
                         content: message.content,
                         sender: message.sender,
@@ -63,16 +63,16 @@ pub async fn create_message(
 pub async fn get_messages(
     State(manager): State<MessageManager>,
     Query(query): Query<GetMessagesQuery>,
-) -> Result<Json<MessagesResponse>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<Messages>, (StatusCode, Json<serde_json::Value>)> {
     let sender_filter = query.sender.as_deref();
     let limit = query.limit;
     let offset = query.offset;
 
     match manager.get_messages(sender_filter, limit, offset).await {
         Ok(messages) => {
-            let message_responses: Vec<MessageResponse> = messages
+            let message_responses: Vec<Message> = messages
                 .into_iter()
-                .map(|msg| MessageResponse {
+                .map(|msg| Message {
                     id: msg.id,
                     content: msg.content,
                     sender: msg.sender,
@@ -80,7 +80,7 @@ pub async fn get_messages(
                 })
                 .collect();
 
-            Ok(Json(MessagesResponse {
+            Ok(Json(Messages {
                 messages: message_responses,
             }))
         }
@@ -97,10 +97,10 @@ pub async fn get_messages(
 pub async fn get_message(
     State(manager): State<MessageManager>,
     Path(id): Path<i32>,
-) -> Result<Json<MessageResponse>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<Message>, (StatusCode, Json<serde_json::Value>)> {
     match manager.get_message(id).await {
         Ok(message) => {
-            let response = MessageResponse {
+            let response = Message {
                 id: message.id,
                 content: message.content,
                 sender: message.sender,

@@ -7,14 +7,14 @@ use serde_json::json;
 
 use crate::db::{UserManager, CreateUserDto, UpdateUserDto};
 use crate::models::{
-    CreateUserRequest, UserResponse, UpdateProfileRequest,
-    PasswordAuth, UserStatus, UsersListResponse
+    CreateUserRequest, User, UpdateProfileRequest,
+    PasswordAuth, UserStatus, UsersList
 };
 
 pub async fn create_user(
     State(user_manager): State<UserManager>,
     Json(request): Json<CreateUserRequest>,
-) -> Result<(StatusCode, Json<UserResponse>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<User>), (StatusCode, Json<serde_json::Value>)> {
     let create_dto = CreateUserDto {
         name: request.name.clone(),
         bio: request.bio.clone(),
@@ -23,7 +23,7 @@ pub async fn create_user(
 
     match user_manager.create_user(&create_dto).await {
         Ok(user) => {
-            let response = UserResponse {
+            let response = User {
                 name: user.name,
                 bio: user.bio,
                 status: UserStatus {
@@ -56,10 +56,10 @@ pub async fn create_user(
 pub async fn get_user_profile(
     State(user_manager): State<UserManager>,
     Path(username): Path<String>,
-) -> Result<Json<UserResponse>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<User>, (StatusCode, Json<serde_json::Value>)> {
     match user_manager.get_user_by_name(&username).await {
         Ok(user) => {
-            let response = UserResponse {
+            let response = User {
                 name: user.name,
                 bio: user.bio,
                 status: UserStatus {
@@ -92,12 +92,12 @@ pub async fn get_user_profile(
 pub async fn get_own_profile(
     State(user_manager): State<UserManager>,
     Json(request): Json<PasswordAuth>,
-) -> Result<Json<UserResponse>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<User>, (StatusCode, Json<serde_json::Value>)> {
     // For now, we'll need to determine the username from the password
     // This is a simplified approach - in a real system you might want to include username in auth
     match user_manager.authenticate_user(&request.password, &request.password).await {
         Ok(user) => {
-            let response = UserResponse {
+            let response = User {
                 name: user.name,
                 bio: user.bio,
                 status: UserStatus {
@@ -130,7 +130,7 @@ pub async fn get_own_profile(
 pub async fn update_profile(
     State(user_manager): State<UserManager>,
     Json(request): Json<UpdateProfileRequest>,
-) -> Result<Json<UserResponse>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<User>, (StatusCode, Json<serde_json::Value>)> {
     // First authenticate with current password
     match user_manager.authenticate_user(&request.current_password, &request.current_password).await {
         Ok(user) => {
@@ -141,7 +141,7 @@ pub async fn update_profile(
 
             match user_manager.update_user(&user.name, &update_dto).await {
                 Ok(updated_user) => {
-                    let response = UserResponse {
+                    let response = User {
                         name: updated_user.name,
                         bio: updated_user.bio,
                         status: UserStatus {
@@ -182,12 +182,12 @@ pub async fn update_profile(
 
 pub async fn get_all_users(
     State(user_manager): State<UserManager>,
-) -> Result<Json<UsersListResponse>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<UsersList>, (StatusCode, Json<serde_json::Value>)> {
     match user_manager.get_all_users().await {
         Ok(users) => {
-            let user_responses: Vec<UserResponse> = users
+            let user_responses: Vec<User> = users
                 .into_iter()
-                .map(|user| UserResponse {
+                .map(|user| User {
                     name: user.name,
                     bio: user.bio,
                     status: UserStatus {
@@ -199,7 +199,7 @@ pub async fn get_all_users(
                 })
                 .collect();
 
-            Ok(Json(UsersListResponse {
+            Ok(Json(UsersList {
                 users: user_responses,
             }))
         }

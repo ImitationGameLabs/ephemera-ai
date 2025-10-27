@@ -9,7 +9,7 @@ pub struct CreateMessageRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MessageResponse {
+pub struct Message {
     pub id: i32,
     pub content: String,
     pub sender: String,
@@ -25,6 +25,6 @@ pub struct GetMessagesQuery {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MessagesResponse {
-    pub messages: Vec<MessageResponse>,
+pub struct Messages {
+    pub messages: Vec<Message>,
 }

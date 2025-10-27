@@ -4,9 +4,11 @@ use std::time::Duration;
 use tokio::time::interval;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use atrium_client::{DialogueClient, AuthManager, AuthSession};
+use atrium_client::{
+    DialogueClient, UserCredentials,
+    auth::{AuthManager, AuthSession}
+};
 use crate::commands::{CommandHandler, CommandContext, CommandError};
-use atrium::models::UserCredentials;
 
 pub struct CliInterface {
     client: DialogueClient,
@@ -107,14 +109,7 @@ impl CliInterface {
         Ok(())
     }
 
-    pub async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Authenticate or register user
-        let session = self.auth_manager.authenticate_or_register().await?;
-
-        self.run_with_session(session).await
-    }
-
-    pub async fn run_with_credentials(&mut self, user: Option<String>, password: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn run(&mut self, user: Option<String>, password: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         let session = match (user, password) {
             (Some(username), Some(password)) => {
                 // Use provided credentials

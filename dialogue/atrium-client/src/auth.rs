@@ -1,13 +1,13 @@
 use std::io::{self, Write};
 use rpassword::read_password;
-use atrium::models::{CreateUserRequest, UserResponse};
+use atrium::models::{CreateUserRequest, User};
 use crate::client::{DialogueClient, ClientError};
 
 #[derive(Debug, Clone)]
 pub struct AuthSession {
     pub username: String,
     pub password: String,
-    pub user_info: UserResponse,
+    pub user_info: User,
 }
 
 pub struct AuthManager {

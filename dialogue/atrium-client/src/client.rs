@@ -1,8 +1,7 @@
 use reqwest::{Client, Response, Error as ReqwestError};
 use serde::de::DeserializeOwned;
 use std::fmt;
-use atrium::models::{CreateUserRequest, UserCredentials, UserResponse, UsersListResponse};
-use atrium::models::{CreateMessageRequest, MessageResponse, MessagesResponse};
+use atrium::models::*;
 
 #[derive(Debug)]
 pub enum ClientError {
@@ -59,7 +58,7 @@ impl DialogueClient {
         }
     }
 
-    pub async fn register_user(&self, request: CreateUserRequest) -> Result<UserResponse, ClientError> {
+    pub async fn register_user(&self, request: CreateUserRequest) -> Result<User, ClientError> {
         let response = self.client
             .post(format!("{}/api/v1/users", self.base_url))
             .json(&request)
@@ -69,7 +68,7 @@ impl DialogueClient {
         Self::handle_response(response).await
     }
 
-    pub async fn authenticate(&self, username: &str, password: &str) -> Result<UserResponse, ClientError> {
+    pub async fn authenticate(&self, username: &str, password: &str) -> Result<User, ClientError> {
         // First check if user exists
         match self.get_user_profile(username).await {
             Ok(user) => {
@@ -90,7 +89,7 @@ impl DialogueClient {
         }
     }
 
-    pub async fn get_all_users(&self) -> Result<UsersListResponse, ClientError> {
+    pub async fn get_all_users(&self) -> Result<UsersList, ClientError> {
         let response = self.client
             .get(format!("{}/api/v1/users", self.base_url))
             .send()
@@ -99,7 +98,7 @@ impl DialogueClient {
         Self::handle_response(response).await
     }
 
-    pub async fn get_user_profile(&self, username: &str) -> Result<UserResponse, ClientError> {
+    pub async fn get_user_profile(&self, username: &str) -> Result<User, ClientError> {
         let response = self.client
             .get(format!("{}/api/v1/users/{}", self.base_url, username))
             .send()
@@ -124,7 +123,7 @@ impl DialogueClient {
         }
     }
 
-    pub async fn send_message(&self, username: &str, password: &str, content: String) -> Result<MessageResponse, ClientError> {
+    pub async fn send_message(&self, username: &str, password: &str, content: String) -> Result<Message, ClientError> {
         let request = CreateMessageRequest {
             content,
             username: username.to_string(),
@@ -140,7 +139,7 @@ impl DialogueClient {
         Self::handle_response(response).await
     }
 
-    pub async fn get_messages(&self, limit: Option<u64>, offset: Option<u64>) -> Result<MessagesResponse, ClientError> {
+    pub async fn get_messages(&self, limit: Option<u64>, offset: Option<u64>) -> Result<Messages, ClientError> {
         let mut query_params = Vec::new();
 
         if let Some(limit) = limit {
