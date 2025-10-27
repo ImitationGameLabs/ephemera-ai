@@ -1,5 +1,3 @@
-import type { ChatInterfaceProps } from '$lib/types/chat';
-
 /**
  * Chat-specific scroll manager that combines auto-scroll with UI state management
  */

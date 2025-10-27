@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { MessageSquare } from '@lucide/svelte';
-	import type { WelcomeContentProps } from '$lib/types/chat';
+
+	interface WelcomeContentProps {
+		onSignIn: () => void;
+	}
 
 	let { onSignIn = $bindable(() => {}) }: WelcomeContentProps = $props();
 </script>

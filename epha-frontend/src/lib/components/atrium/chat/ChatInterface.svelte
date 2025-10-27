@@ -1,9 +1,28 @@
 <script lang="ts">
 	import MessageList from '$lib/components/atrium/chat/MessageList.svelte';
 	import MessageInput from '$lib/components/atrium/chat/MessageInput.svelte';
-	import { CircleAlert, MessageSquare, Users } from '@lucide/svelte';
-	import type { ChatInterfaceProps } from '$lib/types/chat';
-	import { chatScrollManager } from '$lib/actions/chatScrollManager';
+	import { CircleAlert } from '@lucide/svelte';
+	import type { Message } from '$lib/api/types';
+	import type { AuthenticatedUser } from '$lib/stores/auth';
+
+	interface ChatInterfaceProps {
+		messages: Message[];
+		loading: boolean;
+		error: string | null;
+		initialLoadDone: boolean;
+		sendingError: string | null;
+		notifications: NotificationState;
+		currentUser: AuthenticatedUser | null;
+		isOffline?: boolean;
+		onSendMessage: (content: string) => void;
+		onRetryLoad: () => void;
+		onClearNotifications: () => void;
+	}
+
+	interface NotificationState {
+		count: number;
+		hasUnloadedUnread: boolean;
+	}
 
 	let {
 		messages = $bindable([]),
@@ -16,39 +35,14 @@
 		isOffline = $bindable(false),
 		onSendMessage = $bindable(() => {}),
 		onRetryLoad = $bindable(() => {}),
-		onClearNotifications = $bindable(() => {})
-	}: ChatInterfaceProps = $props();
-
-	let messagesContainer = $state<HTMLElement>();
-	let showScrollToBottom = $state(false);
-
-	// Handle scroll events for loading more messages and scroll-to-bottom button
-	function handleScroll() {
-		if (!messagesContainer) return;
-
-		const { scrollTop, scrollHeight, clientHeight } = messagesContainer;
-		const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-		// Show scroll to bottom button if not near bottom
-		showScrollToBottom = distanceFromBottom > 200;
-
-		// Clear notifications if user scrolls to bottom (viewing latest messages)
-		if (distanceFromBottom < 10) {
-			onClearNotifications();
-		}
-	}
-
-	// Scroll to bottom (exposed for external use)
-	function scrollToBottom() {
-		if (messagesContainer) {
-			messagesContainer.scrollTop = messagesContainer.scrollHeight;
-		}
-	}
+		onClearNotifications = $bindable(() => {}),
+		classes = $bindable('')
+	}: ChatInterfaceProps & { classes?: string } = $props();
 </script>
 
-<div class="flex-1 flex flex-col max-w-4xl mx-auto h-full w-full min-h-0">
-	<!-- Messages Container -->
-	<div class="flex-1 relative min-h-0">
+<div class="{classes} flex flex-col relative min-h-0">
+	<!-- Messages Area -->
+	<div class="flex-1 flex min-h-0">
 		{#if error}
 			<div class="absolute inset-0 flex items-center justify-center bg-surface-50-950/50">
 				<div class="text-center p-6">
@@ -66,65 +60,30 @@
 				</div>
 			</div>
 		{:else}
-			<div
-				bind:this={messagesContainer}
-				class="h-full overflow-auto min-h-0"
-				onscroll={handleScroll}
-			>
-				{#if loading && !initialLoadDone}
-					<div class="flex items-center justify-center h-full">
-						<div class="text-center">
-							<div class="loading loading-spinner w-8 h-8 mx-auto mb-4"></div>
-							<p class="text-surface-600-400">Loading messages...</p>
-						</div>
+			<!-- Loading more messages indicator (at top) -->
+			{#if loading && initialLoadDone}
+				<div class="sticky top-0 bg-surface-50-950/80 backdrop-blur-sm border-b border-surface-200-800 p-3 z-10">
+					<div class="flex items-center justify-center gap-2">
+						<div class="loading loading-spinner w-4 h-4"></div>
+						<span class="text-sm text-surface-600-400">Loading older messages...</span>
 					</div>
-				{:else if messages.length === 0}
-					<div class="flex items-center justify-center h-full">
-						<div class="text-center max-w-md mx-6">
-							<div class="w-16 h-16 bg-surface-100-900 rounded-full flex items-center justify-center mx-auto mb-4">
-								<MessageSquare class="w-8 h-8 text-surface-500" />
-							</div>
-							<h3 class="text-lg font-medium mb-2">No messages yet</h3>
-							<p class="text-sm text-surface-600-400">
-								Be the first to start the conversation!
-							</p>
-						</div>
-					</div>
-				{:else}
-					<!-- Loading more messages indicator (at top) -->
-					{#if loading && initialLoadDone}
-						<div class="sticky top-0 bg-surface-50-950/80 backdrop-blur-sm border-b border-surface-200-800 p-3 z-10">
-							<div class="flex items-center justify-center gap-2">
-								<div class="loading loading-spinner w-4 h-4"></div>
-								<span class="text-sm text-surface-600-400">Loading older messages...</span>
-							</div>
-						</div>
-					{/if}
-
-					<MessageList
-						messages={messages}
-						currentUser={currentUser}
-					/>
-				{/if}
-			</div>
-
-			<!-- Scroll to bottom button -->
-			{#if showScrollToBottom}
-				<button
-					class="absolute bottom-4 right-4 btn preset-filled-primary rounded-full w-12 h-12 p-0 flex items-center justify-center shadow-lg"
-					onclick={scrollToBottom}
-					title="Scroll to bottom"
-				>
-					<Users class="w-5 h-5" />
-				</button>
+				</div>
 			{/if}
+
+			<MessageList
+				class="flex-1"
+				messages={messages}
+				currentUser={currentUser}
+				loading={loading && !initialLoadDone}
+				onClearNotifications={onClearNotifications}
+			/>
 		{/if}
 	</div>
 
 	<!-- Message Input -->
-	<div>
+	<div class="sticky bottom-0 bg-surface-50-950 border-t border-surface-200-800 p-4 z-10">
 		{#if sendingError}
-			<div class="mx-4 mb-2 p-3 bg-error-100-900 border border-error-200-800 rounded-lg">
+			<div class="max-w-4xl mx-auto mb-2 p-3 bg-error-100-900 border border-error-200-800 rounded-lg">
 				<div class="flex items-center gap-2">
 					<CircleAlert class="w-4 h-4 text-error-600-400" />
 					<span class="text-sm text-error-700-300">{sendingError}</span>

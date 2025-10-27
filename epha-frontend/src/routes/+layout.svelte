@@ -18,7 +18,7 @@
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-<div class="w-full h-screen grid grid-cols-[auto_1fr] border border-surface-200-800">
+<div class="w-full h-screen flex flex-row border border-surface-200-800">
   <!-- --- -->
   <Navigation layout="rail">
     <Navigation.Header>
@@ -44,7 +44,7 @@
     </Navigation.Footer>
   </Navigation>
   <!-- --- -->
-  <div class="h-full">
+  <div class="flex flex-1">
 	{@render children()}
   </div>
 </div>

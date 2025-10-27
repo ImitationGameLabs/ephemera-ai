@@ -12,6 +12,7 @@
 	import { dialogueAtriumAPI } from '$lib/api/dialogue-atrium';
 	import { heartbeatManager } from '$lib/services/heartbeat';
 	import { MESSAGE_CONFIG } from '$lib/config/app';
+	import { CircleAlert } from '@lucide/svelte';
 	import type { User, Message } from '$lib/api/types';
 
 	// Modal state
@@ -137,9 +138,9 @@
 	}
 </script>
 
-<div class="flex flex-col flex-1 bg-surface-50-950 min-h-0 h-full">
+<div class="flex-1 flex flex-col bg-surface-50-950 min-h-0">
 	<!-- Header -->
-	<div class="bg-surface-100-900 border-b border-surface-200-800 px-6 py-4">
+	<div class="sticky top-0 bg-surface-100-900 border-b border-surface-200-800 p-6 z-10 min-h-0">
 		<div class="max-w-6xl mx-auto">
 			<div class="flex items-center justify-between">
 				<div>
@@ -175,35 +176,21 @@
 	<!-- Chat Area -->
 	{#if !$auth.authenticatedUser}
 		<WelcomeContent onSignIn={() => isLoginModalOpen = true} />
-	{:else if $auth.authMode === 'offline'}
-		<!-- Offline mode: Show chat interface with disconnected banner -->
-		<div class="flex flex-col flex-1 min-h-0">
-			<DisconnectedBanner onRetry={() => heartbeatManager.resetAndRetry()} />
-			<ChatInterface
-				messages={currentMessages}
-				loading={currentLoading}
-				error={currentError}
-				initialLoadDone={initialLoadDone}
-				sendingError={sendingError}
-				notifications={notifications}
-				currentUser={$auth.authenticatedUser?.user}
-				isOffline={$auth.authMode === AuthMode.OFFLINE}
-				onSendMessage={handleSendMessage}
-				onRetryLoad={loadInitialMessages}
-				onClearNotifications={() => messagesStore.clearNotifications()}
-			/>
-		</div>
 	{:else}
-		<!-- Online mode: Normal chat interface -->
+		<!-- Offline mode: Show chat interface with disconnected banner -->
+		{#if $auth.authMode === AuthMode.OFFLINE}
+			<DisconnectedBanner onRetry={() => heartbeatManager.resetAndRetry()} />
+		{/if}
 		<ChatInterface
+			classes="w-full max-w-4xl mx-auto min-h-0 border-2"
 			messages={currentMessages}
 			loading={currentLoading}
 			error={currentError}
 			initialLoadDone={initialLoadDone}
 			sendingError={sendingError}
 			notifications={notifications}
-			currentUser={$auth.authenticatedUser?.user}
-			isOffline={false}
+			currentUser={$auth.authenticatedUser}
+			isOffline={$auth.authMode === AuthMode.OFFLINE}
 			onSendMessage={handleSendMessage}
 			onRetryLoad={loadInitialMessages}
 			onClearNotifications={() => messagesStore.clearNotifications()}
