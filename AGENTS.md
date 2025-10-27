@@ -10,7 +10,8 @@ Ephemera AI is an AI system with a focus on long-term memory, reflection, and me
 
 - **epha-ai/**: Main application binary.
 - **epha-agent/**: Agent system with state machine and context management capabilities.
-- **epha-memory/**: Memory management library for handling memory operations and persistence.
+- **psyche/**: Memory and cognition components.
+  - **loom/**: Memory management library for handling memory operations and persistence.
 - **epha-frontend/**: Web interface providing visual interaction and management for all ephemera-ai related components and features.
 - **dialogue/**: Modular chat system designed for human/AI-agnostic integration.
   - **atrium/**: Server implementation with database and API logic.
@@ -35,6 +36,7 @@ cargo build
 # Build specific crate (examples)
 cargo build -p epha-ai
 cargo build -p atrium
+cargo build -p loom
 # See workspace configuration above for all available projects
 
 # Build with release optimizations
@@ -49,6 +51,7 @@ cargo test
 # Run tests for specific crate (examples)
 cargo test -p epha-ai
 cargo test -p atrium
+cargo test -p loom
 # See workspace configuration above for all available projects
 
 # Run specific test

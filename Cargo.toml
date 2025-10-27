@@ -2,7 +2,7 @@
 members = [
     "epha-ai",
     "epha-agent",
-    "epha-memory",
+    "psyche/loom",
 
     "dialogue/atrium",
     "dialogue/atrium-client",
