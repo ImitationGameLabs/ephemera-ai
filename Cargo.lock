@@ -866,49 +866,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "epha-ai"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "dotenv",
- "epha-agent",
- "epha-memory",
- "log",
- "qdrant-client",
- "rig-core",
- "sea-orm",
- "sea-orm-migration",
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror 2.0.17",
- "time",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "epha-memory"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "qdrant-client",
- "rig-core",
- "sea-orm",
- "sea-orm-migration",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "time",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1737,6 +1694,43 @@ name = "log"
 version = "0.4.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
+
+[[package]]
+name = "loom"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.8.6",
+ "clap",
+ "dotenv",
+ "qdrant-client",
+ "rig-core",
+ "sea-orm",
+ "sea-orm-migration",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "time",
+ "tokio",
+ "tower 0.5.2",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "loom-client"
+version = "0.1.0"
+dependencies = [
+ "loom",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "lru-slab"

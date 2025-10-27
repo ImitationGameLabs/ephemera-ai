@@ -1,0 +1,16 @@
+[package]
+name = "loom-client"
+version = "0.1.0"
+edition = "2024"
+description = "Client library for Loom memory service"
+
+[dependencies]
+# Loom server dependency for shared types
+loom = { path = "../loom" }
+
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1.41"
+thiserror = "2.0"

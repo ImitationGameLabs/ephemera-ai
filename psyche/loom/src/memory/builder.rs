@@ -1,4 +1,4 @@
-use crate::{MemoryFragment, MemorySource, SubjectiveMetadata, ObjectiveMetadata};
+use super::types::{MemoryFragment, MemorySource, SubjectiveMetadata, ObjectiveMetadata};
 use time::OffsetDateTime;
 
 /// Builder for creating MemoryFragment instances with flexible configuration
@@ -85,7 +85,7 @@ impl Default for MemoryFragmentBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::MemorySource;
+    use crate::memory::types::MemorySource;
 
     #[test]
     fn test_builder_basic_functionality() {

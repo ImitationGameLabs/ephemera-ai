@@ -3,10 +3,11 @@ use rig::embeddings::embedding::EmbeddingModelDyn;
 use thiserror::Error;
 
 use super::{
+    Manager, TimeRange, MemoryQuery, MemoryQueryResult,
     mysql_manager::{MysqlError, MysqlMemoryManager},
     qdrant_manager::{QdrantError, QdrantMemoryManager},
 };
-use crate::{Manager, MemoryFragment, MemoryQuery, MemoryQueryResult, TimeRange};
+use crate::memory::types::MemoryFragment;
 
 /// Filter criteria for memory queries
 #[derive(Debug)]
@@ -14,7 +15,7 @@ pub struct MemoryQueryFilter {
     pub min_importance: Option<u8>,
     pub min_confidence: Option<u8>,
     pub tags: Option<Vec<String>>,
-    pub time_range: Option<crate::manager::TimeRange>,
+    pub time_range: Option<TimeRange>,
 }
 
 #[derive(Error, Debug)]
@@ -167,6 +168,24 @@ impl HybridMemoryManager {
         } else {
             Ok(insights)
         }
+    }
+
+    /// Get a specific memory by ID
+    pub async fn get(&self, id: i64) -> Result<MemoryFragment, HybridError> {
+        self.mysql_manager.get(id).await.map_err(HybridError::from)
+    }
+
+    /// Delete a memory by ID (removes from both MySQL and Qdrant)
+    pub async fn delete(&self, id: i64) -> Result<(), HybridError> {
+        // Delete from MySQL first
+        self.mysql_manager.delete(id).await.map_err(HybridError::from)?;
+
+        // Delete from Qdrant (if fails, log error but don't fail the operation)
+        if let Err(e) = self.qdrant_manager.delete_embedding(id).await {
+            eprintln!("Warning: Failed to delete embedding from Qdrant for memory {}: {}", id, e);
+        }
+
+        Ok(())
     }
 
     /// Get memories with high importance for review using targeted queries

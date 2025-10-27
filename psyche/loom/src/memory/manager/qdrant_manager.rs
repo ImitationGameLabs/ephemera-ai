@@ -1,7 +1,7 @@
 use qdrant_client::Qdrant;
 use thiserror::Error;
 
-use crate::MemoryFragment;
+use crate::memory::types::MemoryFragment;
 
 #[derive(Error, Debug)]
 pub enum QdrantError {

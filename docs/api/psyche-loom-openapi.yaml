@@ -1,0 +1,406 @@
+openapi: 3.1.0
+info:
+  title: Psyche Loom API
+  description: |
+    RESTful API for memory management with text-based memory fragments, metadata support, and search capabilities.
+
+    ## Core Design Principles
+
+    Psyche Loom focuses on efficient memory management and retrieval:
+    - **Flexible Metadata**: JSON metadata for rich context storage
+    - **Time-based Queries**: Filter memories by creation time
+    - **Semantic Search**: Advanced similarity search capabilities
+    - **Clean Architecture**: Simple RESTful design with consistent responses
+  version: 1.0.0
+  contact:
+    name: Psyche Loom Team
+    email: team@psyche-loom.example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://127.0.0.1:8080
+    description: Development server
+
+paths:
+  /health:
+    get:
+      summary: Health Check
+      description: Check if the service is running and healthy
+      operationId: healthCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/memory:
+    post:
+      summary: Create Memory
+      description: Store a new memory fragment with content and optional metadata
+      operationId: createMemory
+      tags:
+        - Memory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMemoryRequest'
+      responses:
+        '201':
+          description: Memory created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+                examples:
+                  created_memory:
+                    summary: Successfully created memory
+                    value:
+                      success: true
+                      data:
+                        id: 123
+                        content: "Meeting notes about project architecture"
+                        metadata:
+                          type: "meeting"
+                          project: "loom"
+                        source: "user_input"
+                        created_at: 1640995200
+                        updated_at: 1640995200
+                      error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    get:
+      summary: Search Memories
+      description: Search memory fragments by keywords and optional time range
+      operationId: searchMemories
+      tags:
+        - Memory
+      parameters:
+        - name: keywords
+          in: query
+          required: true
+          description: Search terms to find matching memories
+          schema:
+            type: string
+          example: "architecture meeting"
+        - name: start_time
+          in: query
+          required: false
+          description: Unix timestamp for search range start
+          schema:
+            type: integer
+            format: int64
+          example: 1640995200
+        - name: end_time
+          in: query
+          required: false
+          description: Unix timestamp for search range end
+          schema:
+            type: integer
+            format: int64
+          example: 1641081600
+      responses:
+        '200':
+          description: Search completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchMemoryResponse'
+                examples:
+                  search_results:
+                    summary: Search results with multiple memories
+                    value:
+                      success: true
+                      data:
+                        memories:
+                          - id: 123
+                            content: "Meeting notes about project architecture"
+                            metadata:
+                              type: "meeting"
+                              project: "loom"
+                            source: "user_input"
+                            created_at: 1640995200
+                            updated_at: 1640995200
+                          - id: 124
+                            content: "Architecture review session"
+                            metadata:
+                              type: "review"
+                              project: "loom"
+                            source: "team_notes"
+                            created_at: 1641000000
+                            updated_at: 1641000000
+                        total: 2
+                      error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/memory/{id}:
+    get:
+      summary: Get Memory
+      description: Retrieve a specific memory fragment by ID
+      operationId: getMemory
+      tags:
+        - Memory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Memory ID
+          schema:
+            type: integer
+            format: int64
+          example: 123
+      responses:
+        '200':
+          description: Memory retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      summary: Delete Memory
+      description: Remove a memory fragment by ID
+      operationId: deleteMemory
+      tags:
+        - Memory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Memory ID
+          schema:
+            type: integer
+            format: int64
+          example: 123
+      responses:
+        '200':
+          description: Memory deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Whether the operation was successful
+        data:
+          description: Response data (present on success)
+          oneOf:
+            - $ref: '#/components/schemas/MemoryResponse'
+            - $ref: '#/components/schemas/SearchMemoryResponse'
+            - type: object
+              nullable: true
+        error:
+          type: string
+          description: Error message (present on failure)
+          nullable: true
+      required:
+        - success
+      example:
+        success: true
+        data:
+          id: 123
+          content: "Example memory"
+          metadata: {}
+          source: "user"
+          created_at: 1640995200
+          updated_at: 1640995200
+        error: null
+
+    CreateMemoryRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          description: Main content of the memory fragment
+          example: "Meeting notes about project architecture"
+        metadata:
+          type: object
+          description: Optional JSON metadata for additional context
+          nullable: true
+          example:
+            type: "meeting"
+            project: "loom"
+            participants: ["alice", "bob"]
+        source:
+          type: string
+          description: Optional identifier for memory origin
+          nullable: true
+          example: "user_input"
+      required:
+        - content
+
+    MemoryResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique memory identifier
+          example: 123
+        content:
+          type: string
+          description: Main content of the memory
+          example: "Meeting notes about project architecture"
+        metadata:
+          type: object
+          description: JSON metadata for additional context
+          nullable: true
+          example:
+            type: "meeting"
+            project: "loom"
+        source:
+          type: string
+          description: Memory origin identifier
+          nullable: true
+          example: "user_input"
+        created_at:
+          type: integer
+          format: int64
+          description: Creation timestamp (Unix timestamp)
+          example: 1640995200
+        updated_at:
+          type: integer
+          format: int64
+          description: Last update timestamp (Unix timestamp)
+          example: 1640995200
+      required:
+        - id
+        - content
+        - created_at
+        - updated_at
+
+    SearchMemoryResponse:
+      type: object
+      properties:
+        memories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemoryResponse'
+          description: List of matching memory fragments
+        total:
+          type: integer
+          description: Total number of matching memories
+          example: 5
+      required:
+        - memories
+        - total
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Service health status
+          example: "ok"
+        service:
+          type: string
+          description: Service name
+          example: "loom-memory-service"
+        timestamp:
+          type: integer
+          format: int64
+          description: Response timestamp (Unix timestamp)
+          example: 1640995200
+      required:
+        - status
+        - service
+        - timestamp
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        data:
+          nullable: true
+          example: null
+        error:
+          type: string
+          description: Error description
+          example: "Invalid request parameters"
+      required:
+        - success
+        - error
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters or malformed request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            data: null
+            error: "Missing required field: content"
+
+    ValidationError:
+      description: Validation error - request data doesn't match expected format
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            data: null
+            error: "Content field cannot be empty"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            data: null
+            error: "Memory with ID 123 not found"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            data: null
+            error: "Database connection failed"
+
+tags:
+  - name: Memory
+    description: Memory fragment operations
+  - name: Health
+    description: Service health check

@@ -1,9 +1,9 @@
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, NotSet};
 use thiserror::Error;
 
-use crate::MemoryFragment;
-use crate::entity::MemoryEntity;
-use crate::entity::memory;
+use crate::memory::types::MemoryFragment;
+use crate::memory::entity::MemoryEntity;
+use crate::memory::entity::memory;
 
 #[derive(Error, Debug)]
 pub enum MysqlError {

@@ -8,7 +8,7 @@ pub use qdrant_manager::*;
 
 use serde::{Deserialize, Serialize};
 
-use crate::MemoryFragment;
+use crate::memory::types::MemoryFragment;
 
 /// Represents a time range for memory queries
 #[derive(Debug, Clone, Serialize, Deserialize)]

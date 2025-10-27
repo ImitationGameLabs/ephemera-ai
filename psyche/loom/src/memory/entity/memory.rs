@@ -1,4 +1,4 @@
-use crate::{MemoryFragment, MemorySource, ObjectiveMetadata, SubjectiveMetadata};
+use crate::memory::types::{MemoryFragment, MemorySource, ObjectiveMetadata, SubjectiveMetadata};
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 

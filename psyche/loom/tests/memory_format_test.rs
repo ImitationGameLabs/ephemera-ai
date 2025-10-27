@@ -1,4 +1,4 @@
-use epha_memory::{MemoryFragment, MemorySource, SubjectiveMetadata, ObjectiveMetadata};
+use loom::memory::types::{MemoryFragment, MemorySource, SubjectiveMetadata, ObjectiveMetadata};
 use time::OffsetDateTime;
 
 #[test]

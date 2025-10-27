@@ -11,7 +11,8 @@ Ephemera AI is an AI system with a focus on long-term memory, reflection, and me
 - **epha-ai/**: Main application binary.
 - **epha-agent/**: Agent system with state machine and context management capabilities.
 - **psyche/**: Memory and cognition components.
-  - **loom/**: Memory management library for handling memory operations and persistence.
+  - **loom/**: Memory management HTTP service and library with hybrid storage (MySQL + Qdrant).
+  - **loom-client/**: HTTP client library for interacting with the Loom memory service.
 - **epha-frontend/**: Web interface providing visual interaction and management for all ephemera-ai related components and features.
 - **dialogue/**: Modular chat system designed for human/AI-agnostic integration.
   - **atrium/**: Server implementation with database and API logic.
