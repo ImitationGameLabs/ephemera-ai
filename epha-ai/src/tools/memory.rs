@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use rig::{completion::ToolDefinition, tool::Tool};
 use serde::Deserialize;
 use serde_json::json;
-use epha_memory::{MemoryQuery, Manager, HybridMemoryManager, MemoryFragment};
+use loom_client::{LoomClient, SearchMemoryRequest, MemoryResponse};
+use loom_client::memory::MemoryFragment;
 use epha_agent::context::ContextSerialize;
 use crate::context::{MemoryFragmentList, EphemeraContext};
 
@@ -35,6 +36,26 @@ impl RecallCacheHelper {
         }
     }
 
+    pub fn store_responses(&mut self, responses: Vec<MemoryResponse>) {
+        self.memories.clear();
+        for response in responses {
+            // Convert MemoryResponse to MemoryFragment for compatibility
+            let fragment: MemoryFragment = MemoryFragment {
+                id: response.id,
+                content: response.content,
+                subjective_metadata: Default::default(), // Will use default values
+                objective_metadata: loom_client::memory::ObjectiveMetadata {
+                    created_at: response.created_at.unix_timestamp(),
+                    source: response.source
+                        .map(|s| loom_client::memory::MemorySource::action(s))
+                        .unwrap_or_else(|| loom_client::memory::MemorySource::action("unknown".to_string())),
+                },
+                associations: Vec::new(),
+            };
+            self.memories.insert(response.id, fragment);
+        }
+    }
+
     pub fn get(&self, ids: &[i64]) -> Option<Vec<MemoryFragment>> {
         let mut result = Vec::new();
         for &id in ids {
@@ -57,13 +78,13 @@ impl RecallCacheHelper {
 }
 
 pub struct MemoryRecall {
-    memory_manager: Arc<HybridMemoryManager>,
+    loom_client: Arc<LoomClient>,
     cache: Arc<Mutex<RecallCacheHelper>>,
 }
 
 impl MemoryRecall {
-    pub fn new(memory_manager: Arc<HybridMemoryManager>, cache: Arc<Mutex<RecallCacheHelper>>) -> Self {
-        Self { memory_manager, cache }
+    pub fn new(loom_client: Arc<LoomClient>, cache: Arc<Mutex<RecallCacheHelper>>) -> Self {
+        Self { loom_client, cache }
     }
 }
 
@@ -97,27 +118,44 @@ impl Tool for MemoryRecall {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let query = MemoryQuery {
+        let search_request = SearchMemoryRequest {
             keywords: args.keywords,
-            time_range: None,
+            start_time: None,
+            end_time: None,
         };
 
-        let recall_result = self.memory_manager.recall(&query)
+        let search_result = self.loom_client.search_memory(search_request)
             .await
             .map_err(|_| MemoryRecallError)?;
 
-        if recall_result.memories.is_empty() {
+        if search_result.memories.is_empty() {
             Ok("No relevant memories found.".to_string())
         } else {
-            // Store memories in cache for selection
-            self.cache.lock().unwrap().store(recall_result.memories.clone());
+            // Store memory responses in cache for selection
+            self.cache.lock().unwrap().store_responses(search_result.memories.clone());
+
+            // Convert responses to fragments for serialization
+            let fragments: Vec<MemoryFragment> = search_result.memories.into_iter()
+                .map(|response| MemoryFragment {
+                    id: response.id,
+                    content: response.content,
+                    subjective_metadata: Default::default(),
+                    objective_metadata: loom_client::memory::ObjectiveMetadata {
+                        created_at: response.created_at.unix_timestamp(),
+                        source: response.source
+                            .map(|s| loom_client::memory::MemorySource::action(s))
+                            .unwrap_or_else(|| loom_client::memory::MemorySource::action("unknown".to_string())),
+                    },
+                    associations: Vec::new(),
+                })
+                .collect();
 
             // Use unified serialization
-            let serialized_memories = MemoryFragmentList::from(recall_result.memories.clone()).serialize();
+            let serialized_memories = MemoryFragmentList::from(fragments.clone()).serialize();
 
             Ok(format!(
                 "Recalled {} memories (cached for selection):\n\n{}\n\nUse select_memories tool to add specific memories to context.",
-                recall_result.memories.len(),
+                fragments.len(),
                 serialized_memories
             ))
         }

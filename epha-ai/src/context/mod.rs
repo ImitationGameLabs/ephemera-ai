@@ -4,7 +4,7 @@
 //! for creating and managing AI context state.
 
 use epha_agent::context::ContextSerialize;
-use epha_memory::MemoryFragment;
+use loom_client::memory::MemoryFragment;
 
 // Re-export all public types
 pub use ephemera_context::{EphemeraContext};

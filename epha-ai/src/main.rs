@@ -1,9 +1,6 @@
 use dotenv::dotenv;
-use epha_memory::HybridMemoryManager;
-use rig::providers::{deepseek, openai};
-use rig::client::embeddings::EmbeddingsClientDyn;
-use qdrant_client::config::QdrantConfig;
-use sea_orm_migration::MigratorTrait;
+use loom_client::LoomClient;
+use rig::providers::deepseek;
 use tracing::info;
 use std::sync::Arc;
 use crate::agent::EphemeraAI;
@@ -22,12 +19,12 @@ async fn main() -> anyhow::Result<()> {
 
     let llm_client = init_llm_client();
 
-    let memory_manager = init_memory_manager()
+    let loom_client = init_loom_client()
         .await
-        .expect("Failed to init memory manager");
+        .expect("Failed to init loom client");
 
-    let memory_manager = Arc::new(memory_manager);
-    let mut ai = EphemeraAI::new(llm_client, memory_manager, &model_name);
+    let loom_client = Arc::new(loom_client);
+    let mut ai = EphemeraAI::new(llm_client, loom_client, &model_name);
     ai.run().await?;
 
     Ok(())
@@ -47,54 +44,20 @@ fn init_llm_client() -> deepseek::Client {
     llm_client
 }
 
-async fn init_memory_manager() -> anyhow::Result<HybridMemoryManager> {
-    // Setup MySQL connection
-    let mysql_url = std::env::var("EPHA_MEMORY_MYSQL_URL").expect("EPHA_MEMORY_MYSQL_URL not set");
-    let conn = sea_orm::Database::connect(&mysql_url).await?;
+async fn init_loom_client() -> anyhow::Result<LoomClient> {
+    // Setup loom service connection
+    let loom_service_url = std::env::var("LOOM_SERVICE_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
 
-    // Run database migrations
-    info!("Running database migrations...");
-    epha_memory::Migrator::up(&conn, None)
+    info!("Connecting to loom service at: {}", loom_service_url);
+
+    // Test connection with health check
+    let client = LoomClient::new(&loom_service_url);
+    client.health_check()
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to run migrations: {}", e))?;
-    info!("Migrations completed successfully!");
+        .map_err(|e| anyhow::anyhow!("Failed to connect to loom service: {}", e))?;
 
-    // Setup Qdrant connection
-    let qdrant_url = std::env::var("EPHA_MEMORY_QDRANT_URL").expect("EPHA_MEMORY_QDRANT_URL not set");
-    let qdrant_config = QdrantConfig {
-        uri: qdrant_url.clone(),
-        ..Default::default()
-    };
-    let qdrant_client =
-        qdrant_client::Qdrant::new(qdrant_config).expect("Failed to create Qdrant client");
+    info!("Successfully connected to loom service!");
 
-    // Initialize embedding model
-    let embedding_model_name = std::env::var("EMBEDDING_MODEL")
-        .expect("EMBEDDING_MODEL not set");
-    let embedding_api_key = std::env::var("EMBEDDING_MODEL_API_KEY")
-        .expect("EMBEDDING_MODEL_API_KEY not set");
-    let embedding_url = std::env::var("EMBEDDING_MODEL_URL")
-        .expect("EMBEDDING_MODEL_URL not set");
-
-    
-    // Create OpenAI-compatible client for custom embedding service
-    let embedding_client = openai::Client::builder(&embedding_api_key)
-        .base_url(&embedding_url)
-        .build();
-
-    // Get embedding dimensions (required)
-    let embedding_dimensions: usize = std::env::var("EMBEDDING_MODEL_DIMENSIONS")
-        .expect("EMBEDDING_MODEL_DIMENSIONS not set")
-        .parse()
-        .expect("EMBEDDING_MODEL_DIMENSIONS must be a valid number");
-
-    let embedding_model = embedding_client.embedding_model_with_ndims(&embedding_model_name, embedding_dimensions);
-
-    let memory_manager = HybridMemoryManager::new(
-        epha_memory::MysqlMemoryManager::new(conn),
-        epha_memory::QdrantMemoryManager::new(qdrant_client, embedding_dimensions),
-        embedding_model,
-    );
-
-    Ok(memory_manager)
+    Ok(client)
 }

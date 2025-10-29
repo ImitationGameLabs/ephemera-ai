@@ -3,9 +3,6 @@ name = "epha-ai"
 version = "0.1.0"
 edition = "2024"
 
-[[bin]]
-name = "db_test"
-path = "src/db_test.rs"
 
 [dependencies]
 anyhow = "1.0"
@@ -25,11 +22,6 @@ tracing-subscriber = { version = "0.3", features = [
 log = "0.4"
 
 epha-agent = { path = "../epha-agent" }
-epha-memory = { path = "../epha-memory" }
+loom-client = { path = "../psyche/loom-client" }
 dotenv = "0.15"
-
-# Database dependencies for testing
-qdrant-client = { version = "1.15" }
-sea-orm = { version = "1.1", features = ["runtime-tokio", "sqlx-mysql"] }
-sea-orm-migration = "1.1"
 serde_yaml = "0.9.34"

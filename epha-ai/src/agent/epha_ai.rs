@@ -6,7 +6,8 @@ use rig::{
     client::CompletionClient,
     providers::deepseek::CompletionModel,
 };
-use epha_memory::{HybridMemoryManager, MemorySource, MemoryFragmentBuilder};
+use loom_client::{LoomClient, CreateMemoryRequest};
+use loom_client::memory::MemorySource;
 use std::sync::{Arc, Mutex};
 use crate::agent::{CommonPrompt, StateMachineExecutor};
 use crate::context::EphemeraContext;
@@ -16,7 +17,7 @@ pub struct EphemeraAI {
     state_machine: Arc<Mutex<StateMachine>>,
     completion_client: Arc<Client>,
     context: Context<EphemeraContext>,
-    memory_manager: Arc<HybridMemoryManager>,
+    loom_client: Arc<LoomClient>,
     common_prompt: CommonPrompt,
     executor: StateMachineExecutor,
     memory_cache: Arc<Mutex<RecallCacheHelper>>,
@@ -25,7 +26,7 @@ pub struct EphemeraAI {
 impl EphemeraAI {
     pub fn new(
         completion_client: Client,
-        memory_manager: Arc<HybridMemoryManager>,
+        loom_client: Arc<LoomClient>,
         model: &str
     ) -> Self {
         // Load common prompt
@@ -49,10 +50,10 @@ impl EphemeraAI {
         let memory_cache = Arc::new(Mutex::new(RecallCacheHelper::new()));
 
         // Create shared context first
-        let context_data = Arc::new(Mutex::new(EphemeraContext::new(memory_manager.clone())));
+        let context_data = Arc::new(Mutex::new(EphemeraContext::new(loom_client.clone())));
 
         // Stage 3: Create agents and assign them to states
-        init_agents(&completion_client, model, memory_manager.clone(), &state_machine, &common_prompt, &memory_cache, &context_data)
+        init_agents(&completion_client, model, loom_client.clone(), &state_machine, &common_prompt, &memory_cache, &context_data)
             .expect("Failed to initialize agents");
 
         let executor = StateMachineExecutor::new(state_machine.clone());
@@ -61,7 +62,7 @@ impl EphemeraAI {
             state_machine,
             completion_client: Arc::new(completion_client),
             context: Context::new(context_data),
-            memory_manager,
+            loom_client,
             common_prompt,
             executor,
             memory_cache,
@@ -90,15 +91,19 @@ impl EphemeraAI {
     
     async fn update_context(&mut self, result: String) -> anyhow::Result<()> {
         // Application-specific context update logic
-        let activity_fragment = MemoryFragmentBuilder::new()
-            .content(format!("state_execution: {}", result))
-            .importance(100)
-            .confidence(255)
-            .add_tag("activity".to_string())
-            .add_tag("state_execution".to_string())
-            .source(MemorySource::action("execution".to_string()))
-            .build();
-        self.context.data().lock().unwrap().add_activity(activity_fragment);
+        let activity_request = CreateMemoryRequest {
+            content: format!("state_execution: {}", result),
+            metadata: Some(serde_json::json!({
+                "subjective": {
+                    "importance": 100,
+                    "confidence": 255,
+                    "tags": ["activity", "state_execution"]
+                }
+            })),
+            source: Some(MemorySource::action("execution".to_string()).to_string()),
+        };
+
+        self.context.data().lock().unwrap().add_activity(activity_request);
         Ok(())
     }
 }
@@ -107,7 +112,7 @@ impl EphemeraAI {
 fn init_agents(
     completion_client: &Client,
     model: &str,
-    memory_manager: Arc<HybridMemoryManager>,
+    loom_client: Arc<LoomClient>,
     state_machine: &Arc<Mutex<StateMachine>>,
     common_prompt: &CommonPrompt,
     memory_cache: &Arc<Mutex<RecallCacheHelper>>,
@@ -125,7 +130,7 @@ fn init_agents(
         let agent = create_agent_for_state(
             completion_client,
             model,
-            &memory_manager,
+            &loom_client,
             state_machine,
             &state,
             common_prompt,
@@ -145,7 +150,7 @@ fn init_agents(
 fn create_agent_for_state(
     completion_client: &Client,
     model: &str,
-    memory_manager: &Arc<HybridMemoryManager>,
+    loom_client: &Arc<LoomClient>,
     state_machine: &Arc<Mutex<StateMachine>>,
     state: &State,
     common_prompt: &CommonPrompt,
@@ -166,7 +171,7 @@ fn create_agent_for_state(
         "perception" => agent_builder.tool(GetMessages).build(),
         "recall" => {
             agent_builder
-                .tool(MemoryRecall::new(memory_manager.clone(), memory_cache.clone()))
+                .tool(MemoryRecall::new(loom_client.clone(), memory_cache.clone()))
                 .tool(MemorySelection::new(memory_cache.clone(), context_data.clone()))
                 .build()
         },

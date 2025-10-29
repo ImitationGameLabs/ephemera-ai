@@ -1,7 +1,8 @@
 [workspace]
 members = [
-    # "epha-ai",
+    "epha-ai",
     "epha-agent",
+    
     "psyche/loom",
     "psyche/loom-client",
 

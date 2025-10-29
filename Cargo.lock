@@ -865,6 +865,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "epha-ai"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "dotenv",
+ "epha-agent",
+ "log",
+ "loom-client",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 2.0.17",
+ "time",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

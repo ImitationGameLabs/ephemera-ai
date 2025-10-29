@@ -1,5 +1,6 @@
 use super::{ContextSerialize, MemoryFragment, MemoryFragmentList};
-use epha_memory::{MemorySource, MemoryFragmentBuilder, HybridMemoryManager, Manager};
+use loom_client::{LoomClient, CreateMemoryRequest};
+use loom_client::memory::MemorySource;
 use std::collections::VecDeque;
 use std::fmt;
 use std::sync::Arc;
@@ -25,7 +26,7 @@ impl fmt::Display for QueueStatus {
 }
 
 pub struct EphemeraContext {
-    memory_manager: Arc<HybridMemoryManager>,      // Memory manager for auto-saving
+    loom_client: Arc<LoomClient>,                  // HTTP client for memory operations
 
     memory_context: Vec<MemoryFragment>,           // Recalled long-term memories
     recent_activities: VecDeque<MemoryFragment>,   // Recent activities
@@ -35,13 +36,13 @@ pub struct EphemeraContext {
 }
 
 impl EphemeraContext {
-    pub fn new(memory_manager: Arc<HybridMemoryManager>) -> Self {
+    pub fn new(loom_client: Arc<LoomClient>) -> Self {
         Self {
             memory_context: Vec::new(),
             recent_activities: VecDeque::new(),
             current_token_usage: 0,
             max_token_limit: 30_000,  // 30k token maximum
-            memory_manager,
+            loom_client,
         }
     }
 
@@ -62,18 +63,32 @@ impl EphemeraContext {
     }
 
     // General activity method - single interface for adding activities
-    pub fn add_activity(&mut self, fragment: MemoryFragment) {
-        let fragment_tokens = self.calculate_fragment_tokens(&fragment);
+    pub fn add_activity(&mut self, request: CreateMemoryRequest) {
+        // For token calculation, we need to convert request to a fragment-like structure
+        // Create a temporary fragment for token estimation
+        let temp_fragment = MemoryFragment {
+            id: 0, // Temporary ID
+            content: request.content.clone(),
+            subjective_metadata: Default::default(),
+            objective_metadata: loom_client::memory::ObjectiveMetadata {
+                created_at: time::OffsetDateTime::now_utc().unix_timestamp(),
+                source: request.source.clone()
+                    .map(|s| loom_client::memory::MemorySource::action(s))
+                    .unwrap_or_else(|| loom_client::memory::MemorySource::action("unknown".to_string())),
+            },
+            associations: Vec::new(),
+        };
+
+        let fragment_tokens = self.calculate_fragment_tokens(&temp_fragment);
 
         // Add to queue tail
-        self.recent_activities.push_back(fragment.clone());
+        self.recent_activities.push_back(temp_fragment.clone());
         self.current_token_usage += fragment_tokens;
 
         // Auto-save to long-term memory (async-friendly approach)
-        let fragment_to_save = fragment.clone();
-        let memory_manager = self.memory_manager.clone();
+        let loom_client = self.loom_client.clone();
         tokio::spawn(async move {
-            if let Err(e) = memory_manager.append(&fragment_to_save).await {
+            if let Err(e) = loom_client.create_memory(request).await {
                 error!("Failed to save activity to memory: {:?}", e);
             }
         });
@@ -94,14 +109,18 @@ impl EphemeraContext {
         }
 
         // Add activity entry with agent's summary
-        let activity_fragment = MemoryFragmentBuilder::new()
-            .content(format!("Added {} memories to context. Summary: {}", memory_count, summary))
-            .importance(110)
-            .confidence(255)
-            .add_tag("memory_selection".to_string())
-            .source(MemorySource::action("context_update".to_string()))
-            .build();
-        self.add_activity(activity_fragment);
+        let activity_request = CreateMemoryRequest {
+            content: format!("Added {} memories to context. Summary: {}", memory_count, summary),
+            metadata: Some(serde_json::json!({
+                "subjective": {
+                    "importance": 110,
+                    "confidence": 255,
+                    "tags": ["memory_selection"]
+                }
+            })),
+            source: Some(MemorySource::action("context_update".to_string()).to_string()),
+        };
+        self.add_activity(activity_request);
     }
 
 
