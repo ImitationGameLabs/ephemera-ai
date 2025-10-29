@@ -18,7 +18,13 @@ use crate::db::{UserManager, MessageManager};
 use crate::migration::Migrator;
 use crate::routes::create_routes;
 
-const BIND_ADDRESS: &str = "127.0.0.1:3000";
+/// Get service port from environment variable with default
+fn get_service_port() -> u16 {
+    env::var("ATRIUM_SERVICE_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(3002)
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -51,12 +57,16 @@ async fn main() -> anyhow::Result<()> {
     let user_manager = UserManager::new(user_conn);
     let message_manager = MessageManager::new(message_conn);
 
+    // Get service port from environment variable
+    let port = get_service_port();
+    let bind_address = format!("[::]:{}", port);
+
     // Create axum app
     let app = create_routes(user_manager, message_manager);
 
     // Start server
-    let listener = tokio::net::TcpListener::bind(BIND_ADDRESS).await?;
-    tracing::info!("Server listening on {}", BIND_ADDRESS);
+    let listener = tokio::net::TcpListener::bind(&bind_address).await?;
+    tracing::info!("Atrium service listening on {}", bind_address);
 
     axum::serve(listener, app).await?;
 

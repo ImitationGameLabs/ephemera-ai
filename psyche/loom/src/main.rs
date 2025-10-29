@@ -2,47 +2,31 @@ mod services;
 mod server;
 mod memory;
 
-use clap::{Arg, Command};
 use dotenv::dotenv;
 use tracing::info;
+use std::env;
 
 use crate::server::{LoomServer, ServerConfig};
+
+/// Get service port from environment variable with default
+fn get_service_port() -> u16 {
+    env::var("LOOM_SERVICE_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(3001)
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Load environment variables
     dotenv().ok();
 
-    let matches = Command::new("loom-server")
-        .version("0.1.0")
-        .about("Loom Memory Service HTTP Server")
-        .arg(
-            Arg::new("host")
-                .short('h')
-                .long("host")
-                .value_name("HOST")
-                .help("Sets the host address to bind to")
-                .default_value("127.0.0.1"),
-        )
-        .arg(
-            Arg::new("port")
-                .short('p')
-                .long("port")
-                .value_name("PORT")
-                .help("Sets the port to bind to")
-                .default_value("8080"),
-        )
-        .get_matches();
+    // Get service port from environment variable
+    let port = get_service_port();
+    let config = ServerConfig { port };
 
-    let config = ServerConfig {
-        host: matches.get_one::<String>("host").unwrap().clone(),
-        port: matches.get_one::<String>("port")
-            .unwrap()
-            .parse()
-            .map_err(|_| anyhow::anyhow!("Invalid port number"))?,
-    };
-
-    info!("Starting Loom Memory Service on {}:{}", config.host, config.port);
+    info!("Starting Loom Memory Service on {}",
+          config.bind_address());
 
     let server = LoomServer::new(config).await?;
     server.run().await?;

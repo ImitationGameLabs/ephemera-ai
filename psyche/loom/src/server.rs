@@ -22,18 +22,16 @@ use crate::{
 /// Server configuration
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
-    pub host: String,
     pub port: u16,
 }
 
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            host: "127.0.0.1".to_string(),
-            port: 8080,
-        }
+impl ServerConfig {
+    /// Get the full bind address in [::]:port format for IPv6 compatibility
+    pub fn bind_address(&self) -> String {
+        format!("[::]:{}", self.port)
     }
 }
+
 
 /// HTTP server for the Loom memory service
 pub struct LoomServer {
@@ -75,11 +73,12 @@ impl LoomServer {
 
         let app = create_routes(app_state);
 
-        let addr = format!("{}:{}", self.config.host, self.config.port)
+        let bind_address = self.config.bind_address();
+        let addr = format!("[::]:{}", self.config.port)
             .parse::<SocketAddr>()
             .map_err(|e| anyhow::anyhow!("Invalid address: {}", e))?;
 
-        info!("Starting Loom server on {}", addr);
+        info!("Starting Loom server on {}", bind_address);
 
         let listener = tokio::net::TcpListener::bind(addr)
             .await

@@ -53,7 +53,7 @@ fn init_llm_client() -> deepseek::Client {
 async fn init_loom_client() -> anyhow::Result<LoomClient> {
     // Setup loom service connection
     let loom_service_url = std::env::var("LOOM_SERVICE_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
+        .expect("LOOM_SERVICE_URL environment variable not set");
 
     info!("Connecting to loom service at: {}", loom_service_url);
 
@@ -71,7 +71,7 @@ async fn init_loom_client() -> anyhow::Result<LoomClient> {
 async fn init_dialogue_client() -> anyhow::Result<AuthenticatedClient> {
     // Setup atrium service connection
     let atrium_service_url = std::env::var("ATRIUM_SERVICE_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
+        .expect("ATRIUM_SERVICE_URL environment variable not set");
 
     info!("Connecting to atrium service at: {}", atrium_service_url);
 

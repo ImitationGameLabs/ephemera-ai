@@ -43,6 +43,51 @@ Edit `.env` with your API keys and configurations. See [Environment Configuratio
 cargo run --bin epha-ai
 ```
 
+## Service Development
+
+### Starting Individual Services
+
+For development, you may want to start individual microservices:
+
+#### Loom Memory Service
+```bash
+cargo run --bin loom
+```
+- Uses `LOOM_SERVICE_PORT` environment variable for binding
+- Default: `3001` (binds to `[::]:3001`)
+
+#### Atrium Dialogue Service
+```bash
+cargo run --bin atrium
+```
+- Uses `ATRIUM_SERVICE_PORT` environment variable for binding
+- Default: `3002` (binds to `[::]:3002`)
+
+#### Using CLI Tools
+```bash
+# Atrium CLI client
+cargo run --bin atrium-cli -- --help
+
+# Connect to specific atrium service
+cargo run --bin atrium-cli -- --server http://localhost:3002
+```
+
+### Service Configuration
+
+Services and clients use different environment variables:
+
+```env
+# Service binding ports (for services)
+LOOM_SERVICE_PORT=3001
+ATRIUM_SERVICE_PORT=3002
+
+# Client connection URLs (for clients)
+LOOM_SERVICE_URL=http://localhost:3001
+ATRIUM_SERVICE_URL=http://localhost:3002
+```
+
+Services bind to `[::]:port` for IPv6 compatibility.
+
 ## Environment Configuration
 
 ### Required Environment Variables
@@ -60,6 +105,16 @@ MODEL_NAME=deepseek-chat
 # Database Configuration
 EPHA_MEMORY_MYSQL_URL=mysql://epha:123456@localhost:3306/epha_memory
 EPHA_MEMORY_QDRANT_URL=http://localhost:6334
+DIALOGUE_ATRIUM_MYSQL_URL=mysql://epha:123456@localhost:3307/dialogue_atrium
+
+# Service Configuration
+# Service ports (for services)
+LOOM_SERVICE_PORT=3001
+ATRIUM_SERVICE_PORT=3002
+
+# Client URLs (for clients)
+LOOM_SERVICE_URL=http://localhost:3001
+ATRIUM_SERVICE_URL=http://localhost:3002
 
 # Embedding Configuration (OpenAI-compatible API)
 EMBEDDING_MODEL=embedding-3

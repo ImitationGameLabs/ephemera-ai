@@ -2,7 +2,7 @@ use reqwest::Client;
 use serde_json::json;
 use std::time::Duration;
 
-const BASE_URL: &str = "http://127.0.0.1:3000/api/v1";
+const BASE_URL: &str = "http://127.0.0.1:3001/api/v1";
 
 struct TestClient {
     client: Client,

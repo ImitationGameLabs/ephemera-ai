@@ -18,7 +18,7 @@ use crate::interface::CliInterface;
 #[command(version)]
 struct Args {
     /// Server URL to connect to
-    #[arg(short, long, default_value = "http://127.0.0.1:3000")]
+    #[arg(short, long, default_value = "http://127.0.0.1:3001")]
     server: String,
 
     /// Username for quick login (optional)
@@ -51,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     // Use server URL from args or environment variable
-    let server_url = env::var("DIALOGUE_ATRIUM_SERVER_URL")
+    let server_url = env::var("ATRIUM_SERVICE_URL")
         .unwrap_or_else(|_| args.server);
 
     tracing::info!("Connecting to Dialogue Atrium server at: {}", server_url);

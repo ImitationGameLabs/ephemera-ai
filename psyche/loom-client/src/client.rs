@@ -168,14 +168,14 @@ mod tests {
 
     #[test]
     fn test_client_creation() {
-        let client = LoomClient::new("http://localhost:8080");
-        assert_eq!(client.base_url(), "http://localhost:8080");
+        let client = LoomClient::new("http://localhost:3000");
+        assert_eq!(client.base_url(), "http://localhost:3000");
     }
 
     #[test]
     fn test_client_with_custom_http_client() {
         let http_client = Client::new();
-        let client = LoomClient::with_client("http://localhost:8080", http_client);
-        assert_eq!(client.base_url(), "http://localhost:8080");
+        let client = LoomClient::with_client("http://localhost:3000", http_client);
+        assert_eq!(client.base_url(), "http://localhost:3000");
     }
 }
