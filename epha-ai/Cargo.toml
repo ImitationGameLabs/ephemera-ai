@@ -23,5 +23,6 @@ log = "0.4"
 
 epha-agent = { path = "../epha-agent" }
 loom-client = { path = "../psyche/loom-client" }
+atrium-client = { path = "../dialogue/atrium-client" }
 dotenv = "0.15"
 serde_yaml = "0.9.34"

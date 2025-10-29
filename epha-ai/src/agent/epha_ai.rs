@@ -8,6 +8,7 @@ use rig::{
 };
 use loom_client::{LoomClient, CreateMemoryRequest};
 use loom_client::memory::MemorySource;
+use atrium_client::DialogueClient;
 use std::sync::{Arc, Mutex};
 use crate::agent::{CommonPrompt, StateMachineExecutor};
 use crate::context::EphemeraContext;
@@ -18,6 +19,7 @@ pub struct EphemeraAI {
     completion_client: Arc<Client>,
     context: Context<EphemeraContext>,
     loom_client: Arc<LoomClient>,
+    dialogue_client: Arc<DialogueClient>,
     common_prompt: CommonPrompt,
     executor: StateMachineExecutor,
     memory_cache: Arc<Mutex<RecallCacheHelper>>,
@@ -27,6 +29,7 @@ impl EphemeraAI {
     pub fn new(
         completion_client: Client,
         loom_client: Arc<LoomClient>,
+        dialogue_client: Arc<DialogueClient>,
         model: &str
     ) -> Self {
         // Load common prompt
@@ -53,7 +56,7 @@ impl EphemeraAI {
         let context_data = Arc::new(Mutex::new(EphemeraContext::new(loom_client.clone())));
 
         // Stage 3: Create agents and assign them to states
-        init_agents(&completion_client, model, loom_client.clone(), &state_machine, &common_prompt, &memory_cache, &context_data)
+        init_agents(&completion_client, model, loom_client.clone(), dialogue_client.clone(), &state_machine, &common_prompt, &memory_cache, &context_data)
             .expect("Failed to initialize agents");
 
         let executor = StateMachineExecutor::new(state_machine.clone());
@@ -63,6 +66,7 @@ impl EphemeraAI {
             completion_client: Arc::new(completion_client),
             context: Context::new(context_data),
             loom_client,
+            dialogue_client,
             common_prompt,
             executor,
             memory_cache,
@@ -113,6 +117,7 @@ fn init_agents(
     completion_client: &Client,
     model: &str,
     loom_client: Arc<LoomClient>,
+    dialogue_client: Arc<DialogueClient>,
     state_machine: &Arc<Mutex<StateMachine>>,
     common_prompt: &CommonPrompt,
     memory_cache: &Arc<Mutex<RecallCacheHelper>>,
@@ -131,6 +136,7 @@ fn init_agents(
             completion_client,
             model,
             &loom_client,
+            &dialogue_client,
             state_machine,
             &state,
             common_prompt,
@@ -151,6 +157,7 @@ fn create_agent_for_state(
     completion_client: &Client,
     model: &str,
     loom_client: &Arc<LoomClient>,
+    dialogue_client: &Arc<DialogueClient>,
     state_machine: &Arc<Mutex<StateMachine>>,
     state: &State,
     common_prompt: &CommonPrompt,
@@ -168,7 +175,7 @@ fn create_agent_for_state(
         .preamble(&combined_prompt);
 
     let agent = match prompt.name.as_str() {
-        "perception" => agent_builder.tool(GetMessages).build(),
+        "perception" => agent_builder.tool(GetMessages::new(dialogue_client.clone())).build(),
         "recall" => {
             agent_builder
                 .tool(MemoryRecall::new(loom_client.clone(), memory_cache.clone()))
@@ -176,7 +183,7 @@ fn create_agent_for_state(
                 .build()
         },
         "reasoning" => agent_builder.tool(StateTransition::new(state_machine.clone())).build(),
-        "output" => agent_builder.tool(SendMessage).build(),
+        "output" => agent_builder.tool(SendMessage::new(dialogue_client.clone())).build(),
         _ => agent_builder.build(),
     };
 

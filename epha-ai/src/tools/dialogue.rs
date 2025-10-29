@@ -1,6 +1,9 @@
+use std::sync::Arc;
 use rig::{completion::ToolDefinition, tool::Tool};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
+use atrium_client::{DialogueClient, Message};
+use atrium_client::ClientError as DialogueClientError;
 
 #[derive(Deserialize)]
 pub struct GetMessagesArgs {
@@ -17,16 +20,23 @@ pub struct SendMessageArgs {
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("Dialogue Atrium error")]
-pub struct DialogueAtriumError;
+#[error("Dialogue error: {0}")]
+pub struct DialogueError(#[from] DialogueClientError);
 
-#[derive(Deserialize, Serialize)]
-pub struct GetMessages;
+pub struct GetMessages {
+    dialogue_client: Arc<DialogueClient>,
+}
+
+impl GetMessages {
+    pub fn new(dialogue_client: Arc<DialogueClient>) -> Self {
+        Self { dialogue_client }
+    }
+}
 
 impl Tool for GetMessages {
     const NAME: &'static str = "get_messages";
 
-    type Error = DialogueAtriumError;
+    type Error = DialogueError;
     type Args = GetMessagesArgs;
     type Output = String;
 
@@ -57,21 +67,48 @@ impl Tool for GetMessages {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        // TODO: Implement actual Dialogue Atrium client
-        let sender_desc = args.sender.map(|s| format!("from sender: {}", s)).unwrap_or_else(|| "from all senders".to_string());
-        let limit_desc = args.limit.map(|l| format!("limit: {}", l)).unwrap_or_else(|| "no limit".to_string());
-        Ok(format!("Retrieved messages {} ({}, {})", sender_desc, limit_desc,
-                   args.offset.map(|o| format!("offset: {}", o)).unwrap_or_else(|| "no offset".to_string())))
+        let messages = self.dialogue_client.get_messages(args.limit, args.offset)
+            .await?;
+
+        // Filter by sender if specified
+        let filtered_messages: Vec<&Message> = if let Some(sender) = args.sender {
+            messages.messages.iter()
+                .filter(|msg| msg.sender == sender)
+                .collect()
+        } else {
+            messages.messages.iter().collect()
+        };
+
+        if filtered_messages.is_empty() {
+            Ok("No messages found matching the criteria.".to_string())
+        } else {
+            let formatted_messages: Vec<String> = filtered_messages.iter()
+                .map(|msg| {
+                    format!("[{}] {}: {}", msg.created_at, msg.sender, msg.content)
+                })
+                .collect();
+
+            Ok(format!("Retrieved {} messages:\n\n{}",
+                filtered_messages.len(),
+                formatted_messages.join("\n")))
+        }
     }
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct SendMessage;
+pub struct SendMessage {
+    dialogue_client: Arc<DialogueClient>,
+}
+
+impl SendMessage {
+    pub fn new(dialogue_client: Arc<DialogueClient>) -> Self {
+        Self { dialogue_client }
+    }
+}
 
 impl Tool for SendMessage {
     const NAME: &'static str = "send_message";
 
-    type Error = DialogueAtriumError;
+    type Error = DialogueError;
     type Args = SendMessageArgs;
     type Output = String;
 
@@ -102,7 +139,14 @@ impl Tool for SendMessage {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        // TODO: Implement actual Dialogue Atrium client
-        Ok(format!("Sent message '{}' as user '{}'", args.message, args.username))
+        let message = self.dialogue_client.send_message(
+            &args.username,
+            &args.password,
+            args.message.clone()
+        ).await?;
+
+        Ok(format!("Message sent successfully! ID: {}, Sent at: {}",
+            message.id,
+            message.created_at))
     }
 }

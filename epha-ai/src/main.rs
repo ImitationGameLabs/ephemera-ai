@@ -1,5 +1,6 @@
 use dotenv::dotenv;
 use loom_client::LoomClient;
+use atrium_client::DialogueClient;
 use rig::providers::deepseek;
 use tracing::info;
 use std::sync::Arc;
@@ -23,8 +24,13 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Failed to init loom client");
 
+    let dialogue_client = init_dialogue_client()
+        .await
+        .expect("Failed to init dialogue client");
+
     let loom_client = Arc::new(loom_client);
-    let mut ai = EphemeraAI::new(llm_client, loom_client, &model_name);
+    let dialogue_client = Arc::new(dialogue_client);
+    let mut ai = EphemeraAI::new(llm_client, loom_client, dialogue_client, &model_name);
     ai.run().await?;
 
     Ok(())
@@ -58,6 +64,20 @@ async fn init_loom_client() -> anyhow::Result<LoomClient> {
         .map_err(|e| anyhow::anyhow!("Failed to connect to loom service: {}", e))?;
 
     info!("Successfully connected to loom service!");
+
+    Ok(client)
+}
+
+async fn init_dialogue_client() -> anyhow::Result<DialogueClient> {
+    // Setup atrium service connection
+    let atrium_service_url = std::env::var("ATRIUM_SERVICE_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
+
+    info!("Connecting to atrium service at: {}", atrium_service_url);
+
+    let client = DialogueClient::new(&atrium_service_url);
+
+    info!("Successfully created atrium client!");
 
     Ok(client)
 }
