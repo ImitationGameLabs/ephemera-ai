@@ -63,14 +63,8 @@ impl MemoryHandler {
                 info!("Successfully created memory fragment");
                 // Return a mock response since we don't have the generated ID
                 // In a real implementation, you'd modify append to return the created memory with ID
-                let response = MemoryResponse {
-                    id: 1, // Mock ID - would be returned from the database
-                    content: memory_fragment.content,
-                    metadata: Some(memory_fragment.subjective_metadata.notes.into()),
-                    source: Some(memory_fragment.objective_metadata.source.identifier),
-                    created_at: memory_fragment.objective_metadata.created_at,
-                    updated_at: memory_fragment.objective_metadata.created_at, // Same as created_at for new memories
-                };
+                let mut response = MemoryResponse::from(memory_fragment);
+                response.id = 0; // Mock ID - would be returned from the database
                 Ok(Json(ApiResponse::success(response)))
             }
             Err(e) => {
@@ -114,14 +108,7 @@ impl MemoryHandler {
         match state.memory_manager.get(id).await {
             Ok(memory_fragment) => {
                 info!("Successfully retrieved memory fragment with ID: {}", id);
-                let response = MemoryResponse {
-                    id: memory_fragment.id,
-                    content: memory_fragment.content,
-                    metadata: Some(memory_fragment.subjective_metadata.notes.into()),
-                    source: Some(memory_fragment.objective_metadata.source.identifier),
-                    created_at: memory_fragment.objective_metadata.created_at,
-                    updated_at: memory_fragment.objective_metadata.created_at, // Same as created_at for now
-                };
+                let response = MemoryResponse::from(memory_fragment);
                 Ok(Json(ApiResponse::success(response)))
             }
             Err(e) => {

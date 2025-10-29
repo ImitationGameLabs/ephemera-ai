@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use crate::memory::{
     types::MemoryFragment,
     manager::{MemoryQuery, MemoryQueryResult},
@@ -14,14 +15,16 @@ pub struct CreateMemoryRequest {
 }
 
 /// Response model for memory operations
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryResponse {
     pub id: i64,
     pub content: String,
     pub metadata: Option<serde_json::Value>,
     pub source: Option<String>,
-    pub created_at: i64,
-    pub updated_at: i64,
+    #[serde(with = "time::serde::iso8601")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::iso8601")]
+    pub updated_at: OffsetDateTime,
 }
 
 impl From<MemoryFragment> for MemoryResponse {
@@ -31,8 +34,10 @@ impl From<MemoryFragment> for MemoryResponse {
             content: fragment.content,
             metadata: Some(fragment.subjective_metadata.notes.into()),
             source: Some(fragment.objective_metadata.source.identifier),
-            created_at: fragment.objective_metadata.created_at,
-            updated_at: fragment.objective_metadata.created_at, // Same as created_at for now
+            created_at: OffsetDateTime::from_unix_timestamp(fragment.objective_metadata.created_at)
+                .unwrap_or_else(|_| OffsetDateTime::now_utc()),
+            updated_at: OffsetDateTime::from_unix_timestamp(fragment.objective_metadata.created_at)
+                .unwrap_or_else(|_| OffsetDateTime::now_utc()), // Same as created_at for now
         }
     }
 }
