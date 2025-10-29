@@ -30,7 +30,7 @@ pub struct PasswordAuth {
     pub password: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserCredentials {
     pub username: String,
     pub password: String,

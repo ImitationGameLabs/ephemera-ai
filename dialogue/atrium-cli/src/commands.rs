@@ -1,6 +1,5 @@
 use std::fmt;
-use atrium_client::{DialogueClient, User};
-use atrium_client::auth::AuthSession;
+use atrium_client::{AuthenticatedClient, User};
 
 #[derive(Debug)]
 pub enum CommandError {
@@ -20,8 +19,7 @@ impl fmt::Display for CommandError {
 }
 
 pub struct CommandContext {
-    pub client: DialogueClient,
-    pub session: AuthSession,
+    pub client: AuthenticatedClient,
 }
 
 pub struct CommandHandler {
@@ -145,7 +143,7 @@ Chat:
 
     fn cmd_profile(&mut self, args: &[&str]) -> Result<String, CommandError> {
         let username = if args.is_empty() {
-            &self.ctx.session.username
+            &self.ctx.client.credentials().username
         } else {
             args[0]
         };
@@ -224,10 +222,8 @@ Chat:
 
     pub async fn send_message(&mut self, content: String) -> Result<String, CommandError> {
         let client = self.ctx.client.clone();
-        let username = self.ctx.session.username.clone();
-        let password = self.ctx.session.password.clone();
 
-        match client.send_message(&username, &password, content).await {
+        match client.send_message(content).await {
             Ok(message) => {
                 Ok(format!("Message sent: {}", message.content))
             }

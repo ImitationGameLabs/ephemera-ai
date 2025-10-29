@@ -1,7 +1,6 @@
 mod client;
-pub mod auth;
 
-pub use client::*;
+pub use client::{RawClient, AuthenticatedClient, ClientError};
 
 // Re-export commonly used types from atrium
 pub use atrium::models::*;

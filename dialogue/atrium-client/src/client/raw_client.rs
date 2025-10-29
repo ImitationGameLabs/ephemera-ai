@@ -43,12 +43,12 @@ impl From<serde_json::Error> for ClientError {
 }
 
 #[derive(Clone)]
-pub struct DialogueClient {
+pub struct RawClient {
     client: Client,
     base_url: String,
 }
 
-impl DialogueClient {
+impl RawClient {
     pub fn new(base_url: impl Into<String>) -> Self {
         Self {
             client: Client::new(),

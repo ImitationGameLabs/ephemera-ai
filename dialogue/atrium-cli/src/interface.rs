@@ -4,15 +4,12 @@ use std::time::Duration;
 use tokio::time::interval;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use atrium_client::{
-    DialogueClient, UserCredentials,
-    auth::{AuthManager, AuthSession}
-};
+use atrium_client::AuthenticatedClient;
+use crate::auth_cli::CliAuthPrompt;
 use crate::commands::{CommandHandler, CommandContext, CommandError};
 
 pub struct CliInterface {
-    client: DialogueClient,
-    auth_manager: AuthManager,
+    server_url: String,
     heartbeat_sender: Option<mpsc::Sender<()>>,
     heartbeat_handle: Option<JoinHandle<()>>,
     message_receiver_handle: Option<JoinHandle<()>>,
@@ -35,12 +32,9 @@ impl Drop for CliInterface {
 }
 
 impl CliInterface {
-    pub fn new(client: DialogueClient) -> Self {
-        let auth_manager = AuthManager::new(client.clone());
-
+    pub fn new(server_url: impl Into<String>) -> Self {
         Self {
-            client,
-            auth_manager,
+            server_url: server_url.into(),
             heartbeat_sender: None,
             heartbeat_handle: None,
             message_receiver_handle: None,
@@ -48,9 +42,8 @@ impl CliInterface {
         }
     }
 
-    fn start_heartbeat_task(&mut self, username: String, password: String) {
+    fn start_heartbeat_task(&mut self, authenticated_client: AuthenticatedClient) {
         let (sender, mut receiver) = mpsc::channel::<()>(1);
-        let client = self.client.clone();
 
         let handle = tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(30)); // Send heartbeat every 30 seconds
@@ -58,10 +51,7 @@ impl CliInterface {
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
-                        if let Err(e) = client.send_heartbeat(UserCredentials {
-                            username: username.clone(),
-                            password: password.clone()
-                        }).await {
+                        if let Err(e) = authenticated_client.send_heartbeat().await {
                             eprintln!("Heartbeat failed: {}", e);
                         }
                     }
@@ -82,8 +72,8 @@ impl CliInterface {
         // This can be implemented later with proper synchronization
     }
 
-    async fn load_initial_history(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        match self.client.get_messages(Some(20), None).await {
+    async fn load_initial_history(&mut self, authenticated_client: &AuthenticatedClient) -> Result<(), Box<dyn std::error::Error>> {
+        match authenticated_client.get_messages(Some(20), None).await {
             Ok(messages_response) => {
                 if !messages_response.messages.is_empty() {
                     println!("Recent messages ({}):", messages_response.messages.len());
@@ -110,28 +100,28 @@ impl CliInterface {
     }
 
     pub async fn run(&mut self, user: Option<String>, password: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
-        let session = match (user, password) {
+        let authenticated_client = match (user, password) {
             (Some(username), Some(password)) => {
                 // Use provided credentials
-                self.auth_manager.authenticate_or_register_with_credentials(username, password).await?
+                AuthenticatedClient::connect_and_login(&self.server_url, username, password).await?
             }
             _ => {
                 // Fall back to interactive mode
-                self.auth_manager.authenticate_or_register().await?
+                CliAuthPrompt::authenticate_or_register_interactive(&self.server_url).await?
             }
         };
 
-        self.run_with_session(session).await
+        self.run_with_authenticated_client(authenticated_client).await
     }
 
-    async fn run_with_session(&mut self, session: AuthSession) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run_with_authenticated_client(&mut self, authenticated_client: AuthenticatedClient) -> Result<(), Box<dyn std::error::Error>> {
         // Start heartbeat in background
-        self.start_heartbeat_task(session.username.clone(), session.password.clone());
+        self.start_heartbeat_task(authenticated_client.clone());
         println!("✓ Heartbeat started - you will appear as online");
 
         // Load initial message history
         println!("Loading recent message history...");
-        if let Err(e) = self.load_initial_history().await {
+        if let Err(e) = self.load_initial_history(&authenticated_client).await {
             println!("Failed to load message history: {}", e);
         }
 
@@ -141,8 +131,7 @@ impl CliInterface {
 
         // Create command handler
         let ctx = CommandContext {
-            client: self.client.clone(),
-            session,
+            client: authenticated_client.clone(),
         };
         let mut command_handler = CommandHandler::new(ctx);
 
@@ -155,7 +144,7 @@ impl CliInterface {
 
         // Main command loop
         loop {
-            print!("{}> ", command_handler.ctx.session.username);
+            print!("{}> ", command_handler.ctx.client.credentials().username);
             io::stdout().flush().unwrap();
 
             let mut input = String::new();
