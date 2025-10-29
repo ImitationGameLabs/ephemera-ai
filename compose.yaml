@@ -1,18 +1,18 @@
 services:
-  epha-memory-mysql:
+  psyche-loom-mysql:
     image: "mysql:8.0"
     restart: always
     ports:
       - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: 123456
-      MYSQL_DATABASE: epha_memory
+      MYSQL_DATABASE: psyche_loom
       MYSQL_USER: epha
       MYSQL_PASSWORD: 123456
     volumes:
-      - epha-memory-mysql-data:/var/lib/mysql
+      - psyche-loom-mysql-data:/var/lib/mysql
 
-  epha-memory-qdrant:
+  psyche-loom-qdrant:
     image: "qdrant/qdrant:latest"
     restart: always
     ports:
@@ -23,7 +23,7 @@ services:
       - 6334
       - 6335
     volumes:
-      - epha-memory-qdrant-data:/qdrant/storage
+      - psyche-loom-qdrant-data:/qdrant/storage
 
   dialogue-atrium-mysql:
     image: "mysql:8.0"
@@ -38,6 +38,6 @@ services:
     volumes:
       - dialogue-atrium-data:/var/lib/mysql
 volumes:
-  epha-memory-mysql-data:
-  epha-memory-qdrant-data:
+  psyche-loom-mysql-data:
+  psyche-loom-qdrant-data:
   dialogue-atrium-data:
