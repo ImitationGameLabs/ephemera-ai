@@ -8,7 +8,7 @@ use rig::{
 };
 use loom_client::{LoomClient, CreateMemoryRequest};
 use loom_client::memory::MemorySource;
-use atrium_client::DialogueClient;
+use atrium_client::AuthenticatedClient;
 use std::sync::{Arc, Mutex};
 use crate::agent::{CommonPrompt, StateMachineExecutor};
 use crate::context::EphemeraContext;
@@ -19,7 +19,7 @@ pub struct EphemeraAI {
     completion_client: Arc<Client>,
     context: Context<EphemeraContext>,
     loom_client: Arc<LoomClient>,
-    dialogue_client: Arc<DialogueClient>,
+    dialogue_client: Arc<AuthenticatedClient>,
     common_prompt: CommonPrompt,
     executor: StateMachineExecutor,
     memory_cache: Arc<Mutex<RecallCacheHelper>>,
@@ -29,7 +29,7 @@ impl EphemeraAI {
     pub fn new(
         completion_client: Client,
         loom_client: Arc<LoomClient>,
-        dialogue_client: Arc<DialogueClient>,
+        dialogue_client: Arc<AuthenticatedClient>,
         model: &str
     ) -> Self {
         // Load common prompt
@@ -117,7 +117,7 @@ fn init_agents(
     completion_client: &Client,
     model: &str,
     loom_client: Arc<LoomClient>,
-    dialogue_client: Arc<DialogueClient>,
+    dialogue_client: Arc<AuthenticatedClient>,
     state_machine: &Arc<Mutex<StateMachine>>,
     common_prompt: &CommonPrompt,
     memory_cache: &Arc<Mutex<RecallCacheHelper>>,
@@ -157,7 +157,7 @@ fn create_agent_for_state(
     completion_client: &Client,
     model: &str,
     loom_client: &Arc<LoomClient>,
-    dialogue_client: &Arc<DialogueClient>,
+    dialogue_client: &Arc<AuthenticatedClient>,
     state_machine: &Arc<Mutex<StateMachine>>,
     state: &State,
     common_prompt: &CommonPrompt,

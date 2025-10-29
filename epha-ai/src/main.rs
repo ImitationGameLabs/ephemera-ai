@@ -1,6 +1,6 @@
 use dotenv::dotenv;
 use loom_client::LoomClient;
-use atrium_client::DialogueClient;
+use atrium_client::AuthenticatedClient;
 use rig::providers::deepseek;
 use tracing::info;
 use std::sync::Arc;
@@ -68,16 +68,29 @@ async fn init_loom_client() -> anyhow::Result<LoomClient> {
     Ok(client)
 }
 
-async fn init_dialogue_client() -> anyhow::Result<DialogueClient> {
+async fn init_dialogue_client() -> anyhow::Result<AuthenticatedClient> {
     // Setup atrium service connection
     let atrium_service_url = std::env::var("ATRIUM_SERVICE_URL")
         .unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
 
     info!("Connecting to atrium service at: {}", atrium_service_url);
 
-    let client = DialogueClient::new(&atrium_service_url);
+    // Read credentials from environment variables (application layer responsibility)
+    let username = std::env::var("ATRIUM_USERNAME")
+        .map_err(|_| anyhow::anyhow!("ATRIUM_USERNAME environment variable not set"))?;
 
-    info!("Successfully created atrium client!");
+    let password = std::env::var("ATRIUM_PASSWORD")
+        .map_err(|_| anyhow::anyhow!("ATRIUM_PASSWORD environment variable not set"))?;
 
-    Ok(client)
+    info!("Logging in...");
+
+    let authenticated_client = AuthenticatedClient::connect_and_login(&atrium_service_url, username, password).await
+        .map_err(|e| anyhow::anyhow!("Failed to login: {}", e))?;
+
+    info!("Successfully logged in as: {}!",
+          authenticated_client.user().await
+          .ok_or_else(|| anyhow::anyhow!("User info not available"))?
+          .name);
+
+    Ok(authenticated_client)
 }

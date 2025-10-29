@@ -2,7 +2,7 @@ use std::sync::Arc;
 use rig::{completion::ToolDefinition, tool::Tool};
 use serde::Deserialize;
 use serde_json::json;
-use atrium_client::{DialogueClient, Message};
+use atrium_client::{AuthenticatedClient, Message};
 use atrium_client::ClientError as DialogueClientError;
 
 #[derive(Deserialize)]
@@ -14,8 +14,6 @@ pub struct GetMessagesArgs {
 
 #[derive(Deserialize)]
 pub struct SendMessageArgs {
-    pub username: String,
-    pub password: String,
     pub message: String,
 }
 
@@ -24,11 +22,11 @@ pub struct SendMessageArgs {
 pub struct DialogueError(#[from] DialogueClientError);
 
 pub struct GetMessages {
-    dialogue_client: Arc<DialogueClient>,
+    dialogue_client: Arc<AuthenticatedClient>,
 }
 
 impl GetMessages {
-    pub fn new(dialogue_client: Arc<DialogueClient>) -> Self {
+    pub fn new(dialogue_client: Arc<AuthenticatedClient>) -> Self {
         Self { dialogue_client }
     }
 }
@@ -96,11 +94,11 @@ impl Tool for GetMessages {
 }
 
 pub struct SendMessage {
-    dialogue_client: Arc<DialogueClient>,
+    dialogue_client: Arc<AuthenticatedClient>,
 }
 
 impl SendMessage {
-    pub fn new(dialogue_client: Arc<DialogueClient>) -> Self {
+    pub fn new(dialogue_client: Arc<AuthenticatedClient>) -> Self {
         Self { dialogue_client }
     }
 }
@@ -119,31 +117,19 @@ impl Tool for SendMessage {
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "username": {
-                        "type": "string",
-                        "description": "Your username for authentication"
-                    },
-                    "password": {
-                        "type": "string",
-                        "description": "Your password for authentication"
-                    },
                     "message": {
                         "type": "string",
                         "description": "The message to send"
                     }
                 },
-                "required": ["username", "password", "message"]
+                "required": ["message"]
             }
         }))
         .expect("Tool Definition")
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let message = self.dialogue_client.send_message(
-            &args.username,
-            &args.password,
-            args.message.clone()
-        ).await?;
+        let message = self.dialogue_client.send_message(args.message.clone()).await?;
 
         Ok(format!("Message sent successfully! ID: {}, Sent at: {}",
             message.id,
