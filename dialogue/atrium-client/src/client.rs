@@ -20,6 +20,16 @@ impl fmt::Display for ClientError {
     }
 }
 
+impl std::error::Error for ClientError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ClientError::NetworkError(e) => Some(e),
+            ClientError::JsonError(e) => Some(e),
+            ClientError::ApiError(_) => None,
+        }
+    }
+}
+
 impl From<ReqwestError> for ClientError {
     fn from(error: ReqwestError) -> Self {
         ClientError::NetworkError(error)
