@@ -8,7 +8,7 @@ pub struct CreateMessageRequest {
     pub password: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
     pub id: i32,
     pub content: String,
@@ -22,9 +22,16 @@ pub struct GetMessagesQuery {
     pub sender: Option<String>,
     pub limit: Option<u64>,
     pub offset: Option<u64>,
+    pub since_id: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Messages {
     pub messages: Vec<Message>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UnreadMessages {
+    pub messages: Vec<Message>,
+    pub remaining_unread: i64,
 }

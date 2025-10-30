@@ -149,15 +149,23 @@ impl RawClient {
         Self::handle_response(response).await
     }
 
-    pub async fn get_messages(&self, limit: Option<u64>, offset: Option<u64>) -> Result<Messages, ClientError> {
+    pub async fn get_messages(&self, query: GetMessagesQuery) -> Result<Messages, ClientError> {
         let mut query_params = Vec::new();
 
-        if let Some(limit) = limit {
+        if let Some(sender) = &query.sender {
+            query_params.push(format!("sender={}", urlencoding::encode(sender)));
+        }
+
+        if let Some(limit) = query.limit {
             query_params.push(format!("limit={}", limit));
         }
 
-        if let Some(offset) = offset {
+        if let Some(offset) = query.offset {
             query_params.push(format!("offset={}", offset));
+        }
+
+        if let Some(since_id) = query.since_id {
+            query_params.push(format!("since_id={}", since_id));
         }
 
         let url = if query_params.is_empty() {

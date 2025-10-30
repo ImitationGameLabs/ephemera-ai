@@ -5,10 +5,10 @@ use axum::{
 };
 use serde_json::json;
 
-use crate::db::{UserManager, CreateUserDto, UpdateUserDto};
+use crate::db::user_manager::{UserManager, CreateUserDto, UpdateUserDto, UserError};
 use crate::models::{
     CreateUserRequest, User, UpdateProfileRequest,
-    PasswordAuth, UserStatus, UsersList
+    PasswordAuth, UsersList
 };
 
 pub async fn create_user(
@@ -23,21 +23,11 @@ pub async fn create_user(
 
     match user_manager.create_user(&create_dto).await {
         Ok(user) => {
-            let response = User {
-                name: user.name,
-                bio: user.bio,
-                status: UserStatus {
-                    online: user.online,
-                    last_seen: user.last_seen,
-                },
-                message_height: user.message_height,
-                created_at: user.created_at,
-            };
-            Ok((StatusCode::CREATED, Json(response)))
+            Ok((StatusCode::CREATED, Json(user)))
         }
         Err(e) => {
             match e {
-                crate::db::UserError::UserAlreadyExists(name) => Err((
+                UserError::UserAlreadyExists(name) => Err((
                     StatusCode::BAD_REQUEST,
                     Json(json!({ "error": format!("User '{}' already exists", name) })),
                 )),
@@ -59,21 +49,11 @@ pub async fn get_user_profile(
 ) -> Result<Json<User>, (StatusCode, Json<serde_json::Value>)> {
     match user_manager.get_user_by_name(&username).await {
         Ok(user) => {
-            let response = User {
-                name: user.name,
-                bio: user.bio,
-                status: UserStatus {
-                    online: user.online,
-                    last_seen: user.last_seen,
-                },
-                message_height: user.message_height,
-                created_at: user.created_at,
-            };
-            Ok(Json(response))
+            Ok(Json(user))
         }
         Err(e) => {
             match e {
-                crate::db::UserError::UserNotFound(_) => Err((
+                UserError::UserNotFound(_) => Err((
                     StatusCode::NOT_FOUND,
                     Json(json!({ "error": "User not found" })),
                 )),
@@ -97,21 +77,11 @@ pub async fn get_own_profile(
     // This is a simplified approach - in a real system you might want to include username in auth
     match user_manager.authenticate_user(&request.password, &request.password).await {
         Ok(user) => {
-            let response = User {
-                name: user.name,
-                bio: user.bio,
-                status: UserStatus {
-                    online: user.online,
-                    last_seen: user.last_seen,
-                },
-                message_height: user.message_height,
-                created_at: user.created_at,
-            };
-            Ok(Json(response))
+            Ok(Json(user))
         }
         Err(e) => {
             match e {
-                crate::db::UserError::InvalidPassword(_) => Err((
+                UserError::InvalidPassword(_) => Err((
                     StatusCode::UNAUTHORIZED,
                     Json(json!({ "error": "Invalid password" })),
                 )),
@@ -141,17 +111,7 @@ pub async fn update_profile(
 
             match user_manager.update_user(&user.name, &update_dto).await {
                 Ok(updated_user) => {
-                    let response = User {
-                        name: updated_user.name,
-                        bio: updated_user.bio,
-                        status: UserStatus {
-                            online: updated_user.online,
-                            last_seen: updated_user.last_seen,
-                        },
-                        message_height: updated_user.message_height,
-                        created_at: updated_user.created_at,
-                    };
-                    Ok(Json(response))
+                    Ok(Json(updated_user))
                 }
                 Err(e) => {
                     tracing::error!("Failed to update user profile: {:?}", e);
@@ -164,7 +124,7 @@ pub async fn update_profile(
         }
         Err(e) => {
             match e {
-                crate::db::UserError::InvalidPassword(_) => Err((
+                UserError::InvalidPassword(_) => Err((
                     StatusCode::UNAUTHORIZED,
                     Json(json!({ "error": "Invalid password" })),
                 )),
@@ -185,22 +145,8 @@ pub async fn get_all_users(
 ) -> Result<Json<UsersList>, (StatusCode, Json<serde_json::Value>)> {
     match user_manager.get_all_users().await {
         Ok(users) => {
-            let user_responses: Vec<User> = users
-                .into_iter()
-                .map(|user| User {
-                    name: user.name,
-                    bio: user.bio,
-                    status: UserStatus {
-                        online: user.online,
-                        last_seen: user.last_seen,
-                    },
-                    message_height: user.message_height,
-                    created_at: user.created_at,
-                })
-                .collect();
-
             Ok(Json(UsersList {
-                users: user_responses,
+                users,
             }))
         }
         Err(e) => {

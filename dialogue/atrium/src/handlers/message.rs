@@ -5,7 +5,10 @@ use axum::{
 };
 use serde_json::json;
 
-use crate::db::{MessageManager, UserManager, CreateMessageDto};
+use crate::db::{
+    user_manager::{UserManager, UserError},
+    message_manager::{MessageManager, CreateMessageDto, MessageError},
+};
 use crate::models::{
     CreateMessageRequest, Message, Messages,
     GetMessagesQuery
@@ -25,13 +28,7 @@ pub async fn create_message(
 
             match message_manager.create_message(&create_dto).await {
                 Ok(message) => {
-                    let response = Message {
-                        id: message.id,
-                        content: message.content,
-                        sender: message.sender,
-                        created_at: message.created_at,
-                    };
-                    Ok((StatusCode::CREATED, Json(response)))
+                    Ok((StatusCode::CREATED, Json(message)))
                 }
                 Err(e) => {
                     tracing::error!("Failed to create message: {:?}", e);
@@ -44,7 +41,7 @@ pub async fn create_message(
         }
         Err(e) => {
             match e {
-                crate::db::UserError::InvalidPassword(_) => Err((
+                UserError::InvalidPassword(_) => Err((
                     StatusCode::UNAUTHORIZED,
                     Json(json!({ "error": "Invalid password" })),
                 )),
@@ -64,24 +61,22 @@ pub async fn get_messages(
     State(manager): State<MessageManager>,
     Query(query): Query<GetMessagesQuery>,
 ) -> Result<Json<Messages>, (StatusCode, Json<serde_json::Value>)> {
-    let sender_filter = query.sender.as_deref();
-    let limit = query.limit;
-    let offset = query.offset;
+    let result = if let Some(since_id) = query.since_id {
+        // Use get_messages_since_id when since_id is provided
+        // Ignore sender and offset in this mode as requested
+        manager.get_messages_since_id(since_id, query.limit).await
+    } else {
+        // Use existing get_messages logic when since_id is not provided
+        let sender_filter = query.sender.as_deref();
+        let limit = query.limit;
+        let offset = query.offset;
+        manager.get_messages(sender_filter, limit, offset).await
+    };
 
-    match manager.get_messages(sender_filter, limit, offset).await {
+    match result {
         Ok(messages) => {
-            let message_responses: Vec<Message> = messages
-                .into_iter()
-                .map(|msg| Message {
-                    id: msg.id,
-                    content: msg.content,
-                    sender: msg.sender,
-                    created_at: msg.created_at,
-                })
-                .collect();
-
             Ok(Json(Messages {
-                messages: message_responses,
+                messages,
             }))
         }
         Err(e) => {
@@ -100,17 +95,11 @@ pub async fn get_message(
 ) -> Result<Json<Message>, (StatusCode, Json<serde_json::Value>)> {
     match manager.get_message(id).await {
         Ok(message) => {
-            let response = Message {
-                id: message.id,
-                content: message.content,
-                sender: message.sender,
-                created_at: message.created_at,
-            };
-            Ok(Json(response))
+            Ok(Json(message))
         }
         Err(e) => {
             match e {
-                crate::db::DbError::MessageNotFound(_) => Err((
+                MessageError::MessageNotFound(_) => Err((
                     StatusCode::NOT_FOUND,
                     Json(json!({ "error": "Message not found" })),
                 )),
@@ -134,7 +123,7 @@ pub async fn delete_message(
         Ok(()) => Ok(StatusCode::NO_CONTENT),
         Err(e) => {
             match e {
-                crate::db::DbError::MessageNotFound(_) => Err((
+                MessageError::MessageNotFound(_) => Err((
                     StatusCode::NOT_FOUND,
                     Json(json!({ "error": "Message not found" })),
                 )),

@@ -4,6 +4,7 @@ use time::OffsetDateTime;
 
 use crate::entity::{UserEntity};
 use crate::entity::user;
+use crate::models::{User, UserStatus};
 
 #[derive(Error, Debug)]
 pub enum UserError {
@@ -23,18 +24,7 @@ pub enum UserError {
     Serialization(#[from] serde_json::Error),
 }
 
-#[derive(Debug, Clone)]
-pub struct UserDto {
-    pub id: i32,
-    pub name: String,
-    pub bio: String,
-    pub message_height: i32,
-    pub last_seen: Option<OffsetDateTime>,
-    pub created_at: OffsetDateTime,
-    pub online: bool,
-}
-
-impl From<user::Model> for UserDto {
+impl From<user::Model> for User {
     fn from(model: user::Model) -> Self {
         let now = OffsetDateTime::now_utc();
         let online = model.last_seen
@@ -48,10 +38,12 @@ impl From<user::Model> for UserDto {
             id: model.id,
             name: model.name,
             bio: model.bio,
+            status: UserStatus {
+                online,
+                last_seen: model.last_seen,
+            },
             message_height: model.message_height,
-            last_seen: model.last_seen,
             created_at: model.created_at,
-            online,
         }
     }
 }
@@ -79,7 +71,7 @@ impl UserManager {
         Self { conn }
     }
 
-    pub async fn create_user(&self, user_dto: &CreateUserDto) -> Result<UserDto, UserError> {
+    pub async fn create_user(&self, user_dto: &CreateUserDto) -> Result<User, UserError> {
         // Check if user already exists
         let existing_user = UserEntity::find()
             .filter(user::Column::Name.eq(&user_dto.name))
@@ -105,7 +97,7 @@ impl UserManager {
         Ok(inserted_model.into())
     }
 
-    pub async fn get_user_by_name(&self, name: &str) -> Result<UserDto, UserError> {
+    pub async fn get_user_by_name(&self, name: &str) -> Result<User, UserError> {
         let model = UserEntity::find()
             .filter(user::Column::Name.eq(name))
             .one(&self.conn)
@@ -115,16 +107,7 @@ impl UserManager {
         Ok(model.into())
     }
 
-    pub async fn get_user_by_id(&self, id: i32) -> Result<UserDto, UserError> {
-        let model = UserEntity::find_by_id(id)
-            .one(&self.conn)
-            .await?
-            .ok_or(UserError::UserNotFound(format!("id: {}", id)))?;
-
-        Ok(model.into())
-    }
-
-    pub async fn authenticate_user(&self, name: &str, password: &str) -> Result<UserDto, UserError> {
+    pub async fn authenticate_user(&self, name: &str, password: &str) -> Result<User, UserError> {
         let model = UserEntity::find()
             .filter(user::Column::Name.eq(name))
             .filter(user::Column::Password.eq(password))
@@ -135,11 +118,11 @@ impl UserManager {
         Ok(model.into())
     }
 
-    pub async fn authenticate_by_credentials(&self, username: &str, password: &str) -> Result<UserDto, UserError> {
+    pub async fn authenticate_by_credentials(&self, username: &str, password: &str) -> Result<User, UserError> {
         self.authenticate_user(username, password).await
     }
 
-    pub async fn update_user(&self, name: &str, update_dto: &UpdateUserDto) -> Result<UserDto, UserError> {
+    pub async fn update_user(&self, name: &str, update_dto: &UpdateUserDto) -> Result<User, UserError> {
         let model = UserEntity::find()
             .filter(user::Column::Name.eq(name))
             .one(&self.conn)
@@ -160,7 +143,7 @@ impl UserManager {
         Ok(updated_model.into())
     }
 
-    pub async fn update_heartbeat(&self, name: &str) -> Result<UserDto, UserError> {
+    pub async fn update_heartbeat(&self, name: &str) -> Result<User, UserError> {
         let model = UserEntity::find()
             .filter(user::Column::Name.eq(name))
             .one(&self.conn)
@@ -175,7 +158,7 @@ impl UserManager {
         Ok(updated_model.into())
     }
 
-    pub async fn update_message_height(&self, name: &str, message_height: i32) -> Result<UserDto, UserError> {
+    pub async fn update_message_height(&self, name: &str, message_height: i32) -> Result<User, UserError> {
         let model = UserEntity::find()
             .filter(user::Column::Name.eq(name))
             .one(&self.conn)
@@ -189,7 +172,7 @@ impl UserManager {
         Ok(updated_model.into())
     }
 
-    pub async fn get_all_users(&self) -> Result<Vec<UserDto>, UserError> {
+    pub async fn get_all_users(&self) -> Result<Vec<User>, UserError> {
         let models = UserEntity::find()
             .order_by_asc(user::Column::Name)
             .all(&self.conn)

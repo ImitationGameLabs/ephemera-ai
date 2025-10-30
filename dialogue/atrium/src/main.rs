@@ -14,7 +14,10 @@ use tracing_subscriber::{
 };
 use std::env;
 
-use crate::db::{UserManager, MessageManager};
+use crate::db::{
+    user_manager::UserManager, 
+    message_manager::MessageManager,
+};
 use crate::migration::Migrator;
 use crate::routes::create_routes;
 

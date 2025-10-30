@@ -14,3 +14,4 @@ serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1.41"
 rpassword = "7.3"
+urlencoding = "2.1"

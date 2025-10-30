@@ -73,7 +73,14 @@ impl CliInterface {
     }
 
     async fn load_initial_history(&mut self, authenticated_client: &AuthenticatedClient) -> Result<(), Box<dyn std::error::Error>> {
-        match authenticated_client.get_messages(Some(20), None).await {
+        use atrium_client::GetMessagesQuery;
+        let query = GetMessagesQuery {
+            sender: None,
+            limit: Some(20),
+            offset: None,
+            since_id: None,
+        };
+        match authenticated_client.get_messages(query).await {
             Ok(messages_response) => {
                 if !messages_response.messages.is_empty() {
                     println!("Recent messages ({}):", messages_response.messages.len());

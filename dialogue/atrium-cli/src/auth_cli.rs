@@ -50,10 +50,7 @@ impl CliAuthPrompt {
             // Try to login first
             match AuthenticatedClient::connect_and_login(server_url, username.clone(), password.clone()).await {
                 Ok(client) => {
-                    println!("✓ Successfully logged in as: {}",
-                        client.user().await
-                            .ok_or("User info not available")?
-                            .name);
+                    println!("✓ Successfully logged in as: {}", client.credentials().username);
                     return Ok(client);
                 }
                 Err(e) => {
@@ -72,10 +69,7 @@ impl CliAuthPrompt {
                                 if bio.is_empty() { "".to_string() } else { bio }
                             ).await {
                                 Ok(client) => {
-                                    println!("✓ Successfully registered and logged in as: {}",
-                                        client.user().await
-                                            .ok_or("User info not available")?
-                                            .name);
+                                    println!("✓ Successfully registered and logged in as: {}", client.credentials().username);
                                     return Ok(client);
                                 }
                                 Err(e) => {

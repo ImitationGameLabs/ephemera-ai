@@ -4,9 +4,10 @@ use time::OffsetDateTime;
 
 use crate::entity::{MessageEntity};
 use crate::entity::message;
+use crate::models::Message;
 
 #[derive(Error, Debug)]
-pub enum DbError {
+pub enum MessageError {
     #[error("Database connection error: {0}")]
     Connection(#[from] sea_orm::DbErr),
 
@@ -17,15 +18,8 @@ pub enum DbError {
     Serialization(#[from] serde_json::Error),
 }
 
-#[derive(Debug, Clone)]
-pub struct MessageDto {
-    pub id: i32,
-    pub content: String,
-    pub sender: String,
-    pub created_at: OffsetDateTime,
-}
 
-impl From<message::Model> for MessageDto {
+impl From<message::Model> for Message {
     fn from(model: message::Model) -> Self {
         Self {
             id: model.id,
@@ -52,7 +46,7 @@ impl MessageManager {
         Self { conn }
     }
 
-    pub async fn create_message(&self, message_dto: &CreateMessageDto) -> Result<MessageDto, DbError> {
+    pub async fn create_message(&self, message_dto: &CreateMessageDto) -> Result<Message, MessageError> {
         let now = OffsetDateTime::now_utc();
         let active_model = message::ActiveModel {
             id: NotSet,
@@ -65,11 +59,11 @@ impl MessageManager {
         Ok(inserted_model.into())
     }
 
-    pub async fn get_message(&self, id: i32) -> Result<MessageDto, DbError> {
+    pub async fn get_message(&self, id: i32) -> Result<Message, MessageError> {
         let model = MessageEntity::find_by_id(id)
             .one(&self.conn)
             .await?
-            .ok_or(DbError::MessageNotFound(id))?;
+            .ok_or(MessageError::MessageNotFound(id))?;
 
         Ok(model.into())
     }
@@ -79,7 +73,7 @@ impl MessageManager {
         sender_filter: Option<&str>,
         limit: Option<u64>,
         offset: Option<u64>,
-    ) -> Result<Vec<MessageDto>, DbError> {
+    ) -> Result<Vec<Message>, MessageError> {
         let mut query = MessageEntity::find();
 
         if let Some(sender) = sender_filter {
@@ -100,17 +94,17 @@ impl MessageManager {
         Ok(models.into_iter().map(Into::into).collect())
     }
 
-    pub async fn delete_message(&self, id: i32) -> Result<(), DbError> {
+    pub async fn delete_message(&self, id: i32) -> Result<(), MessageError> {
         let result = MessageEntity::delete_by_id(id).exec(&self.conn).await?;
 
         if result.rows_affected == 0 {
-            return Err(DbError::MessageNotFound(id));
+            return Err(MessageError::MessageNotFound(id));
         }
 
         Ok(())
     }
 
-    pub async fn get_latest_message_id(&self) -> Result<Option<i32>, DbError> {
+    pub async fn get_latest_message_id(&self) -> Result<Option<i32>, MessageError> {
         let latest_message = MessageEntity::find()
             .order_by_desc(message::Column::Id)
             .one(&self.conn)
@@ -123,7 +117,7 @@ impl MessageManager {
         &self,
         since_id: i32,
         limit: Option<u64>,
-    ) -> Result<Vec<MessageDto>, DbError> {
+    ) -> Result<Vec<Message>, MessageError> {
         let mut query = MessageEntity::find()
             .filter(message::Column::Id.gt(since_id))
             .order_by_asc(message::Column::Id);

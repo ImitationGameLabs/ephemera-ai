@@ -174,14 +174,14 @@ paths:
   /messages:
     get:
       summary: Get Messages
-      description: Retrieve a list of messages with filtering and pagination
+      description: Retrieve a list of messages with filtering, pagination, or incremental fetching. When `since_id` is provided, returns messages with ID greater than the specified value and ignores `sender` and `offset` parameters.
       operationId: getMessages
       tags:
         - Messages
       parameters:
         - name: sender
           in: query
-          description: Filter by sender name
+          description: Filter by sender name (ignored when since_id is provided)
           schema:
             type: string
         - name: limit
@@ -194,11 +194,17 @@ paths:
             maximum: 100
         - name: offset
           in: query
-          description: Number of messages to skip
+          description: Number of messages to skip (ignored when since_id is provided)
           schema:
             type: integer
             default: 0
             minimum: 0
+        - name: since_id
+          in: query
+          description: Return messages with ID greater than this value for incremental fetching. When provided, overrides sender and offset parameters.
+          schema:
+            type: integer
+            minimum: 1
       responses:
         '200':
           description: Successful response with message list

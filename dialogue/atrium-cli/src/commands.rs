@@ -186,7 +186,14 @@ Chat:
         let client = self.ctx.client.clone();
 
         tokio::spawn(async move {
-            match client.get_messages(Some(count), None).await {
+            use atrium_client::GetMessagesQuery;
+            let query = GetMessagesQuery {
+                sender: None,
+                limit: Some(count),
+                offset: None,
+                since_id: None,
+            };
+            match client.get_messages(query).await {
                 Ok(messages_response) => {
                     if messages_response.messages.is_empty() {
                         println!("No messages found.");

@@ -10,7 +10,10 @@ use crate::handlers::{
     update_heartbeat,
     create_message, get_messages, get_message, delete_message
 };
-use crate::db::{UserManager, MessageManager};
+use crate::db::{
+    user_manager::UserManager,
+    message_manager::MessageManager,
+};
 
 pub fn create_routes(user_manager: UserManager, message_manager: MessageManager) -> Router {
     let cors = CorsLayer::new()

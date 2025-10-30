@@ -5,7 +5,10 @@ use axum::{
 };
 use serde_json::json;
 
-use crate::db::{UserManager, MessageManager};
+use crate::db::{
+    user_manager::{UserManager, UserError},
+    message_manager::MessageManager,
+};
 use crate::models::{UserCredentials, OnlineStatus};
 
 pub async fn update_heartbeat(
@@ -26,7 +29,7 @@ pub async fn update_heartbeat(
 
                     let response = OnlineStatus {
                         online: true,
-                        last_seen: updated_user.last_seen,
+                        last_seen: updated_user.status.last_seen,
                     };
                     Ok((StatusCode::OK, Json(response)))
                 }
@@ -41,7 +44,7 @@ pub async fn update_heartbeat(
         }
         Err(e) => {
             match e {
-                crate::db::UserError::InvalidPassword(_) => Err((
+                UserError::InvalidPassword(_) => Err((
                     StatusCode::UNAUTHORIZED,
                     Json(json!({ "error": "Invalid password" })),
                 )),

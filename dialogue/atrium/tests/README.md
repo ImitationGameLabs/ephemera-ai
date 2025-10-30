@@ -33,6 +33,9 @@ cargo test -p dialogue-atrium test_user_lifecycle -- --nocapture
 # Message lifecycle tests
 cargo test -p dialogue-atrium test_message_lifecycle -- --nocapture
 
+# Message incremental fetching tests
+cargo test -p dialogue-atrium test_message_incremental_fetching -- --nocapture
+
 # Error handling tests
 cargo test -p dialogue-atrium test_error_handling -- --nocapture
 ```
@@ -70,5 +73,51 @@ async fn test_new_feature() {
     // Act - perform API call
     // Assert - verify response
     assert_eq!(response.status(), expected_status);
+}
+```
+
+## Testing since_id Functionality
+
+The `since_id` parameter enables incremental message fetching for efficient polling. Here are key test scenarios:
+
+### Test Scenarios
+
+1. **Basic Incremental Fetching:**
+   - Create multiple messages
+   - Get messages with `since_id` parameter
+   - Verify only messages with greater IDs are returned
+   - Verify messages are ordered by ID (ascending)
+
+2. **Parameter Override Behavior:**
+   - Test that `since_id` ignores `sender` parameter
+   - Test that `since_id` ignores `offset` parameter
+   - Verify `limit` parameter still works with `since_id`
+
+3. **Edge Cases:**
+   - Test with non-existent `since_id` value
+   - Test with `since_id` of 1 (first message)
+   - Test with `since_id` larger than latest message ID
+   - Test with `since_id` combined with `limit`
+
+### Example Test
+
+```rust
+#[tokio::test]
+async fn test_message_incremental_fetching() {
+    let client = TestClient::new();
+
+    // Arrange - create test messages
+    let msg1 = client.create_message("Hello from user1", "user1", "pass1").await;
+    let msg2 = client.create_message("Hello from user2", "user2", "pass2").await;
+    let msg3 = client.create_message("Another message", "user1", "pass1").await;
+
+    // Act - fetch messages since second message
+    let response = client.get_messages_with_since_id(msg2.id, Some(10)).await;
+
+    // Assert - should only return messages with ID > msg2.id
+    assert_eq!(response.status(), 200);
+    let messages: Messages = response.json().await;
+    assert_eq!(messages.messages.len(), 1);
+    assert_eq!(messages.messages[0].id, msg3.id);
 }
 ```
