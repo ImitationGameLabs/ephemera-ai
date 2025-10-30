@@ -87,10 +87,7 @@ async fn init_dialogue_client() -> anyhow::Result<AuthenticatedClient> {
     let authenticated_client = AuthenticatedClient::connect_and_login(&atrium_service_url, username, password).await
         .map_err(|e| anyhow::anyhow!("Failed to login: {}", e))?;
 
-    info!("Successfully logged in as: {}!",
-          authenticated_client.user().await
-          .ok_or_else(|| anyhow::anyhow!("User info not available"))?
-          .name);
+    info!("Successfully logged in as: {}!", authenticated_client.credentials().username);
 
     Ok(authenticated_client)
 }

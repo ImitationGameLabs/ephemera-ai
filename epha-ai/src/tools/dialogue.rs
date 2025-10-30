@@ -2,15 +2,10 @@ use std::sync::Arc;
 use rig::{completion::ToolDefinition, tool::Tool};
 use serde::Deserialize;
 use serde_json::json;
-use atrium_client::{AuthenticatedClient, Message};
+use atrium_client::{AuthenticatedClient, UnreadMessages};
 use atrium_client::ClientError as DialogueClientError;
 
-#[derive(Deserialize)]
-pub struct GetMessagesArgs {
-    pub sender: Option<String>,
-    pub limit: Option<u64>,
-    pub offset: Option<u64>,
-}
+const GET_MESSAGES_LIMIT: u64 = 20;
 
 #[derive(Deserialize)]
 pub struct SendMessageArgs {
@@ -35,60 +30,43 @@ impl Tool for GetMessages {
     const NAME: &'static str = "get_messages";
 
     type Error = DialogueError;
-    type Args = GetMessagesArgs;
+    type Args = ();
     type Output = String;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         serde_json::from_value(json!({
             "name": "get_messages",
-            "description": "Get messages from Dialogue Atrium",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "sender": {
-                        "type": "string",
-                        "description": "Optional filter to get messages only from specific sender"
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Maximum number of messages to retrieve"
-                    },
-                    "offset": {
-                        "type": "integer",
-                        "description": "Number of messages to skip for pagination"
-                    }
-                },
-                "required": []
-            }
+            "description": "Get unread messages from Dialogue Atrium"
         }))
         .expect("Tool Definition")
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let messages = self.dialogue_client.get_messages(args.limit, args.offset)
-            .await?;
+        let unread_result: UnreadMessages = self.dialogue_client.get_unread_messages(Some(GET_MESSAGES_LIMIT)).await?;
 
-        // Filter by sender if specified
-        let filtered_messages: Vec<&Message> = if let Some(sender) = args.sender {
-            messages.messages.iter()
-                .filter(|msg| msg.sender == sender)
-                .collect()
+        if unread_result.messages.is_empty() {
+            if unread_result.remaining_unread > 0 {
+                Ok(format!("No new messages retrieved. {} messages remain unread in total.", unread_result.remaining_unread))
+            } else {
+                Ok("No unread messages found. You're all caught up!".to_string())
+            }
         } else {
-            messages.messages.iter().collect()
-        };
-
-        if filtered_messages.is_empty() {
-            Ok("No messages found matching the criteria.".to_string())
-        } else {
-            let formatted_messages: Vec<String> = filtered_messages.iter()
+            let formatted_messages: Vec<String> = unread_result.messages.iter()
                 .map(|msg| {
                     format!("[{}] {}: {}", msg.created_at, msg.sender, msg.content)
                 })
                 .collect();
 
-            Ok(format!("Retrieved {} messages:\n\n{}",
-                filtered_messages.len(),
-                formatted_messages.join("\n")))
+            let remaining_text = if unread_result.remaining_unread > 0 {
+                format!("{} more messages remain unread.", unread_result.remaining_unread)
+            } else {
+                "No more unread messages.".to_string()
+            };
+
+            Ok(format!("Retrieved {} unread messages:\n\n{}\n\n{}",
+                unread_result.messages.len(),
+                formatted_messages.join("\n"),
+                remaining_text))
         }
     }
 }
