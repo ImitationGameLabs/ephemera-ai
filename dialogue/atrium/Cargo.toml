@@ -21,7 +21,12 @@ thiserror = "2.0"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 dotenv = "0.15"
 url = "2.5"
+reqwest = { version = "0.12", features = ["json"], optional = true }
+
+[features]
+default = []
+integration-tests = ["dep:reqwest"]
 
 [dev-dependencies]
 tokio-test = "0.4"
-reqwest = { version = "0.12", features = ["json"] }
+

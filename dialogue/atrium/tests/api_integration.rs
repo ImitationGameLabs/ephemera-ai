@@ -1,3 +1,5 @@
+#![cfg(feature = "integration-tests")]
+
 use reqwest::Client;
 use serde_json::json;
 use std::time::Duration;

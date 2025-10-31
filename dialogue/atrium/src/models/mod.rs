@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 pub mod message;
 pub mod user;
 
