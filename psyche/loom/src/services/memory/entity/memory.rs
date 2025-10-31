@@ -11,7 +11,11 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub content: String,
 
-    pub created_at: i64,
+    #[sea_orm(column_type = "custom(\"DATETIME(6)\")")]
+    pub created_at: time::OffsetDateTime,
+
+    #[sea_orm(column_type = "custom(\"DATETIME(6)\")")]
+    pub updated_at: time::OffsetDateTime,
 
     #[sea_orm(column_type = "Text")]
     pub source: String,
@@ -41,6 +45,7 @@ impl From<MemoryFragment> for Model {
             id: 0, // This will be ignored by insert
             content: memory.content,
             created_at: memory.objective_metadata.created_at,
+            updated_at: memory.objective_metadata.updated_at,
             source: serde_json::to_string(&memory.objective_metadata.source)
                 .expect("MemorySource must be serializable"),
             importance: memory.subjective_metadata.importance as i8,
@@ -71,6 +76,7 @@ impl From<Model> for MemoryFragment {
             },
             objective_metadata: ObjectiveMetadata {
                 created_at: model.created_at,
+                updated_at: model.updated_at,
                 source,
             },
             associations: serde_json::from_str(&model.associations)

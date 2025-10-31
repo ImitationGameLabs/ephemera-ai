@@ -1,46 +1,83 @@
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
-use crate::memory::{
-    types::MemoryFragment,
-    manager::{MemoryQuery, MemoryQueryResult},
-};
-use crate::memory::manager::TimeRange;
+use crate::memory::types::MemoryFragment;
 
-/// Request model for creating a new memory fragment
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CreateMemoryRequest {
-    pub content: String,
-    pub metadata: Option<serde_json::Value>,
-    pub source: Option<String>,
+/// Represents a time range for memory queries
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeRange {
+    pub start: i64,
+    pub end: i64,
 }
 
-/// Response model for memory operations
+/// Query parameters for memory retrieval operations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryQuery {
+    pub keywords: String,
+    pub time_range: Option<TimeRange>,
+}
+
+/// Unified response model for memory operations (single or multiple fragments)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryResponse {
-    pub id: i64,
-    pub content: String,
-    pub metadata: Option<serde_json::Value>,
-    pub source: Option<String>,
-    #[serde(with = "time::serde::iso8601")]
-    pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::iso8601")]
-    pub updated_at: OffsetDateTime,
+    pub fragments: Vec<MemoryFragment>,
+    pub total: usize,
 }
 
-impl From<MemoryFragment> for MemoryResponse {
-    fn from(fragment: MemoryFragment) -> Self {
+impl MemoryResponse {
+    /// Create a response with a single memory fragment
+    pub fn single(fragment: MemoryFragment) -> Self {
         Self {
-            id: fragment.id,
-            content: fragment.content,
-            metadata: Some(fragment.subjective_metadata.notes.into()),
-            source: Some(fragment.objective_metadata.source.identifier),
-            created_at: OffsetDateTime::from_unix_timestamp(fragment.objective_metadata.created_at)
-                .unwrap_or_else(|_| OffsetDateTime::now_utc()),
-            updated_at: OffsetDateTime::from_unix_timestamp(fragment.objective_metadata.created_at)
-                .unwrap_or_else(|_| OffsetDateTime::now_utc()), // Same as created_at for now
+            fragments: vec![fragment],
+            total: 1,
         }
     }
+
+    /// Create a response with multiple memory fragments
+    pub fn multiple(fragments: Vec<MemoryFragment>) -> Self {
+        let total = fragments.len();
+        Self {
+            fragments,
+            total,
+        }
+    }
+
+    /// Get the first fragment (convenience method for single fragment responses)
+    pub fn first(&self) -> Option<&MemoryFragment> {
+        self.fragments.first()
+    }
+
+    /// Check if response contains any fragments
+    pub fn is_empty(&self) -> bool {
+        self.fragments.is_empty()
+    }
+
+    /// Get the number of fragments
+    pub fn len(&self) -> usize {
+        self.fragments.len()
+    }
 }
+
+
+/// Request model for creating memory fragments (supports batch operations)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateMemoryRequest {
+    pub fragments: Vec<MemoryFragment>,
+}
+
+impl CreateMemoryRequest {
+    /// Create a request with a single memory fragment (backward compatibility)
+    pub fn single(fragment: MemoryFragment) -> Self {
+        Self {
+            fragments: vec![fragment],
+        }
+    }
+
+    /// Create a request with multiple memory fragments
+    pub fn multiple(fragments: Vec<MemoryFragment>) -> Self {
+        Self { fragments }
+    }
+}
+
 
 /// Request model for memory search
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,20 +100,18 @@ impl From<SearchMemoryRequest> for MemoryQuery {
     }
 }
 
-/// Response model for memory search results
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SearchMemoryResponse {
-    pub memories: Vec<MemoryResponse>,
-    pub total: usize,
+/// Legacy type alias for backward compatibility
+pub type SearchMemoryResponse = MemoryResponse;
+
+/// Legacy type for backward compatibility
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryQueryResult {
+    pub memories: Vec<MemoryFragment>,
 }
 
-impl From<MemoryQueryResult> for SearchMemoryResponse {
+impl From<MemoryQueryResult> for MemoryResponse {
     fn from(result: MemoryQueryResult) -> Self {
-        let total = result.memories.len();
-        Self {
-            memories: result.memories.into_iter().map(MemoryResponse::from).collect(),
-            total,
-        }
+        MemoryResponse::multiple(result.memories)
     }
 }
 

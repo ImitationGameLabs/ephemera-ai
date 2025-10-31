@@ -41,7 +41,7 @@ impl Tool for GetMessages {
         .expect("Tool Definition")
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+    async fn call(&self, _args: Self::Args) -> Result<Self::Output, Self::Error> {
         let unread_result: UnreadMessages = self.dialogue_client.get_unread_messages(Some(GET_MESSAGES_LIMIT)).await?;
 
         if unread_result.messages.is_empty() {

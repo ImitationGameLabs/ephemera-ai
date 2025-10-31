@@ -10,9 +10,6 @@ pub enum QdrantError {
 
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
-
-    #[error("Embedding generation error: {0}")]
-    Embedding(String),
 }
 
 const QDRANT_COLLECTION_NAME: &str = "ephemera_memory";
@@ -51,41 +48,51 @@ impl QdrantMemoryManager {
         Ok(())
     }
 
-    pub async fn save_embedding(
+    pub async fn save(
         &self,
-        memory: &MemoryFragment,
-        embedding: Vec<f32>,
+        memories: &[MemoryFragment],
+        embeddings: &[Vec<f32>],
     ) -> Result<(), QdrantError> {
         self.ensure_collection().await?;
 
-        let point = qdrant_client::qdrant::PointStruct::new(
-            memory.id as u64,
-            embedding,
-            [
-                ("created_at", memory.objective_metadata.created_at.into()),
-                (
-                    "source",
-                    format!("{:?}", memory.objective_metadata.source).into(),
-                ),
-                (
-                    "importance",
-                    (memory.subjective_metadata.importance as f32).into(),
-                ),
-                (
-                    "confidence",
-                    (memory.subjective_metadata.confidence as f32).into(),
-                ),
-                (
-                    "tags",
-                    serde_json::to_string(&memory.subjective_metadata.tags)?.into(),
-                ),
-            ],
-        );
+        if memories.len() != embeddings.len() {
+            return Err(QdrantError::Client(
+                "Memories and embeddings must have the same length".to_string(),
+            ));
+        }
+
+        let mut points = Vec::new();
+        for (memory, embedding) in memories.iter().zip(embeddings.iter()) {
+            let point = qdrant_client::qdrant::PointStruct::new(
+                memory.id as u64,
+                embedding.clone(),
+                [
+                    ("created_at", memory.objective_metadata.created_at.unix_timestamp().into()),
+                    (
+                        "source",
+                        format!("{:?}", memory.objective_metadata.source).into(),
+                    ),
+                    (
+                        "importance",
+                        (memory.subjective_metadata.importance as f32).into(),
+                    ),
+                    (
+                        "confidence",
+                        (memory.subjective_metadata.confidence as f32).into(),
+                    ),
+                    (
+                        "tags",
+                        serde_json::to_string(&memory.subjective_metadata.tags)?.into(),
+                    ),
+                ],
+            );
+            points.push(point);
+        }
 
         self.client
             .upsert_points(qdrant_client::qdrant::UpsertPointsBuilder::new(
                 QDRANT_COLLECTION_NAME,
-                vec![point],
+                points,
             ))
             .await
             .map_err(|e| QdrantError::Client(e.to_string()))?;

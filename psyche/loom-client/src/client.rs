@@ -4,6 +4,7 @@ use std::fmt;
 use tracing::{debug, instrument};
 
 use loom::memory::models::*;
+use loom::memory::types::MemoryFragment;
 
 /// Client error types
 #[derive(Debug)]
@@ -103,7 +104,7 @@ impl LoomClient {
         request: CreateMemoryRequest,
     ) -> Result<MemoryResponse, LoomClientError> {
         let url = format!("{}/api/v1/memory", self.base_url);
-        debug!("Creating memory fragment at: {}", url);
+        debug!("Creating {} memory fragments at: {}", request.fragments.len(), url);
 
         let response = self.client.post(&url).json(&request).send().await?;
         let api_response: ApiResponse<MemoryResponse> = Self::handle_response(response).await?;
@@ -111,6 +112,16 @@ impl LoomClient {
         api_response
             .data
             .ok_or_else(|| LoomClientError::ApiError("No data returned from API".to_string()))
+    }
+
+    /// Create a single memory fragment (backward compatibility convenience method)
+    #[instrument(skip(self))]
+    pub async fn create_single_memory(
+        &self,
+        fragment: MemoryFragment,
+    ) -> Result<MemoryResponse, LoomClientError> {
+        let request = CreateMemoryRequest::single(fragment);
+        self.create_memory(request).await
     }
 
     /// Search memory fragments

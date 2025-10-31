@@ -17,8 +17,12 @@ pub struct MemoryFragment {
 /// Contains objective facts about the memory that are autonomously maintained by the system.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectiveMetadata {
-    /// Timestamp when the memory was created.
-    pub created_at: i64,
+    /// Timestamp when the memory was created (microsecond precision).
+    #[serde(with = "time::serde::iso8601")]
+    pub created_at: time::OffsetDateTime,
+    /// Timestamp when the memory was last updated (microsecond precision).
+    #[serde(with = "time::serde::iso8601")]
+    pub updated_at: time::OffsetDateTime,
     /// Source of the memory, indicating its origin (user input, system thought, etc.).
     pub source: MemorySource,
 }
@@ -65,63 +69,5 @@ impl fmt::Display for MemorySource {
             .map(|t| format!(":{}", t))
             .unwrap_or_default();
         write!(f, "[{}{}] {}", self.channel, type_str, self.identifier)
-    }
-}
-
-// Convenience methods for creating common MemorySource types
-impl MemorySource {
-    pub fn dialogue_input(identifier: String) -> Self {
-        let mut metadata = HashMap::new();
-        metadata.insert("type".to_string(), "input".to_string());
-
-        Self {
-            channel: "dialogue".to_string(),
-            identifier,
-            metadata,
-        }
-    }
-
-    pub fn dialogue_response() -> Self {
-        let mut metadata = HashMap::new();
-        metadata.insert("type".to_string(), "output".to_string());
-
-        Self {
-            channel: "dialogue".to_string(),
-            identifier: "self".to_string(),
-            metadata,
-        }
-    }
-
-    pub fn information(identifier: String, info_type: String) -> Self {
-        let mut metadata = HashMap::new();
-        metadata.insert("type".to_string(), info_type);
-
-        Self {
-            channel: "information".to_string(),
-            identifier,
-            metadata,
-        }
-    }
-
-    pub fn thought(thought_type: String) -> Self {
-        let mut metadata = HashMap::new();
-        metadata.insert("type".to_string(), thought_type);
-
-        Self {
-            channel: "thought".to_string(),
-            identifier: "self_thought".to_string(),
-            metadata,
-        }
-    }
-
-    pub fn action(action_type: String) -> Self {
-        let mut metadata = HashMap::new();
-        metadata.insert("type".to_string(), action_type);
-
-        Self {
-            channel: "action".to_string(),
-            identifier: "self_action".to_string(),
-            metadata,
-        }
     }
 }

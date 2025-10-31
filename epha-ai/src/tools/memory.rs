@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use rig::{completion::ToolDefinition, tool::Tool};
 use serde::Deserialize;
 use serde_json::json;
-use loom_client::{LoomClient, SearchMemoryRequest, MemoryResponse};
+use loom_client::{LoomClient, SearchMemoryRequest};
 use loom_client::memory::MemoryFragment;
 use epha_agent::context::ContextSerialize;
 use crate::context::{MemoryFragmentList, EphemeraContext};
@@ -11,7 +11,6 @@ use crate::context::{MemoryFragmentList, EphemeraContext};
 #[derive(Deserialize)]
 pub struct MemoryRecallArgs {
     pub keywords: String,
-    pub query: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -29,30 +28,11 @@ impl RecallCacheHelper {
         Self::default()
     }
 
-    pub fn store(&mut self, memories: Vec<MemoryFragment>) {
+    
+    pub fn store(&mut self, fragments: Vec<MemoryFragment>) {
         self.memories.clear();
-        for memory in memories {
-            self.memories.insert(memory.id, memory);
-        }
-    }
-
-    pub fn store_responses(&mut self, responses: Vec<MemoryResponse>) {
-        self.memories.clear();
-        for response in responses {
-            // Convert MemoryResponse to MemoryFragment for compatibility
-            let fragment: MemoryFragment = MemoryFragment {
-                id: response.id,
-                content: response.content,
-                subjective_metadata: Default::default(), // Will use default values
-                objective_metadata: loom_client::memory::ObjectiveMetadata {
-                    created_at: response.created_at.unix_timestamp(),
-                    source: response.source
-                        .map(|s| loom_client::memory::MemorySource::action(s))
-                        .unwrap_or_else(|| loom_client::memory::MemorySource::action("unknown".to_string())),
-                },
-                associations: Vec::new(),
-            };
-            self.memories.insert(response.id, fragment);
+        for fragment in fragments {
+            self.memories.insert(fragment.id, fragment);
         }
     }
 
@@ -128,27 +108,14 @@ impl Tool for MemoryRecall {
             .await
             .map_err(|_| MemoryRecallError)?;
 
-        if search_result.memories.is_empty() {
+        if search_result.fragments.is_empty() {
             Ok("No relevant memories found.".to_string())
         } else {
-            // Store memory responses in cache for selection
-            self.cache.lock().unwrap().store_responses(search_result.memories.clone());
+            // Store memory fragments in cache for selection
+            self.cache.lock().unwrap().store(search_result.fragments.clone());
 
-            // Convert responses to fragments for serialization
-            let fragments: Vec<MemoryFragment> = search_result.memories.into_iter()
-                .map(|response| MemoryFragment {
-                    id: response.id,
-                    content: response.content,
-                    subjective_metadata: Default::default(),
-                    objective_metadata: loom_client::memory::ObjectiveMetadata {
-                        created_at: response.created_at.unix_timestamp(),
-                        source: response.source
-                            .map(|s| loom_client::memory::MemorySource::action(s))
-                            .unwrap_or_else(|| loom_client::memory::MemorySource::action("unknown".to_string())),
-                    },
-                    associations: Vec::new(),
-                })
-                .collect();
+            // The search result already contains MemoryFragment objects
+            let fragments = search_result.fragments;
 
             // Use unified serialization
             let serialized_memories = MemoryFragmentList::from(fragments.clone()).serialize();

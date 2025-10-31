@@ -1,17 +1,18 @@
-use super::{ContextSerialize, MemoryFragment};
-use time::OffsetDateTime;
-use time::format_description::well_known::Rfc3339;
+use epha_agent::context::ContextSerialize;
+use loom_client::memory::MemoryFragment;
 use std::collections::VecDeque;
 
 /// New type for unified MemoryFragment serialization
 pub struct MemoryFragmentList(Vec<MemoryFragment>);
 
 impl MemoryFragmentList {
-    /// Format timestamp for readable display
-    fn format_timestamp(&self, timestamp: i64) -> String {
-        let datetime = OffsetDateTime::from_unix_timestamp(timestamp)
-            .unwrap_or_else(|_| OffsetDateTime::now_utc());
-        datetime.format(&Rfc3339)
+    /// Format datetime for readable display with millisecond precision (3 decimal places)
+    fn format_datetime(&self, datetime: time::OffsetDateTime) -> String {
+        // Use custom format to limit to 3 decimal places (milliseconds)
+        let format = time::format_description::parse(
+            "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:3]Z"
+        ).unwrap();
+        datetime.format(&format)
             .unwrap_or_else(|_| "unknown".to_string())
     }
 
@@ -20,7 +21,7 @@ impl MemoryFragmentList {
         format!(
             "Memory ID: {}\nCreated: {}\nSource: {}\nImportance: {}/255\nConfidence: {}/255\nTags: {}\nContent: {}",
             memory.id,
-            self.format_timestamp(memory.objective_metadata.created_at),
+            self.format_datetime(memory.objective_metadata.created_at),
             format!("{}::{}", memory.objective_metadata.source.channel, memory.objective_metadata.source.identifier),
             memory.subjective_metadata.importance,
             memory.subjective_metadata.confidence,
@@ -64,41 +65,45 @@ impl ContextSerialize for MemoryFragmentList {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use loom_client::memory::{MemorySource, ObjectiveMetadata, SubjectiveMetadata};
+    use loom_client::{MemoryFragmentBuilder, memory::MemorySource};
 
     #[test]
     fn test_memory_fragment_list_serialization() {
-        let fragment1 = MemoryFragment {
-            id: 1,
-            content: "Test perception".to_string(),
-            subjective_metadata: SubjectiveMetadata {
-                importance: 120,
-                confidence: 200,
-                tags: vec!["perception".to_string()],
-                notes: String::new(),
-            },
-            objective_metadata: ObjectiveMetadata {
-                created_at: OffsetDateTime::now_utc().unix_timestamp(),
-                source: MemorySource::dialogue_input("test_source".to_string()),
-            },
-            associations: Vec::new(),
+        let source1 = MemorySource {
+            channel: "dialogue".to_string(),
+            identifier: "test_source".to_string(),
+            metadata: [("type".to_string(), "input".to_string())].into_iter().collect(),
         };
 
-        let fragment2 = MemoryFragment {
-            id: 2,
-            content: "test_action: test_details".to_string(),
-            subjective_metadata: SubjectiveMetadata {
-                importance: 100,
-                confidence: 255,
-                tags: vec!["activity".to_string(), "test_action".to_string()],
-                notes: String::new(),
-            },
-            objective_metadata: ObjectiveMetadata {
-                created_at: OffsetDateTime::now_utc().unix_timestamp(),
-                source: MemorySource::action("execution".to_string()),
-            },
-            associations: Vec::new(),
+        let mut fragment1 = MemoryFragmentBuilder::new(
+            "Test perception".to_string(),
+            source1
+        )
+            .importance(120)
+            .confidence(200)
+            .add_tag("perception".to_string())
+            .build();
+
+        // Override the ID for test purposes
+        fragment1.id = 1;
+
+        let source2 = MemorySource {
+            channel: "action".to_string(),
+            identifier: "self_action".to_string(),
+            metadata: [("type".to_string(), "execution".to_string())].into_iter().collect(),
         };
+
+        let mut fragment2 = MemoryFragmentBuilder::new(
+            "test_action: test_details".to_string(),
+            source2
+        )
+            .importance(100)
+            .confidence(255)
+            .add_tags(vec!["activity".to_string(), "test_action".to_string()])
+            .build();
+
+        // Override the ID for test purposes
+        fragment2.id = 2;
 
         let memories = vec![fragment1, fragment2];
         let memory_list = MemoryFragmentList::from(memories);

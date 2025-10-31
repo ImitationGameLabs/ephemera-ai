@@ -1,4 +1,7 @@
+pub mod entity;
 pub mod handlers;
+pub mod manager;
+pub mod migration;
 pub mod routes;
 
 use axum::{
@@ -9,7 +12,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use time::OffsetDateTime;
 
-use crate::memory::manager::HybridMemoryManager;
+use manager::HybridMemoryManager;
 
 /// Application state shared across handlers
 #[derive(Clone)]

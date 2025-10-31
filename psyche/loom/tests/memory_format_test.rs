@@ -14,8 +14,13 @@ fn test_new_memory_format_serialization() {
             notes: "Test note for new memory format".to_string(),
         },
         objective_metadata: ObjectiveMetadata {
-            created_at: OffsetDateTime::now_utc().unix_timestamp(),
-            source: MemorySource::dialogue_input("test_user".to_string()),
+            created_at: OffsetDateTime::now_utc(),
+            updated_at: OffsetDateTime::now_utc(),
+            source: MemorySource {
+                channel: "dialogue".to_string(),
+                identifier: "test_user".to_string(),
+                metadata: [("type".to_string(), "input".to_string())].into_iter().collect(),
+            },
         },
         associations: vec![1, 2, 3],
     };
@@ -42,29 +47,49 @@ fn test_new_memory_format_serialization() {
 }
 
 #[test]
-fn test_memory_source_builder_methods() {
-    // Test all MemorySource builder methods
-    let dialogue_input = MemorySource::dialogue_input("alice".to_string());
+fn test_memory_source_direct_construction() {
+    // Test direct MemorySource construction
+    let dialogue_input = MemorySource {
+        channel: "dialogue".to_string(),
+        identifier: "alice".to_string(),
+        metadata: [("type".to_string(), "input".to_string())].into_iter().collect(),
+    };
     assert_eq!(dialogue_input.channel, "dialogue");
     assert_eq!(dialogue_input.identifier, "alice");
     assert_eq!(dialogue_input.metadata.get("type"), Some(&"input".to_string()));
 
-    let dialogue_response = MemorySource::dialogue_response();
+    let dialogue_response = MemorySource {
+        channel: "dialogue".to_string(),
+        identifier: "self".to_string(),
+        metadata: [("type".to_string(), "output".to_string())].into_iter().collect(),
+    };
     assert_eq!(dialogue_response.channel, "dialogue");
     assert_eq!(dialogue_response.identifier, "self");
     assert_eq!(dialogue_response.metadata.get("type"), Some(&"output".to_string()));
 
-    let information = MemorySource::information("config.json".to_string(), "file".to_string());
+    let information = MemorySource {
+        channel: "information".to_string(),
+        identifier: "config.json".to_string(),
+        metadata: [("type".to_string(), "file".to_string())].into_iter().collect(),
+    };
     assert_eq!(information.channel, "information");
     assert_eq!(information.identifier, "config.json");
     assert_eq!(information.metadata.get("type"), Some(&"file".to_string()));
 
-    let thought = MemorySource::thought("reasoning".to_string());
+    let thought = MemorySource {
+        channel: "thought".to_string(),
+        identifier: "self_thought".to_string(),
+        metadata: [("type".to_string(), "reasoning".to_string())].into_iter().collect(),
+    };
     assert_eq!(thought.channel, "thought");
     assert_eq!(thought.identifier, "self_thought");
     assert_eq!(thought.metadata.get("type"), Some(&"reasoning".to_string()));
 
-    let action = MemorySource::action("execution".to_string());
+    let action = MemorySource {
+        channel: "action".to_string(),
+        identifier: "self_action".to_string(),
+        metadata: [("type".to_string(), "execution".to_string())].into_iter().collect(),
+    };
     assert_eq!(action.channel, "action");
     assert_eq!(action.identifier, "self_action");
     assert_eq!(action.metadata.get("type"), Some(&"execution".to_string()));
@@ -72,11 +97,19 @@ fn test_memory_source_builder_methods() {
 
 #[test]
 fn test_memory_source_display() {
-    let source = MemorySource::dialogue_input("bob".to_string());
+    let source = MemorySource {
+        channel: "dialogue".to_string(),
+        identifier: "bob".to_string(),
+        metadata: [("type".to_string(), "input".to_string())].into_iter().collect(),
+    };
     let display_str = format!("{}", source);
     assert_eq!(display_str, "[dialogue:input] bob");
 
-    let information = MemorySource::information("web".to_string(), "url".to_string());
+    let information = MemorySource {
+        channel: "information".to_string(),
+        identifier: "web".to_string(),
+        metadata: [("type".to_string(), "url".to_string())].into_iter().collect(),
+    };
     let display_str = format!("{}", information);
     assert_eq!(display_str, "[information:url] web");
 }

@@ -6,23 +6,17 @@ use rig::{
     client::CompletionClient,
     providers::deepseek::CompletionModel,
 };
-use loom_client::{LoomClient, CreateMemoryRequest};
-use loom_client::memory::MemorySource;
+use loom_client::LoomClient;
 use atrium_client::AuthenticatedClient;
 use std::sync::{Arc, Mutex};
 use crate::agent::{CommonPrompt, StateMachineExecutor};
 use crate::context::EphemeraContext;
+use crate::context::memory_constructors::from_action;
 use crate::tools::{GetMessages, MemoryRecall, MemorySelection, RecallCacheHelper, SendMessage, StateTransition};
 
 pub struct EphemeraAI {
-    state_machine: Arc<Mutex<StateMachine>>,
-    completion_client: Arc<Client>,
     context: Context<EphemeraContext>,
-    loom_client: Arc<LoomClient>,
-    dialogue_client: Arc<AuthenticatedClient>,
-    common_prompt: CommonPrompt,
     executor: StateMachineExecutor,
-    memory_cache: Arc<Mutex<RecallCacheHelper>>,
 }
 
 impl EphemeraAI {
@@ -62,14 +56,8 @@ impl EphemeraAI {
         let executor = StateMachineExecutor::new(state_machine.clone());
 
         Self {
-            state_machine,
-            completion_client: Arc::new(completion_client),
             context: Context::new(context_data),
-            loom_client,
-            dialogue_client,
-            common_prompt,
             executor,
-            memory_cache,
         }
     }
 
@@ -95,19 +83,21 @@ impl EphemeraAI {
     
     async fn update_context(&mut self, result: String) -> anyhow::Result<()> {
         // Application-specific context update logic
-        let activity_request = CreateMemoryRequest {
-            content: format!("state_execution: {}", result),
-            metadata: Some(serde_json::json!({
+        let fragment = from_action(
+            format!("state_execution: {}", result),
+            "execution"
+        )
+            .from_json_metadata(Some(serde_json::json!({
                 "subjective": {
                     "importance": 100,
                     "confidence": 255,
                     "tags": ["activity", "state_execution"]
                 }
-            })),
-            source: Some(MemorySource::action("execution".to_string()).to_string()),
-        };
+            })))
+            .with_api_defaults()
+            .build();
 
-        self.context.data().lock().unwrap().add_activity(activity_request);
+        self.context.data().lock().unwrap().add_activity(fragment);
         Ok(())
     }
 }

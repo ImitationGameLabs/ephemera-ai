@@ -4,71 +4,52 @@ use axum::{
     response::Json,
 };
 use serde_json::Value;
-use time::OffsetDateTime;
 use tracing::{error, info, instrument};
 
 use crate::memory::{
-    types::{MemoryFragment, MemorySource, SubjectiveMetadata, ObjectiveMetadata},
-    manager::Manager,
-    models::{ApiResponse, CreateMemoryRequest, MemoryResponse, SearchMemoryRequest, SearchMemoryResponse}
+    models::{ApiResponse, CreateMemoryRequest, MemoryResponse, SearchMemoryRequest},
 };
+use crate::services::memory::manager::Manager;
 use crate::services::memory::AppState;
 
 /// HTTP handler for memory operations
 pub struct MemoryHandler;
 
 impl MemoryHandler {
-    /// Create a new memory fragment
+    /// Create memory fragments (supports batch operations)
     #[instrument(skip(state))]
     pub async fn create_memory(
         State(state): State<AppState>,
         Json(request): Json<CreateMemoryRequest>,
     ) -> Result<Json<ApiResponse<MemoryResponse>>, StatusCode> {
-        info!("Creating new memory fragment");
+        info!("Creating {} memory fragments", request.fragments.len());
 
-        let now = OffsetDateTime::now_utc().unix_timestamp();
-        let memory_fragment = MemoryFragment {
-            id: 0, // Will be set by database
-            content: request.content.clone(),
-            subjective_metadata: SubjectiveMetadata {
-                importance: 100, // Default importance
-                confidence: 255, // Default confidence
-                tags: request.metadata
-                    .as_ref()
-                    .and_then(|m| m.get("tags"))
-                    .and_then(|v| v.as_array())
-                    .map(|arr| arr.iter()
-                        .filter_map(|s| s.as_str())
-                        .map(String::from)
-                        .collect())
-                    .unwrap_or_default(),
-                notes: request.metadata
-                    .as_ref()
-                    .and_then(|m| m.get("notes"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-            },
-            objective_metadata: ObjectiveMetadata {
-                created_at: now,
-                source: request.source
-                    .map(|s| MemorySource::information(s, "api".to_string()))
-                    .unwrap_or_else(|| MemorySource::information("api".to_string(), "direct".to_string())),
-            },
-            associations: Vec::new(),
-        };
+        if request.fragments.is_empty() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
 
-        match state.memory_manager.append(&memory_fragment).await {
-            Ok(()) => {
-                info!("Successfully created memory fragment");
-                // Return a mock response since we don't have the generated ID
-                // In a real implementation, you'd modify append to return the created memory with ID
-                let mut response = MemoryResponse::from(memory_fragment);
-                response.id = 0; // Mock ID - would be returned from the database
+        // Set server-side timestamps for all fragments (overriding client timestamps)
+        let now = time::OffsetDateTime::now_utc();
+        let mut fragments = request.fragments;
+        for fragment in &mut fragments {
+            fragment.objective_metadata.created_at = now;
+            fragment.objective_metadata.updated_at = now;
+        }
+
+        match state.memory_manager.append(&mut fragments).await {
+            Ok(ids) => {
+                info!("Successfully created {} memory fragments", ids.len());
+
+                // Update fragments with their database-generated IDs
+                for (fragment, id) in fragments.iter_mut().zip(ids) {
+                    fragment.id = id;
+                }
+
+                let response = MemoryResponse::multiple(fragments);
                 Ok(Json(ApiResponse::success(response)))
             }
             Err(e) => {
-                error!("Failed to create memory fragment: {}", e);
+                error!("Failed to create memory fragments: {}", e);
                 Err(StatusCode::INTERNAL_SERVER_ERROR)
             }
         }
@@ -79,7 +60,7 @@ impl MemoryHandler {
     pub async fn search_memory(
         State(state): State<AppState>,
         Query(request): Query<SearchMemoryRequest>,
-    ) -> Result<Json<ApiResponse<SearchMemoryResponse>>, StatusCode> {
+    ) -> Result<Json<ApiResponse<MemoryResponse>>, StatusCode> {
         info!("Searching memory fragments with keywords: {}", request.keywords);
 
         let query = request.into();
@@ -87,7 +68,7 @@ impl MemoryHandler {
         match state.memory_manager.recall(&query).await {
             Ok(result) => {
                 info!("Found {} memory fragments", result.memories.len());
-                let response = SearchMemoryResponse::from(result);
+                let response = MemoryResponse::from(result);
                 Ok(Json(ApiResponse::success(response)))
             }
             Err(e) => {
@@ -108,7 +89,7 @@ impl MemoryHandler {
         match state.memory_manager.get(id).await {
             Ok(memory_fragment) => {
                 info!("Successfully retrieved memory fragment with ID: {}", id);
-                let response = MemoryResponse::from(memory_fragment);
+                let response = MemoryResponse::single(memory_fragment);
                 Ok(Json(ApiResponse::success(response)))
             }
             Err(e) => {

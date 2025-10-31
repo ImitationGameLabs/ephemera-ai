@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::memory::{
+use crate::services::memory::{
     manager::HybridMemoryManager,
     manager::{MysqlMemoryManager, QdrantMemoryManager},
     migration::Migrator,
