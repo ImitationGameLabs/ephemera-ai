@@ -114,7 +114,7 @@ impl Manager for HybridMemoryManager {
         }
 
         // Save to MySQL first and get the generated IDs
-        let generated_ids = self.mysql_manager.save(&fragments).await?;
+        let generated_ids = self.mysql_manager.save(fragments).await?;
 
         // Update fragments with their generated IDs for Qdrant storage
         for (fragment, id) in fragments.iter_mut().zip(generated_ids.iter()) {
@@ -134,7 +134,7 @@ impl Manager for HybridMemoryManager {
         // Save all embeddings to Qdrant
         match self
             .qdrant_manager
-            .save(&fragments, &embeddings)
+            .save(fragments, &embeddings)
             .await
         {
             Ok(_) => Ok(generated_ids),

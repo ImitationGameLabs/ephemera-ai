@@ -6,7 +6,6 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // Create memory fragments table with auto_increment primary key
         manager
             .create_table(
                 Table::create()
@@ -20,7 +19,8 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(MemoryFragments::Content).text().not_null())
-                    .col(ColumnDef::new(MemoryFragments::CreatedAt).big_integer().not_null())
+                    .col(ColumnDef::new(MemoryFragments::CreatedAt).date_time().extra("(6)").not_null())
+                    .col(ColumnDef::new(MemoryFragments::UpdatedAt).date_time().extra("(6)").not_null())
                     .col(ColumnDef::new(MemoryFragments::Source).text().not_null())
                     .col(ColumnDef::new(MemoryFragments::Importance).integer().not_null())
                     .col(ColumnDef::new(MemoryFragments::Confidence).integer().not_null())
@@ -33,7 +33,6 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        // Create index on timestamp for better query performance
         manager
             .create_index(
                 Index::create()
@@ -58,6 +57,7 @@ enum MemoryFragments {
     Id,
     Content,
     CreatedAt,
+    UpdatedAt,
     Source,
     Importance,
     Confidence,

@@ -1,8 +1,6 @@
 pub mod entity;
 pub mod handlers;
 pub mod manager;
-pub mod migration;
-pub mod routes;
 
 use axum::{
     http::StatusCode,

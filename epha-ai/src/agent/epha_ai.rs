@@ -64,7 +64,7 @@ impl EphemeraAI {
     pub async fn run(&mut self) -> anyhow::Result<()> {
         loop {
             self.execute_current_round().await?;
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         }
     }
 
