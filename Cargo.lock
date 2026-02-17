@@ -1727,8 +1727,6 @@ dependencies = [
  "axum 0.8.6",
  "clap",
  "dotenv",
- "qdrant-client",
- "rig-core",
  "sea-orm",
  "sea-orm-migration",
  "serde",
@@ -1756,6 +1754,30 @@ dependencies = [
  "time",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "loom-vector"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.8.6",
+ "clap",
+ "dotenv",
+ "qdrant-client",
+ "rig-core",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.17",
+ "time",
+ "tokio",
+ "tower 0.5.2",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

@@ -1,8 +1,5 @@
 use axum::Router;
 use dotenv::dotenv;
-use qdrant_client::config::QdrantConfig;
-use rig::providers::openai;
-use rig::client::embeddings::EmbeddingsClientDyn;
 use sea_orm::{Database, DatabaseConnection};
 use sea_orm_migration::MigratorTrait;
 use std::net::SocketAddr;
@@ -13,7 +10,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::services::db_migration::Migrator;
 use crate::services::memory::{
     manager::HybridMemoryManager,
-    manager::{MysqlMemoryManager, QdrantMemoryManager},
+    manager::MysqlMemoryManager,
 };
 
 use crate::services::memory::{handlers::MemoryHandler, AppState as MemoryAppState};
@@ -137,45 +134,7 @@ async fn init_db_connection() -> anyhow::Result<DatabaseConnection> {
 }
 
 async fn init_memory_service(conn: DatabaseConnection) -> anyhow::Result<HybridMemoryManager> {
-
-    // Setup Qdrant connection
-    let qdrant_url = std::env::var("EPHA_MEMORY_QDRANT_URL")
-        .expect("EPHA_MEMORY_QDRANT_URL not set");
-    let qdrant_config = QdrantConfig {
-        uri: qdrant_url.clone(),
-        ..Default::default()
-    };
-    let qdrant_client = qdrant_client::Qdrant::new(qdrant_config)
-        .expect("Failed to create Qdrant client");
-
-    // Initialize embedding model
-    let embedding_model_name = std::env::var("EMBEDDING_MODEL")
-        .expect("EMBEDDING_MODEL not set");
-    let embedding_api_key = std::env::var("EMBEDDING_MODEL_API_KEY")
-        .expect("EMBEDDING_MODEL_API_KEY not set");
-    let embedding_url = std::env::var("EMBEDDING_MODEL_URL")
-        .expect("EMBEDDING_MODEL_URL not set");
-
-    // Create OpenAI-compatible client for custom embedding service
-    let embedding_client = openai::Client::builder(&embedding_api_key)
-        .base_url(&embedding_url)
-        .build();
-
-    // Get embedding dimensions (required)
-    let embedding_dimensions: usize = std::env::var("EMBEDDING_MODEL_DIMENSIONS")
-        .expect("EMBEDDING_MODEL_DIMENSIONS not set")
-        .parse()
-        .expect("EMBEDDING_MODEL_DIMENSIONS must be a valid number");
-
-    let embedding_model = embedding_client.embedding_model(&embedding_model_name);
-
-    let memory_manager = HybridMemoryManager::new(
-        MysqlMemoryManager::new(conn),
-        QdrantMemoryManager::new(qdrant_client, embedding_dimensions),
-        embedding_model,
-    );
-
-    Ok(memory_manager)
+    Ok(HybridMemoryManager::new(MysqlMemoryManager::new(conn)))
 }
 
 async fn init_system_configs_service(conn: DatabaseConnection) -> anyhow::Result<SystemConfigManager> {

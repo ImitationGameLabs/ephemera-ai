@@ -1,8 +1,8 @@
 mod hybrid_manager;
-mod mysql_manager;
+mod qdrant_manager;
 
 pub use hybrid_manager::*;
-pub use mysql_manager::*;
+pub use qdrant_manager::*;
 
 use async_trait::async_trait;
 
