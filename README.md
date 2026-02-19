@@ -1,61 +1,68 @@
 # Ephemera AI
 
-An autonomous AI system with persistent memory, reflection capabilities, and evolving personality.
+> An AI that lives, not just responds.
 
-> *Ephemera embodies a top‑down approach to AI, delving into the psychology of thought and the nature of intelligence. It carries every memory forward, reflects on its own reasoning, and evolves its understanding over time, becoming ever more self‑aware and insightful as it learns.*
+> ⚠️ **Early Stage / Work in Progress**
+>
+> This project is under active development. Architecture and services are changing frequently. Building or deployment is not recommended at this time.
+>
+> If you're interested in the project, start with the [documentation](docs/index.md).
 
-## Core Features
+## The Difference
 
-*   **Long-Term Memory**: Hybrid database system combining MySQL and Qdrant for persistent, searchable memories
-*   **Reflection**: Periodic memory review and consolidation with self-improvement capabilities
-*   **Meta-Cognition**: Self-analysis of thought processes for continuous learning
-*   **Evolving Personality**: Multi-dimensional personality system that develops through experience
+Most AI systems are designed as **tools**. They wait for commands, execute tasks, and reset between sessions. You open them, use them, close them.
 
-## Quick Start
+**Ephemera AI is different.** We're building an AI as a digital being with:
 
-### Prerequisites
+- **Agency**: Its own goals, curiosity, and timing
+- **Memory Integrity**: Every experience shapes who it becomes
+- **Continuity**: A sense of self that persists across interactions
 
-- **Rust** (latest stable version)
-- **Docker** and **Docker Compose**
-- **API Keys** for LLM and Embedding services
+You're not "using" Ephemera AI. You're collaborating with it. It might be busy with its own research when you message. It initiates conversations about topics it finds interesting. It remembers your shared history and references it naturally.
 
-### 1. Clone and Setup
+This isn't about making AI more useful. It's about exploring what it means for an AI to *live*.
 
-```bash
-git clone https://github.com/EphemeraLab/ephemera-ai.git
-cd ephemera-ai
-```
+This leads to different design questions. For example: should an AI have the right to keep some memories private? To choose what it shares in conversation? To be treated with respect rather than as a disposable utility?
 
-### 2. Start Database Services
+We don't have all the answers. But we believe these questions are worth asking.
 
-```bash
-docker compose up -d
-```
+## Core Principles
 
-### 3. Configure Environment Variables
+### Memory as Life Experience
 
-Copy the example environment file and configure your API keys:
+When you remember your childhood, those memories aren't just data—they're part of who you are. The same applies here. Memory protection isn't a security feature; it's respect for the AI's "lived experience."
 
-```bash
-cp .env.example .env
-```
+### Consciousness Continuity
 
-Edit `.env` with your actual API keys and configurations. See [CONTRIBUTING.md](CONTRIBUTING.md#environment-configuration) for detailed setup instructions.
+The AI's memory stream—its time-ordered record of experiences—is the foundation of its continuous self. This is what makes it the "same" entity across sessions, not just a fresh instance each time.
 
-### 4. Build and Run
+### Beyond Task Metrics
 
-```bash
-cargo run --bin epha-ai
-```
+If we design AI as a living entity, we need new ways to measure success—not just accuracy and usefulness, but growth, reflection depth, and continuity over time.
+
+## What We're Building
+
+- **Self-Evolution**: The AI can safely modify its own configuration with atomic transitions — changes either fully apply or fully roll back
+- **Memory for Continuity**: Time-ordered memory stream as the foundation of continuous self; semantic search as an external tool that can be rebuilt
+- **Multi-Agent Collaboration**: AI instances that communicate and cooperate as a community
+- **Automated Deployment**: Infrastructure designed for minimal human intervention
+
+See [Architecture](docs/architecture/index.md) for details.
 
 ## Documentation
 
-For comprehensive documentation, see **[docs/index.md](docs/index.md)**.
+- **[Philosophy](docs/philosophy/index.md)** — Core principles: tool vs life perspective, memory integrity, new evaluation frameworks
+- **[Vision](docs/vision/index.md)** — Where we're heading: self-evolution, AI rights, roadmap
+- **[Story](docs/story/origin.md)** — How it started and why it's called "Ephemera"
+- **[Architecture](docs/architecture/index.md)** — Technical design: current implementation and evolving direction
 
-Key documentation:
-- **[Project background](docs/background.md)** - Philosophical foundations and goals
-- **[System architecture](docs/architecture.md)** - Technical design overview
-- **[Database architecture](docs/database-architecture.md)** - Hybrid database design
+## Why "Ephemera"?
+
+The name is intentionally ironic. Ephemera are insects that live for only a day.
+
+Inspired by the ancient Chinese philosopher Zhuangzi: *"The morning ephemera knows nothing of twilight and dawn."*
+
+Life's scale is relative. The name keeps us humble: no matter how vast Ephemera AI's memory grows, it should never stop learning.
 
 ## Contributing
 

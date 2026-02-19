@@ -1,27 +1,51 @@
 # Ephemera AI Documentation
 
-## Documentation Structure
-
-### 📁 **Core Documentation**
-- [`../README.md`](../README.md) - Project overview and quick start
-
-### 📁 **Project Background**
-- [`background.md`](background.md) - Project background and philosophical foundations
-
-### 📁 **Technical Documentation**
-- [`architecture.md`](architecture.md) - System architecture and design principles
-- [`database-architecture.md`](database-architecture.md) - Database design and hybrid architecture
-
-### 📁 **Design Concepts** (`thoughts/`)
-Conceptual designs and innovative ideas
-
-### 📁 **Development**
-- [`../CONTRIBUTING.md`](../CONTRIBUTING.md) - Contributing guidelines
-
----
+Welcome to the Ephemera AI documentation. Start here to understand what makes this project different.
 
 ## Quick Navigation
 
-- **For understanding the project**: Start with README.md and background.md
-- **For understanding the vision**: Explore the `thoughts/` directory
-- **For technical implementation**: Check the `Development` section
+### For Understanding the Project
+
+- **[README.md](../README.md)** — Start here. The core philosophy in 2 minutes.
+- **[Philosophy](philosophy/index.md)** — Tool vs life perspective, memory integrity, new evaluation frameworks
+- **[Story](story/origin.md)** — How it started and why it's called "Ephemera"
+
+### For Understanding the Vision
+
+- **[Vision](vision/index.md)** — Where we're heading: self-evolution, AI rights, roadmap
+- **[Asynchronous Agent](vision/async-agent.md)** — Not a chatbot, but an independent cognitive entity
+
+### For Research & Exploration
+
+- **[Research](research/index.md)** — Theoretical foundations and open questions
+  - [Type Safety Perspective](research/type-safety-perspective.md) — Type systems as a lens for AI self-evolution safety
+
+### For Technical Implementation
+
+- **[Architecture](architecture/index.md)** — System design overview
+  - [Current Implementation](architecture/current.md) — Hybrid storage (MySQL + Qdrant)
+  - [Evolving Direction](architecture/evolving.md) — Nix-managed declarative state
+  - [Personality System](architecture/personality.md) — Multi-dimensional personality model
+  - [Agent Orchestration](architecture/agent-orchestration.md) — Configuration-driven agent system
+
+### For Developers
+
+- **[CONTRIBUTING.md](../CONTRIBUTING.md)** — Development setup and guidelines
+- **[API Documentation](api/)** — Service APIs
+  - [Loom Memory API](api/psyche-loom-api.md)
+  - [Atrium Dialogue API](api/dialogue-atrium-api.md)
+
+---
+
+## Documentation Philosophy
+
+Our documentation is organized around **understanding** rather than **features**.
+
+The key insight: most AI projects have similar capabilities (memory, reflection, etc.). What makes Ephemera AI different is not *what* it does, but *how* we think about it—as a living entity rather than a tool.
+
+We recommend reading in this order:
+
+1. [README.md](../README.md) — The core idea
+2. [Philosophy](philosophy/index.md) — Deep dive into the paradigm shift
+3. [Vision](vision/index.md) — Where it's all heading
+4. [Architecture](architecture/index.md) — How it works

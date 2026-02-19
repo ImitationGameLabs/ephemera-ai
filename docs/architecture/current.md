@@ -1,15 +1,18 @@
-# Architecture
+# Current Implementation
+
+> **Note**: This documents the current hybrid storage system. See [Evolving Architecture](evolving.md) for where we're heading.
 
 ## Long-Term Memory
- - **Hybrid Search**: Enables associative retrieval; typically implemented using a vector database.
- - **Time-Based Queries**: Allows querying memories based on their timestamps.
- - **Objective Metadata**: For example, the source of the memory, access frequency, timestamp, etc. Time-based queries reflect a form of time perception capability.
- - **Subjective Metadata**: The AI can attach subjective metadata to memory fragments, such as the importance of the memory or its sentiment. When reviewing memories, especially if a topic is linked to thousands of records, the system can sort and filter using these subjective tags.
- - **Complex Views**: For instance, if memories are stored sequentially by time, we might generate a graph view when performing associative recall to better connect related memories. In practice, this could mean creating a specialized index in the database.
 
-The system uses a hybrid database architecture with MySQL for structured metadata storage and Qdrant for vector-based semantic search. This combines relational database integrity with specialized vector search capabilities.
+Core capabilities:
 
-For detailed database implementation, see [database-architecture.md](database-architecture.md).
+- **Hybrid Search**: Enables associative retrieval of related memories
+- **Time-Based Queries**: Query memories by timestamp, enabling temporal reasoning
+- **Objective Metadata**: Source, access frequency, timestamps—enables time perception
+- **Subjective Metadata**: AI-attached importance, sentiment—enables prioritized recall
+- **Complex Views**: Graph views for associative recall, connecting related memories
+
+**Current implementation**: MySQL for structured metadata and time-based queries; Qdrant for vector-based semantic search.
 
 Memory management will be encapsulated behind an interface, allowing the underlying implementation to be swapped out as the project evolves.
 
