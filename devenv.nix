@@ -9,6 +9,7 @@
   # https://devenv.sh/packages/
   packages = with pkgs; [
     openssl
+    tmux
   ];
 
   languages.rust = {
