@@ -29,4 +29,6 @@ integration-tests = ["dep:reqwest"]
 
 [dev-dependencies]
 tokio-test = "0.4"
+testcontainers = "0.27"
+testcontainers-modules = { version = "0.15", features = ["mysql"] }
 
