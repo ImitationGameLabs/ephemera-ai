@@ -2,44 +2,19 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 
+/// MemoryFragment represents a minimal, immutable event in the memory stream.
+/// Each fragment is a simple record of something that happened, stored in chronological order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryFragment {
+    /// Unique identifier for this memory fragment
     pub id: i64,
+    /// The content/text of the memory
     pub content: String,
-
-    pub subjective_metadata: SubjectiveMetadata,
-    pub objective_metadata: ObjectiveMetadata,
-
-    pub associations: Vec<i64>,
-}
-
-/// ObjectiveMetadata representing the system's definitive record of a memory fragment.
-/// Contains objective facts about the memory that are autonomously maintained by the system.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectiveMetadata {
-    /// Timestamp when the memory was created (microsecond precision).
+    /// When this memory was created
     #[serde(with = "time::serde::iso8601")]
-    pub created_at: time::OffsetDateTime,
-    /// Timestamp when the memory was last updated (microsecond precision).
-    #[serde(with = "time::serde::iso8601")]
-    pub updated_at: time::OffsetDateTime,
-    /// Source of the memory, indicating its origin (user input, system thought, etc.).
+    pub timestamp: time::OffsetDateTime,
+    /// Source of the memory, indicating its origin
     pub source: MemorySource,
-}
-
-/// SubjectiveMetadata representing the AI system's subjective perception of a memory fragment
-/// Contains the AI's subjective evaluation of memory importance, confidence, etc.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct SubjectiveMetadata {
-    /// Importance assessment of the memory, range 0-255, higher values indicate greater importance.
-    pub importance: u8,
-    /// Confidence assessment of the memory, range 0-255, higher values indicate stronger AI confidence.
-    pub confidence: u8,
-    /// Tags associated with the memory for categorization and retrieval.
-    pub tags: Vec<String>,
-    /// Free-form notes.
-    pub notes: String, // TODO: Implement emotional weights for sentiment tracking
-                       // pub emotional_weight: EmotionalWeights,
 }
 
 /// Represents the origin of a memory fragment with channel-based design.
@@ -65,7 +40,9 @@ impl Default for MemorySource {
 
 impl fmt::Display for MemorySource {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let type_str = self.metadata.get("type")
+        let type_str = self
+            .metadata
+            .get("type")
             .map(|t| format!(":{}", t))
             .unwrap_or_default();
         write!(f, "[{}{}] {}", self.channel, type_str, self.identifier)

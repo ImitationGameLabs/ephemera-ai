@@ -82,44 +82,37 @@ mod tests {
 
     #[test]
     fn test_convenience_constructors() {
-        let thought = from_reasoning("I need to analyze this".to_string(), "reasoning")
-            .importance(180)
-            .build();
+        let thought = from_reasoning("I need to analyze this".to_string(), "reasoning").build();
         assert_eq!(thought.content, "I need to analyze this");
-        assert_eq!(thought.objective_metadata.source.channel, "thought");
-        assert_eq!(thought.objective_metadata.source.identifier, "self_thought");
-        assert_eq!(thought.objective_metadata.source.metadata.get("type"), Some(&"reasoning".to_string()));
-        assert_eq!(thought.subjective_metadata.importance, 180);
+        assert_eq!(thought.source.channel, "thought");
+        assert_eq!(thought.source.identifier, "self_thought");
+        assert_eq!(
+            thought.source.metadata.get("type"),
+            Some(&"reasoning".to_string())
+        );
 
-        let dialogue = from_dialogue_input("Hello world".to_string(), "alice")
-            .confidence(200)
-            .add_tag("greeting".to_string())
-            .build();
+        let dialogue = from_dialogue_input("Hello world".to_string(), "alice").build();
         assert_eq!(dialogue.content, "Hello world");
-        assert_eq!(dialogue.objective_metadata.source.channel, "dialogue");
-        assert_eq!(dialogue.objective_metadata.source.identifier, "alice");
-        assert_eq!(dialogue.objective_metadata.source.metadata.get("type"), Some(&"input".to_string()));
-        assert_eq!(dialogue.subjective_metadata.confidence, 200);
-        assert!(dialogue.subjective_metadata.tags.contains(&"greeting".to_string()));
+        assert_eq!(dialogue.source.channel, "dialogue");
+        assert_eq!(dialogue.source.identifier, "alice");
+        assert_eq!(
+            dialogue.source.metadata.get("type"),
+            Some(&"input".to_string())
+        );
 
-        let info = from_information("Config loaded".to_string(), "config.json", "file")
-            .add_tag("system".to_string())
-            .build();
+        let info = from_information("Config loaded".to_string(), "config.json", "file").build();
         assert_eq!(info.content, "Config loaded");
-        assert_eq!(info.objective_metadata.source.channel, "information");
-        assert_eq!(info.objective_metadata.source.identifier, "config.json");
-        assert_eq!(info.objective_metadata.source.metadata.get("type"), Some(&"file".to_string()));
-        assert!(info.subjective_metadata.tags.contains(&"system".to_string()));
+        assert_eq!(info.source.channel, "information");
+        assert_eq!(info.source.identifier, "config.json");
+        assert_eq!(info.source.metadata.get("type"), Some(&"file".to_string()));
 
-        let action = from_action("Task completed".to_string(), "execution")
-            .importance(160)
-            .confidence(190)
-            .build();
+        let action = from_action("Task completed".to_string(), "execution").build();
         assert_eq!(action.content, "Task completed");
-        assert_eq!(action.objective_metadata.source.channel, "action");
-        assert_eq!(action.objective_metadata.source.identifier, "self_action");
-        assert_eq!(action.objective_metadata.source.metadata.get("type"), Some(&"execution".to_string()));
-        assert_eq!(action.subjective_metadata.importance, 160);
-        assert_eq!(action.subjective_metadata.confidence, 190);
+        assert_eq!(action.source.channel, "action");
+        assert_eq!(action.source.identifier, "self_action");
+        assert_eq!(
+            action.source.metadata.get("type"),
+            Some(&"execution".to_string())
+        );
     }
 }

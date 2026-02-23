@@ -3,14 +3,13 @@ use axum::{
     http::StatusCode,
     response::Json,
 };
-use serde_json::Value;
 use tracing::{error, info, instrument};
 
-use crate::memory::{
-    models::{ApiResponse, CreateMemoryRequest, MemoryResponse, SearchMemoryRequest},
+use crate::memory::models::{
+    ApiResponse, CreateMemoryRequest, MemoryResponse, RecentMemoryRequest, TimelineMemoryRequest,
 };
-use crate::services::memory::manager::Manager;
 use crate::services::memory::AppState;
+use crate::services::memory::manager::Manager;
 
 /// HTTP handler for memory operations
 pub struct MemoryHandler;
@@ -32,8 +31,7 @@ impl MemoryHandler {
         let now = time::OffsetDateTime::now_utc();
         let mut fragments = request.fragments;
         for fragment in &mut fragments {
-            fragment.objective_metadata.created_at = now;
-            fragment.objective_metadata.updated_at = now;
+            fragment.timestamp = now;
         }
 
         match state.memory_manager.append(&mut fragments).await {
@@ -50,29 +48,6 @@ impl MemoryHandler {
             }
             Err(e) => {
                 error!("Failed to create memory fragments: {}", e);
-                Err(StatusCode::INTERNAL_SERVER_ERROR)
-            }
-        }
-    }
-
-    /// Search memory fragments
-    #[instrument(skip(state))]
-    pub async fn search_memory(
-        State(state): State<AppState>,
-        Query(request): Query<SearchMemoryRequest>,
-    ) -> Result<Json<ApiResponse<MemoryResponse>>, StatusCode> {
-        info!("Searching memory fragments with keywords: {}", request.keywords);
-
-        let query = request.into();
-
-        match state.memory_manager.recall(&query).await {
-            Ok(result) => {
-                info!("Found {} memory fragments", result.memories.len());
-                let response = MemoryResponse::from(result);
-                Ok(Json(ApiResponse::success(response)))
-            }
-            Err(e) => {
-                error!("Failed to search memory fragments: {}", e);
                 Err(StatusCode::INTERNAL_SERVER_ERROR)
             }
         }
@@ -104,17 +79,82 @@ impl MemoryHandler {
     pub async fn delete_memory(
         State(state): State<AppState>,
         Path(id): Path<i64>,
-    ) -> Result<Json<ApiResponse<Value>>, StatusCode> {
+    ) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
         info!("Deleting memory fragment with ID: {}", id);
 
         match state.memory_manager.delete(id).await {
             Ok(()) => {
                 info!("Successfully deleted memory fragment with ID: {}", id);
-                Ok(Json(ApiResponse::success(serde_json::json!({"deleted": true}))))
+                Ok(Json(ApiResponse::success(
+                    serde_json::json!({"deleted": true}),
+                )))
             }
             Err(e) => {
                 error!("Failed to delete memory fragment with ID {}: {}", id, e);
                 Err(StatusCode::NOT_FOUND)
+            }
+        }
+    }
+
+    /// Get recent memory fragments
+    #[instrument(skip(state))]
+    pub async fn get_recent(
+        State(state): State<AppState>,
+        Query(request): Query<RecentMemoryRequest>,
+    ) -> Result<Json<ApiResponse<MemoryResponse>>, StatusCode> {
+        info!("Getting {} most recent memory fragments", request.limit);
+
+        match state.memory_manager.get_recent(request.limit).await {
+            Ok(fragments) => {
+                info!("Successfully retrieved {} recent memory fragments", fragments.len());
+                let response = MemoryResponse::multiple(fragments);
+                Ok(Json(ApiResponse::success(response)))
+            }
+            Err(e) => {
+                error!("Failed to get recent memory fragments: {}", e);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
+    }
+
+    /// Get memory fragments within a time range (timeline view)
+    #[instrument(skip(state))]
+    pub async fn get_timeline(
+        State(state): State<AppState>,
+        Query(request): Query<TimelineMemoryRequest>,
+    ) -> Result<Json<ApiResponse<MemoryResponse>>, StatusCode> {
+        info!(
+            "Getting memory fragments from {} to {}",
+            request.from, request.to
+        );
+
+        // Parse ISO 8601 time strings
+        let time_range = request.parse().map_err(|e| {
+            error!("Failed to parse time range: {}", e);
+            StatusCode::BAD_REQUEST
+        })?;
+
+        match state
+            .memory_manager
+            .get_range(
+                time_range.start,
+                time_range.end,
+                request.limit,
+                request.offset,
+            )
+            .await
+        {
+            Ok(fragments) => {
+                info!(
+                    "Successfully retrieved {} memory fragments in time range",
+                    fragments.len()
+                );
+                let response = MemoryResponse::multiple(fragments);
+                Ok(Json(ApiResponse::success(response)))
+            }
+            Err(e) => {
+                error!("Failed to get memory fragments in time range: {}", e);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
             }
         }
     }

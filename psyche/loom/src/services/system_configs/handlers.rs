@@ -6,9 +6,11 @@ use axum::{
 use serde::Deserialize;
 use tracing::{error, info, instrument};
 
-use crate::system_configs::models::{CreateSystemConfigRequest, SystemConfigQuery, SystemConfigResponse};
-use crate::services::system_configs::manager::SystemConfigError;
 use crate::services::system_configs::AppState;
+use crate::services::system_configs::manager::SystemConfigError;
+use crate::system_configs::models::{
+    CreateSystemConfigRequest, SystemConfigQuery, SystemConfigResponse,
+};
 
 /// HTTP handler for system configs operations
 pub struct SystemConfigHandler;
@@ -35,11 +37,17 @@ impl SystemConfigHandler {
 
         match state.system_config_manager.create(request).await {
             Ok(record) => {
-                info!("Successfully created system config record with id: {}", record.id);
+                info!(
+                    "Successfully created system config record with id: {}",
+                    record.id
+                );
                 Ok(Json(SystemConfigResponse::single(record)))
             }
             Err(SystemConfigError::AlreadyExists(hash)) => {
-                info!("System config record already exists with content hash: {}", hash);
+                info!(
+                    "System config record already exists with content hash: {}",
+                    hash
+                );
                 Err(StatusCode::CONFLICT)
             }
             Err(e) => {
@@ -61,17 +69,31 @@ impl SystemConfigHandler {
         let query = SystemConfigQuery {
             memory_fragment_id: params.memory_fragment_id,
             content_hash: params.content_hash,
-            start_time: params.start_time
-                .and_then(|s| time::OffsetDateTime::parse(&s, &time::format_description::well_known::Iso8601::DEFAULT).ok()),
-            end_time: params.end_time
-                .and_then(|s| time::OffsetDateTime::parse(&s, &time::format_description::well_known::Iso8601::DEFAULT).ok()),
+            start_time: params.start_time.and_then(|s| {
+                time::OffsetDateTime::parse(
+                    &s,
+                    &time::format_description::well_known::Iso8601::DEFAULT,
+                )
+                .ok()
+            }),
+            end_time: params.end_time.and_then(|s| {
+                time::OffsetDateTime::parse(
+                    &s,
+                    &time::format_description::well_known::Iso8601::DEFAULT,
+                )
+                .ok()
+            }),
             limit: params.limit,
             offset: params.offset,
         };
 
         match state.system_config_manager.query(query).await {
             Ok((records, total)) => {
-                info!("Found {} system config records (total: {})", records.len(), total);
+                info!(
+                    "Found {} system config records (total: {})",
+                    records.len(),
+                    total
+                );
                 Ok(Json(SystemConfigResponse::multiple(records)))
             }
             Err(e) => {
@@ -91,7 +113,10 @@ impl SystemConfigHandler {
 
         match state.system_config_manager.get_by_id(id).await {
             Ok(record) => {
-                info!("Successfully retrieved system config record with id: {}", id);
+                info!(
+                    "Successfully retrieved system config record with id: {}",
+                    id
+                );
                 Ok(Json(SystemConfigResponse::single(record)))
             }
             Err(SystemConfigError::NotFound(_)) => {

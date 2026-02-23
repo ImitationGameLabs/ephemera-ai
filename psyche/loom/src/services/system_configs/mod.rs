@@ -2,8 +2,8 @@ pub mod entity;
 pub mod handlers;
 pub mod manager;
 
-use std::sync::Arc;
 use crate::services::system_configs::manager::SystemConfigManager;
+use std::sync::Arc;
 
 /// Application state for system configs service
 #[derive(Clone)]

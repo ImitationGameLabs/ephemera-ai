@@ -1,18 +1,16 @@
-use epha_agent::state_machine::{StateMachine, State, load_state_prompts_from_directory};
-use epha_agent::context::Context;
-use rig::{
-    agent::Agent,
-    providers::deepseek::Client,
-    client::CompletionClient,
-    providers::deepseek::CompletionModel,
-};
-use loom_client::LoomClient;
-use atrium_client::AuthenticatedClient;
-use std::sync::{Arc, Mutex};
 use crate::agent::{CommonPrompt, StateMachineExecutor};
 use crate::context::EphemeraContext;
 use crate::context::memory_constructors::from_action;
-use crate::tools::{GetMessages, MemoryRecall, MemorySelection, RecallCacheHelper, SendMessage, StateTransition};
+use crate::tools::{GetMessages, MemoryGet, MemoryRecent, MemoryTimeline, SendMessage, StateTransition};
+use atrium_client::AuthenticatedClient;
+use epha_agent::context::Context;
+use epha_agent::state_machine::{State, StateMachine, load_state_prompts_from_directory};
+use loom_client::LoomClient;
+use rig::{
+    agent::Agent, client::CompletionClient, providers::deepseek::Client,
+    providers::deepseek::CompletionModel,
+};
+use std::sync::{Arc, Mutex};
 
 pub struct EphemeraAI {
     context: Context<EphemeraContext>,
@@ -24,17 +22,18 @@ impl EphemeraAI {
         completion_client: Client,
         loom_client: Arc<LoomClient>,
         dialogue_client: Arc<AuthenticatedClient>,
-        model: &str
+        model: &str,
     ) -> Self {
         // Load common prompt
-        let common_prompt = CommonPrompt::from_file("prompts/common.md")
-            .expect("Failed to load common prompt");
+        let common_prompt =
+            CommonPrompt::from_file("prompts/common.md").expect("Failed to load common prompt");
 
         // Stage 1: Load state prompts and create states without agents
         let state_prompts = load_state_prompts_from_directory("prompts/states")
             .expect("Failed to load state prompts from directory");
 
-        let states: Vec<State> = state_prompts.into_iter()
+        let states: Vec<State> = state_prompts
+            .into_iter()
             .map(|prompt| State::new(prompt))
             .collect();
 
@@ -43,15 +42,20 @@ impl EphemeraAI {
             .map(|sm| Arc::new(Mutex::new(sm)))
             .expect("Failed to create StateMachine");
 
-        // Stage 2.5: Create shared memory cache
-        let memory_cache = Arc::new(Mutex::new(RecallCacheHelper::new()));
-
         // Create shared context first
         let context_data = Arc::new(Mutex::new(EphemeraContext::new(loom_client.clone())));
 
         // Stage 3: Create agents and assign them to states
-        init_agents(&completion_client, model, loom_client.clone(), dialogue_client.clone(), &state_machine, &common_prompt, &memory_cache, &context_data)
-            .expect("Failed to initialize agents");
+        init_agents(
+            &completion_client,
+            model,
+            loom_client.clone(),
+            dialogue_client.clone(),
+            &state_machine,
+            &common_prompt,
+            &context_data,
+        )
+        .expect("Failed to initialize agents");
 
         let executor = StateMachineExecutor::new(state_machine.clone());
 
@@ -80,22 +84,10 @@ impl EphemeraAI {
 
         Ok(())
     }
-    
+
     async fn update_context(&mut self, result: String) -> anyhow::Result<()> {
         // Application-specific context update logic
-        let fragment = from_action(
-            format!("state_execution: {}", result),
-            "execution"
-        )
-            .from_json_metadata(Some(serde_json::json!({
-                "subjective": {
-                    "importance": 100,
-                    "confidence": 255,
-                    "tags": ["activity", "state_execution"]
-                }
-            })))
-            .with_api_defaults()
-            .build();
+        let fragment = from_action(format!("state_execution: {}", result), "execution").build();
 
         self.context.data().lock().unwrap().add_activity(fragment);
         Ok(())
@@ -110,7 +102,6 @@ fn init_agents(
     dialogue_client: Arc<AuthenticatedClient>,
     state_machine: &Arc<Mutex<StateMachine>>,
     common_prompt: &CommonPrompt,
-    memory_cache: &Arc<Mutex<RecallCacheHelper>>,
     context_data: &Arc<Mutex<EphemeraContext>>,
 ) -> anyhow::Result<()> {
     let state_names: Vec<String> = state_machine.lock().unwrap().get_state_names();
@@ -119,9 +110,10 @@ fn init_agents(
     for state_name in state_names {
         // Get state reference
         let mut sm = state_machine.lock().unwrap();
-        let state = sm.get_state(&state_name)
+        let state = sm
+            .get_state(&state_name)
             .ok_or_else(|| anyhow::anyhow!("State '{}' not found", state_name))?;
-    
+
         let agent = create_agent_for_state(
             completion_client,
             model,
@@ -130,13 +122,12 @@ fn init_agents(
             state_machine,
             &state,
             common_prompt,
-            memory_cache,
-            context_data
+            context_data,
         )?;
 
         if let Some(state) = sm.get_state_mut(&state_name) {
             state.with_agent(agent);
-        } 
+        }
     }
 
     Ok(())
@@ -151,7 +142,6 @@ fn create_agent_for_state(
     state_machine: &Arc<Mutex<StateMachine>>,
     state: &State,
     common_prompt: &CommonPrompt,
-    memory_cache: &Arc<Mutex<RecallCacheHelper>>,
     context_data: &Arc<Mutex<EphemeraContext>>,
 ) -> anyhow::Result<Agent<CompletionModel>> {
     // Get state prompt for combined prompt creation
@@ -160,20 +150,23 @@ fn create_agent_for_state(
     let combined_prompt = common_prompt.combine_with_state_prompt(&prompt.prompt);
 
     // Build agent with appropriate tools based on state name
-    let agent_builder = completion_client
-        .agent(model)
-        .preamble(&combined_prompt);
+    let agent_builder = completion_client.agent(model).preamble(&combined_prompt);
 
     let agent = match prompt.name.as_str() {
-        "perception" => agent_builder.tool(GetMessages::new(dialogue_client.clone())).build(),
-        "recall" => {
-            agent_builder
-                .tool(MemoryRecall::new(loom_client.clone(), memory_cache.clone()))
-                .tool(MemorySelection::new(memory_cache.clone(), context_data.clone()))
-                .build()
-        },
-        "reasoning" => agent_builder.tool(StateTransition::new(state_machine.clone())).build(),
-        "output" => agent_builder.tool(SendMessage::new(dialogue_client.clone())).build(),
+        "perception" => agent_builder
+            .tool(GetMessages::new(dialogue_client.clone()))
+            .build(),
+        "recall" => agent_builder
+            .tool(MemoryGet::new(loom_client.clone(), context_data.clone()))
+            .tool(MemoryRecent::new(loom_client.clone(), context_data.clone()))
+            .tool(MemoryTimeline::new(loom_client.clone(), context_data.clone()))
+            .build(),
+        "reasoning" => agent_builder
+            .tool(StateTransition::new(state_machine.clone()))
+            .build(),
+        "output" => agent_builder
+            .tool(SendMessage::new(dialogue_client.clone()))
+            .build(),
         _ => agent_builder.build(),
     };
 

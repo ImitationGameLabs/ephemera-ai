@@ -1,4 +1,4 @@
-use reqwest::{Client, Response, Error as ReqwestError};
+use reqwest::{Client, Error as ReqwestError, Response};
 use serde::de::DeserializeOwned;
 use std::fmt;
 use tracing::{debug, instrument};
@@ -103,8 +103,12 @@ impl LoomClient {
         &self,
         request: CreateMemoryRequest,
     ) -> Result<MemoryResponse, LoomClientError> {
-        let url = format!("{}/api/v1/memory", self.base_url);
-        debug!("Creating {} memory fragments at: {}", request.fragments.len(), url);
+        let url = format!("{}/api/v1/memories", self.base_url);
+        debug!(
+            "Creating {} memory fragments at: {}",
+            request.fragments.len(),
+            url
+        );
 
         let response = self.client.post(&url).json(&request).send().await?;
         let api_response: ApiResponse<MemoryResponse> = Self::handle_response(response).await?;
@@ -124,27 +128,10 @@ impl LoomClient {
         self.create_memory(request).await
     }
 
-    /// Search memory fragments
-    #[instrument(skip(self))]
-    pub async fn search_memory(
-        &self,
-        request: SearchMemoryRequest,
-    ) -> Result<SearchMemoryResponse, LoomClientError> {
-        let url = format!("{}/api/v1/memory", self.base_url);
-        debug!("Searching memory fragments at: {}", url);
-
-        let response = self.client.get(&url).query(&request).send().await?;
-        let api_response: ApiResponse<SearchMemoryResponse> = Self::handle_response(response).await?;
-
-        api_response
-            .data
-            .ok_or_else(|| LoomClientError::ApiError("No data returned from API".to_string()))
-    }
-
     /// Get a specific memory fragment by ID
     #[instrument(skip(self))]
     pub async fn get_memory(&self, id: i64) -> Result<MemoryResponse, LoomClientError> {
-        let url = format!("{}/api/v1/memory/{}", self.base_url, id);
+        let url = format!("{}/api/v1/memories/{}", self.base_url, id);
         debug!("Getting memory fragment from: {}", url);
 
         let response = self.client.get(&url).send().await?;
@@ -158,13 +145,73 @@ impl LoomClient {
     /// Delete a memory fragment by ID
     #[instrument(skip(self))]
     pub async fn delete_memory(&self, id: i64) -> Result<(), LoomClientError> {
-        let url = format!("{}/api/v1/memory/{}", self.base_url, id);
+        let url = format!("{}/api/v1/memories/{}", self.base_url, id);
         debug!("Deleting memory fragment at: {}", url);
 
         let response = self.client.delete(&url).send().await?;
         let _: ApiResponse<serde_json::Value> = Self::handle_response(response).await?;
 
         Ok(())
+    }
+
+    /// Get recent memory fragments
+    #[instrument(skip(self))]
+    pub async fn get_recent_memory(
+        &self,
+        limit: usize,
+    ) -> Result<MemoryResponse, LoomClientError> {
+        let url = format!("{}/api/v1/memories/views/recent", self.base_url);
+        debug!("Getting {} recent memory fragments from: {}", limit, url);
+
+        let response = self
+            .client
+            .get(&url)
+            .query(&[("limit", limit)])
+            .send()
+            .await?;
+        let api_response: ApiResponse<MemoryResponse> = Self::handle_response(response).await?;
+
+        api_response
+            .data
+            .ok_or_else(|| LoomClientError::ApiError("No data returned from API".to_string()))
+    }
+
+    /// Get memory fragments within a time range (timeline view)
+    ///
+    /// Time format: ISO 8601 (e.g., "2024-01-15T10:30:00Z" or "2024-01-15T10:30:00+08:00")
+    #[instrument(skip(self))]
+    pub async fn get_timeline_memory(
+        &self,
+        from: &str,
+        to: &str,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> Result<MemoryResponse, LoomClientError> {
+        let url = format!("{}/api/v1/memories/views/timeline", self.base_url);
+        debug!(
+            "Getting memory fragments in range {} to {} from: {}",
+            from, to, url
+        );
+
+        let mut query: Vec<(&str, String)> = vec![
+            ("from", from.to_string()),
+            ("to", to.to_string()),
+        ];
+
+        if let Some(limit) = limit {
+            query.push(("limit", limit.to_string()));
+        }
+
+        if let Some(offset) = offset {
+            query.push(("offset", offset.to_string()));
+        }
+
+        let response = self.client.get(&url).query(&query).send().await?;
+        let api_response: ApiResponse<MemoryResponse> = Self::handle_response(response).await?;
+
+        api_response
+            .data
+            .ok_or_else(|| LoomClientError::ApiError("No data returned from API".to_string()))
     }
 
     /// Get the base URL this client is configured to use

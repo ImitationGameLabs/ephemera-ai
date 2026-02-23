@@ -1,6 +1,6 @@
-use super::types::{MemoryFragment, MemorySource, SubjectiveMetadata, ObjectiveMetadata};
-use time::OffsetDateTime;
+use super::types::{MemoryFragment, MemorySource, ObjectiveMetadata, SubjectiveMetadata};
 use serde_json::Value;
+use time::OffsetDateTime;
 
 /// Builder for creating MemoryFragment instances with flexible configuration
 pub struct MemoryFragmentBuilder {
@@ -90,22 +90,19 @@ impl MemoryFragmentBuilder {
     pub fn from_json_metadata(mut self, metadata: Option<Value>) -> Self {
         if let Some(metadata) = metadata {
             // Extract tags from metadata
-            if let Some(tags) = metadata.get("tags")
-                .and_then(|v| v.as_array())
-                .map(|arr| arr.iter()
+            if let Some(tags) = metadata.get("tags").and_then(|v| v.as_array()).map(|arr| {
+                arr.iter()
                     .filter_map(|s| s.as_str())
                     .map(String::from)
-                    .collect::<Vec<_>>())
-            {
+                    .collect::<Vec<_>>()
+            }) {
                 for tag in tags {
                     self = self.add_tag(tag);
                 }
             }
 
             // Extract notes from metadata
-            if let Some(notes) = metadata.get("notes")
-                .and_then(|v| v.as_str())
-            {
+            if let Some(notes) = metadata.get("notes").and_then(|v| v.as_str()) {
                 self = self.notes(notes.to_string());
             }
         }
@@ -147,7 +144,11 @@ impl MemoryFragmentBuilder {
 
     /// Set specific timestamps for testing scenarios
     /// Useful for deterministic test data
-    pub fn with_test_timestamps(mut self, created_at: OffsetDateTime, updated_at: OffsetDateTime) -> Self {
+    pub fn with_test_timestamps(
+        mut self,
+        created_at: OffsetDateTime,
+        updated_at: OffsetDateTime,
+    ) -> Self {
         self.fragment.objective_metadata.created_at = created_at;
         self.fragment.objective_metadata.updated_at = updated_at;
         self
@@ -170,7 +171,9 @@ impl Default for MemoryFragmentBuilder {
         let source = MemorySource {
             channel: "information".to_string(),
             identifier: "unknown".to_string(),
-            metadata: [("type".to_string(), "unknown".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "unknown".to_string())]
+                .into_iter()
+                .collect(),
         };
 
         Self::new(String::new(), source)
@@ -188,13 +191,12 @@ mod tests {
         let source = MemorySource {
             channel: "information".to_string(),
             identifier: "test".to_string(),
-            metadata: [("type".to_string(), "unit".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "unit".to_string())]
+                .into_iter()
+                .collect(),
         };
 
-        let fragment = MemoryFragmentBuilder::new(
-            "test content".to_string(),
-            source
-        )
+        let fragment = MemoryFragmentBuilder::new("test content".to_string(), source)
             .importance(150)
             .confidence(200)
             .add_tag("test".to_string())
@@ -203,7 +205,12 @@ mod tests {
         assert_eq!(fragment.content, "test content");
         assert_eq!(fragment.subjective_metadata.importance, 150);
         assert_eq!(fragment.subjective_metadata.confidence, 200);
-        assert!(fragment.subjective_metadata.tags.contains(&"test".to_string()));
+        assert!(
+            fragment
+                .subjective_metadata
+                .tags
+                .contains(&"test".to_string())
+        );
         assert_eq!(fragment.objective_metadata.source.channel, "information");
     }
 
@@ -212,16 +219,23 @@ mod tests {
         let dialogue_source = MemorySource {
             channel: "dialogue".to_string(),
             identifier: "alice".to_string(),
-            metadata: [("type".to_string(), "input".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "input".to_string())]
+                .into_iter()
+                .collect(),
         };
         assert_eq!(dialogue_source.channel, "dialogue");
         assert_eq!(dialogue_source.identifier, "alice");
-        assert_eq!(dialogue_source.metadata.get("type"), Some(&"input".to_string()));
+        assert_eq!(
+            dialogue_source.metadata.get("type"),
+            Some(&"input".to_string())
+        );
 
         let info_source = MemorySource {
             channel: "information".to_string(),
             identifier: "config.json".to_string(),
-            metadata: [("type".to_string(), "file".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "file".to_string())]
+                .into_iter()
+                .collect(),
         };
         assert_eq!(info_source.channel, "information");
         assert_eq!(info_source.identifier, "config.json");
@@ -233,16 +247,23 @@ mod tests {
         let source = MemorySource {
             channel: "dialogue".to_string(),
             identifier: "bob".to_string(),
-            metadata: [("type".to_string(), "input".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "input".to_string())]
+                .into_iter()
+                .collect(),
         };
         assert_eq!(format!("{}", source), "[dialogue:input] bob");
 
         let custom_source = MemorySource {
             channel: "information".to_string(),
             identifier: "example.com".to_string(),
-            metadata: [("type".to_string(), "web".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "web".to_string())]
+                .into_iter()
+                .collect(),
         };
-        assert_eq!(format!("{}", custom_source), "[information:web] example.com");
+        assert_eq!(
+            format!("{}", custom_source),
+            "[information:web] example.com"
+        );
     }
 
     #[test]
@@ -255,22 +276,25 @@ mod tests {
         let source = MemorySource {
             channel: "information".to_string(),
             identifier: "unknown".to_string(),
-            metadata: [("type".to_string(), "unknown".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "unknown".to_string())]
+                .into_iter()
+                .collect(),
         };
 
-        let fragment = MemoryFragmentBuilder::new(
-            "test with convenience methods".to_string(),
-            source
-        )
-            .from_json_metadata(Some(metadata))
-            .with_api_defaults()
-            .with_api_source(Some("test_source".to_string()))
-            .build();
+        let fragment =
+            MemoryFragmentBuilder::new("test with convenience methods".to_string(), source)
+                .from_json_metadata(Some(metadata))
+                .with_api_defaults()
+                .with_api_source(Some("test_source".to_string()))
+                .build();
 
         assert_eq!(fragment.content, "test with convenience methods");
         assert_eq!(fragment.subjective_metadata.importance, 100);
         assert_eq!(fragment.subjective_metadata.confidence, 255);
-        assert_eq!(fragment.subjective_metadata.tags, vec!["test", "convenience"]);
+        assert_eq!(
+            fragment.subjective_metadata.tags,
+            vec!["test", "convenience"]
+        );
         assert_eq!(fragment.subjective_metadata.notes, "test notes");
         assert_eq!(fragment.objective_metadata.source.channel, "information");
         assert_eq!(fragment.objective_metadata.source.identifier, "test_source");
@@ -281,19 +305,37 @@ mod tests {
         let source = MemorySource {
             channel: "information".to_string(),
             identifier: "unknown".to_string(),
-            metadata: [("type".to_string(), "unknown".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "unknown".to_string())]
+                .into_iter()
+                .collect(),
         };
 
-        let fragment = MemoryFragmentBuilder::new(
-            "test multiple tags".to_string(),
-            source
-        )
-            .add_tags(vec!["tag1".to_string(), "tag2".to_string(), "tag3".to_string()])
+        let fragment = MemoryFragmentBuilder::new("test multiple tags".to_string(), source)
+            .add_tags(vec![
+                "tag1".to_string(),
+                "tag2".to_string(),
+                "tag3".to_string(),
+            ])
             .build();
 
         assert_eq!(fragment.subjective_metadata.tags.len(), 3);
-        assert!(fragment.subjective_metadata.tags.contains(&"tag1".to_string()));
-        assert!(fragment.subjective_metadata.tags.contains(&"tag2".to_string()));
-        assert!(fragment.subjective_metadata.tags.contains(&"tag3".to_string()));
+        assert!(
+            fragment
+                .subjective_metadata
+                .tags
+                .contains(&"tag1".to_string())
+        );
+        assert!(
+            fragment
+                .subjective_metadata
+                .tags
+                .contains(&"tag2".to_string())
+        );
+        assert!(
+            fragment
+                .subjective_metadata
+                .tags
+                .contains(&"tag3".to_string())
+        );
     }
 }

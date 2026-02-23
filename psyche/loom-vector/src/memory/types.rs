@@ -65,7 +65,9 @@ impl Default for MemorySource {
 
 impl fmt::Display for MemorySource {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let type_str = self.metadata.get("type")
+        let type_str = self
+            .metadata
+            .get("type")
             .map(|t| format!(":{}", t))
             .unwrap_or_default();
         write!(f, "[{}{}] {}", self.channel, type_str, self.identifier)

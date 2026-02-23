@@ -8,13 +8,12 @@ use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::services::db_migration::Migrator;
-use crate::services::memory::{
-    manager::HybridMemoryManager,
-    manager::MysqlMemoryManager,
-};
+use crate::services::memory::{manager::HybridMemoryManager, manager::MysqlMemoryManager};
 
-use crate::services::memory::{handlers::MemoryHandler, AppState as MemoryAppState};
-use crate::services::system_configs::{handlers::SystemConfigHandler, AppState as SystemConfigsAppState, manager::SystemConfigManager};
+use crate::services::memory::{AppState as MemoryAppState, handlers::MemoryHandler};
+use crate::services::system_configs::{
+    AppState as SystemConfigsAppState, handlers::SystemConfigHandler, manager::SystemConfigManager,
+};
 
 /// Server configuration
 #[derive(Debug, Clone)]
@@ -72,7 +71,7 @@ impl LoomServer {
 
     /// Start the server
     pub async fn run(self) -> anyhow::Result<()> {
-        use axum::routing::{get, post, delete};
+        use axum::routing::{delete, get, post};
         use tower_http::{
             cors::{Any, CorsLayer},
             trace::TraceLayer,
@@ -88,22 +87,30 @@ impl LoomServer {
 
         let app = Router::new()
             .route("/health", get(crate::services::memory::health_check))
-            .nest("/api/v1/memory",
+            .nest(
+                "/api/v1/memories",
                 Router::new()
                     .route("/", post(MemoryHandler::create_memory))
-                    .route("/", get(MemoryHandler::search_memory))
+                    .route("/views/recent", get(MemoryHandler::get_recent))
+                    .route("/views/timeline", get(MemoryHandler::get_timeline))
                     .route("/{id}", get(MemoryHandler::get_memory))
                     .route("/{id}", delete(MemoryHandler::delete_memory))
-                    .with_state(memory_app_state)
+                    .with_state(memory_app_state),
             )
-            .nest("/api/v1/system-configs",
+            .nest(
+                "/api/v1/system-configs",
                 Router::new()
                     .route("/", post(SystemConfigHandler::create_system_config))
                     .route("/", get(SystemConfigHandler::query_system_configs))
                     .route("/{id}", get(SystemConfigHandler::get_system_config))
-                    .with_state(system_configs_app_state)
+                    .with_state(system_configs_app_state),
             )
-            .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
+            .layer(
+                CorsLayer::new()
+                    .allow_origin(Any)
+                    .allow_methods(Any)
+                    .allow_headers(Any),
+            )
             .layer(TraceLayer::new_for_http());
 
         let bind_address = self.config.bind_address();
@@ -126,8 +133,7 @@ impl LoomServer {
 }
 
 async fn init_db_connection() -> anyhow::Result<DatabaseConnection> {
-    let mysql_url = std::env::var("PSYCHE_LOOM_MYSQL_URL")
-        .expect("PSYCHE_LOOM_MYSQL_URL not set");
+    let mysql_url = std::env::var("PSYCHE_LOOM_MYSQL_URL").expect("PSYCHE_LOOM_MYSQL_URL not set");
     Database::connect(&mysql_url)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to connect to database: {}", e))
@@ -137,7 +143,9 @@ async fn init_memory_service(conn: DatabaseConnection) -> anyhow::Result<HybridM
     Ok(HybridMemoryManager::new(MysqlMemoryManager::new(conn)))
 }
 
-async fn init_system_configs_service(conn: DatabaseConnection) -> anyhow::Result<SystemConfigManager> {
+async fn init_system_configs_service(
+    conn: DatabaseConnection,
+) -> anyhow::Result<SystemConfigManager> {
     Ok(SystemConfigManager::new(conn))
 }
 

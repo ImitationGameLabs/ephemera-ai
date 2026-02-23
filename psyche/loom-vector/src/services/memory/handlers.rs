@@ -6,11 +6,11 @@ use axum::{
 use serde_json::Value;
 use tracing::{error, info, instrument};
 
-use crate::memory::{
-    models::{ApiResponse, CreateMemoryRequest, MemoryResponse, SearchMemoryRequest},
+use crate::memory::models::{
+    ApiResponse, CreateMemoryRequest, MemoryResponse, SearchMemoryRequest,
 };
-use crate::services::memory::manager::Manager;
 use crate::services::memory::AppState;
+use crate::services::memory::manager::Manager;
 
 /// HTTP handler for memory operations
 pub struct MemoryHandler;
@@ -61,7 +61,10 @@ impl MemoryHandler {
         State(state): State<AppState>,
         Query(request): Query<SearchMemoryRequest>,
     ) -> Result<Json<ApiResponse<MemoryResponse>>, StatusCode> {
-        info!("Searching memory fragments with keywords: {}", request.keywords);
+        info!(
+            "Searching memory fragments with keywords: {}",
+            request.keywords
+        );
 
         let query = request.into();
 
@@ -89,7 +92,9 @@ impl MemoryHandler {
         match state.vector_search_manager.delete(id).await {
             Ok(()) => {
                 info!("Successfully deleted memory fragment with ID: {}", id);
-                Ok(Json(ApiResponse::success(serde_json::json!({"deleted": true}))))
+                Ok(Json(ApiResponse::success(
+                    serde_json::json!({"deleted": true}),
+                )))
             }
             Err(e) => {
                 error!("Failed to delete memory fragment with ID {}: {}", id, e);

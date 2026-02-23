@@ -20,9 +20,19 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(SystemConfigs::Content).text().not_null())
-                    .col(ColumnDef::new(SystemConfigs::ContentHash).string().not_null().unique_key())
+                    .col(
+                        ColumnDef::new(SystemConfigs::ContentHash)
+                            .string()
+                            .not_null()
+                            .unique_key(),
+                    )
                     .col(ColumnDef::new(SystemConfigs::MemoryFragmentId).big_integer())
-                    .col(ColumnDef::new(SystemConfigs::CreatedAt).date_time().extra("(6)").not_null())
+                    .col(
+                        ColumnDef::new(SystemConfigs::CreatedAt)
+                            .date_time()
+                            .extra("(6)")
+                            .not_null(),
+                    )
                     .to_owned(),
             )
             .await?;

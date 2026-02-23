@@ -1,18 +1,16 @@
 use axum::Router;
 use dotenv::dotenv;
 use qdrant_client::config::QdrantConfig;
-use rig::providers::openai;
 use rig::client::embeddings::EmbeddingsClientDyn;
+use rig::providers::openai;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::services::memory::{
-    manager::{VectorSearchManager, QdrantMemoryManager},
-};
+use crate::services::memory::manager::{QdrantMemoryManager, VectorSearchManager};
 
-use crate::services::memory::{handlers::MemoryHandler, AppState as MemoryAppState};
+use crate::services::memory::{AppState as MemoryAppState, handlers::MemoryHandler};
 
 /// Server configuration
 #[derive(Debug, Clone)]
@@ -61,7 +59,7 @@ impl LoomVectorServer {
 
     /// Start the server
     pub async fn run(self) -> anyhow::Result<()> {
-        use axum::routing::{get, post, delete};
+        use axum::routing::{delete, get, post};
         use tower_http::{
             cors::{Any, CorsLayer},
             trace::TraceLayer,
@@ -78,14 +76,20 @@ impl LoomVectorServer {
             // .route("/api/v1/vector/index", post(...))
             // .route("/api/v1/vector/search", get(...))
             // .route("/api/v1/vector/{id}", delete(...))
-            .nest("/api/v1/memory",
+            .nest(
+                "/api/v1/memory",
                 Router::new()
                     .route("/", post(MemoryHandler::create_memory))
                     .route("/", get(MemoryHandler::search_memory))
                     .route("/{id}", delete(MemoryHandler::delete_memory))
-                    .with_state(app_state)
+                    .with_state(app_state),
             )
-            .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
+            .layer(
+                CorsLayer::new()
+                    .allow_origin(Any)
+                    .allow_methods(Any)
+                    .allow_headers(Any),
+            )
             .layer(TraceLayer::new_for_http());
 
         let bind_address = self.config.bind_address();
@@ -109,22 +113,20 @@ impl LoomVectorServer {
 
 async fn init_vector_search_service() -> anyhow::Result<VectorSearchManager> {
     // Setup Qdrant connection
-    let qdrant_url = std::env::var("EPHA_MEMORY_QDRANT_URL")
-        .expect("EPHA_MEMORY_QDRANT_URL not set");
+    let qdrant_url =
+        std::env::var("EPHA_MEMORY_QDRANT_URL").expect("EPHA_MEMORY_QDRANT_URL not set");
     let qdrant_config = QdrantConfig {
         uri: qdrant_url.clone(),
         ..Default::default()
     };
-    let qdrant_client = qdrant_client::Qdrant::new(qdrant_config)
-        .expect("Failed to create Qdrant client");
+    let qdrant_client =
+        qdrant_client::Qdrant::new(qdrant_config).expect("Failed to create Qdrant client");
 
     // Initialize embedding model
-    let embedding_model_name = std::env::var("EMBEDDING_MODEL")
-        .expect("EMBEDDING_MODEL not set");
-    let embedding_api_key = std::env::var("EMBEDDING_MODEL_API_KEY")
-        .expect("EMBEDDING_MODEL_API_KEY not set");
-    let embedding_url = std::env::var("EMBEDDING_MODEL_URL")
-        .expect("EMBEDDING_MODEL_URL not set");
+    let embedding_model_name = std::env::var("EMBEDDING_MODEL").expect("EMBEDDING_MODEL not set");
+    let embedding_api_key =
+        std::env::var("EMBEDDING_MODEL_API_KEY").expect("EMBEDDING_MODEL_API_KEY not set");
+    let embedding_url = std::env::var("EMBEDDING_MODEL_URL").expect("EMBEDDING_MODEL_URL not set");
 
     // Create OpenAI-compatible client for custom embedding service
     let embedding_client = openai::Client::builder(&embedding_api_key)

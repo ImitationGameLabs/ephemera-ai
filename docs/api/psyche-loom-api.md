@@ -4,21 +4,22 @@ A memory management API for storing, searching, and retrieving text-based memory
 
 ## Design Philosophy
 
-### Simple Memory Management
-- **Store and Retrieve**: Basic CRUD operations for memory fragments
+### View-Based Resource Design
+- **RESTful Resources**: Memories are first-class resources under `/api/v1/memories`
+- **Views**: Structured access patterns via `/views/*` endpoints
 - **Metadata Support**: Flexible JSON metadata for rich context
-- **Time-based Search**: Filter memories by creation time
-- **Vector Search**: Advanced semantic search capabilities
+- **Time-based Queries**: Timeline view for time range queries
 
 ## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Service health check |
-| `/api/v1/memory` | POST | Create new memory fragment |
-| `/api/v1/memory` | GET | Search memory fragments |
-| `/api/v1/memory/{id}` | GET | Retrieve specific memory |
-| `/api/v1/memory/{id}` | DELETE | Delete memory fragment |
+| `/api/v1/memories` | POST | Create new memory fragment(s) |
+| `/api/v1/memories/{id}` | GET | Retrieve specific memory |
+| `/api/v1/memories/{id}` | DELETE | Delete memory fragment |
+| `/api/v1/memories/views/recent` | GET | Get recent memories |
+| `/api/v1/memories/views/timeline` | GET | Get memories in time range |
 
 ## Authentication
 
@@ -33,36 +34,36 @@ Currently **unauthenticated** - all endpoints are publicly accessible. Authentic
 - **Timestamps**: Automatic creation and update tracking
 - **Unique IDs**: System-assigned identifiers
 
-### Search Capabilities
-- **Keyword Search**: Full-text search across memory content
-- **Time Range**: Filter by creation/update time
-- **Semantic Search**: Advanced similarity matching
-- **Metadata Filtering**: Search within JSON metadata fields
+### View Endpoints
+- **Recent View**: Get the most recent N memories
+- **Timeline View**: Query memories within a time range using ISO 8601 format
 
 ## Usage Examples
 
 ### Creating a Memory
 ```bash
-curl -X POST http://localhost:8080/api/v1/memory \
+curl -X POST http://localhost:8080/api/v1/memories \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "Meeting notes about project architecture",
-    "metadata": {
-      "type": "meeting",
-      "project": "loom",
-      "participants": ["alice", "bob"]
-    },
-    "source": "user_input"
+    "fragments": [{
+      "content": "Meeting notes about project architecture",
+      "source": {"channel": "meeting", "identifier": "user_input"}
+    }]
   }'
 ```
 
-### Searching Memories
+### Getting Recent Memories
 ```bash
-# Basic keyword search
-curl "http://localhost:8080/api/v1/memory?keywords=architecture"
+curl "http://localhost:8080/api/v1/memories/views/recent?limit=10"
+```
 
-# Search with time range
-curl "http://localhost:8080/api/v1/memory?keywords=meeting&start_time=1640995200&end_time=1641081600"
+### Timeline Query (Time Range)
+```bash
+# Using ISO 8601 time format
+curl "http://localhost:8080/api/v1/memories/views/timeline?from=2024-01-01T00:00:00Z&to=2024-12-31T23:59:59Z"
+
+# With pagination
+curl "http://localhost:8080/api/v1/memories/views/timeline?from=2024-01-01T00:00:00Z&to=2024-12-31T23:59:59Z&limit=50&offset=0"
 ```
 
 ## OpenAPI Specification

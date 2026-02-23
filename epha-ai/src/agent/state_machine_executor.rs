@@ -1,9 +1,6 @@
 use epha_agent::state_machine::StateMachine;
+use rig::{completion::Completion, message::AssistantContent};
 use std::sync::{Arc, Mutex};
-use rig::{
-    completion::Completion,
-    message::AssistantContent,
-};
 
 /// Executor for state machine that handles the execution logic
 pub struct StateMachineExecutor {
@@ -22,9 +19,15 @@ impl StateMachineExecutor {
             let sm = self.state_machine.lock().unwrap();
             let current_state = sm.current_state()?;
 
-            current_state.completion_agent.as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Current state '{}' has no completion agent configured",
-                                               current_state.prompt_data.name))?
+            current_state
+                .completion_agent
+                .as_ref()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Current state '{}' has no completion agent configured",
+                        current_state.prompt_data.name
+                    )
+                })?
                 .clone()
         };
 
@@ -33,15 +36,14 @@ impl StateMachineExecutor {
             let sm = self.state_machine.lock().unwrap();
             let current_state = sm.current_state()?;
 
-            format!("{}\n\nCurrent Context:\n{}",
-                   current_state.prompt_data.prompt,
-                   context)
+            format!(
+                "{}\n\nCurrent Context:\n{}",
+                current_state.prompt_data.prompt, context
+            )
         };
 
         // Execute the agent (rig will handle multi-turn and tool calls automatically)
-        let completion_result = agent
-            .completion(full_prompt, vec![])
-            .await?;
+        let completion_result = agent.completion(full_prompt, vec![]).await?;
 
         let result = completion_result.send().await?;
 

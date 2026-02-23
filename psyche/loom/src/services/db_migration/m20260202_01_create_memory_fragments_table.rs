@@ -19,16 +19,46 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(MemoryFragments::Content).text().not_null())
-                    .col(ColumnDef::new(MemoryFragments::CreatedAt).date_time().extra("(6)").not_null())
-                    .col(ColumnDef::new(MemoryFragments::UpdatedAt).date_time().extra("(6)").not_null())
+                    .col(
+                        ColumnDef::new(MemoryFragments::CreatedAt)
+                            .date_time()
+                            .extra("(6)")
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(MemoryFragments::UpdatedAt)
+                            .date_time()
+                            .extra("(6)")
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(MemoryFragments::Source).text().not_null())
-                    .col(ColumnDef::new(MemoryFragments::Importance).integer().not_null())
-                    .col(ColumnDef::new(MemoryFragments::Confidence).integer().not_null())
+                    .col(
+                        ColumnDef::new(MemoryFragments::Importance)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(MemoryFragments::Confidence)
+                            .integer()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(MemoryFragments::Tags).text().not_null())
                     .col(ColumnDef::new(MemoryFragments::Notes).text().not_null())
-                    .col(ColumnDef::new(MemoryFragments::Associations).text().not_null())
-                    .col(ColumnDef::new(MemoryFragments::ClaimedIdentity).text().not_null())
-                    .col(ColumnDef::new(MemoryFragments::AssessedIdentity).text().not_null())
+                    .col(
+                        ColumnDef::new(MemoryFragments::Associations)
+                            .text()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(MemoryFragments::ClaimedIdentity)
+                            .text()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(MemoryFragments::AssessedIdentity)
+                            .text()
+                            .not_null(),
+                    )
                     .to_owned(),
             )
             .await?;

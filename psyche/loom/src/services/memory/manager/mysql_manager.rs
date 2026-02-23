@@ -1,5 +1,9 @@
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, NotSet, TransactionTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, NotSet, QueryFilter,
+    QueryOrder, QuerySelect, Set, TransactionTrait,
+};
 use thiserror::Error;
+use time::OffsetDateTime;
 
 use crate::memory::types::MemoryFragment;
 use crate::services::memory::entity::MemoryEntity;
@@ -38,14 +42,8 @@ impl MysqlMemoryManager {
                 // Let database auto-generate ID
                 id: NotSet,
                 content: Set(model.content),
-                created_at: Set(model.created_at),
-                updated_at: Set(model.updated_at),
+                timestamp: Set(model.timestamp),
                 source: Set(model.source),
-                importance: Set(model.importance),
-                confidence: Set(model.confidence),
-                tags: Set(model.tags),
-                notes: Set(model.notes),
-                associations: Set(model.associations),
             };
 
             let inserted_model = active_model.insert(&txn).await?;
@@ -89,4 +87,40 @@ impl MysqlMemoryManager {
         Ok(())
     }
 
+    /// Get the most recent memories, ordered by created_at descending
+    pub async fn get_recent(&self, limit: usize) -> Result<Vec<MemoryFragment>, MysqlError> {
+        let models = MemoryEntity::find()
+            .order_by_desc(memory::Column::Timestamp)
+            .limit(limit as u64)
+            .all(&self.conn)
+            .await?;
+
+        Ok(models.into_iter().map(Into::into).collect())
+    }
+
+    /// Get memories within a time range, ordered by created_at descending
+    pub async fn get_range(
+        &self,
+        start: OffsetDateTime,
+        end: OffsetDateTime,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> Result<Vec<MemoryFragment>, MysqlError> {
+        let mut query = MemoryEntity::find()
+            .filter(memory::Column::Timestamp.gte(start))
+            .filter(memory::Column::Timestamp.lte(end))
+            .order_by_desc(memory::Column::Timestamp);
+
+        if let Some(limit) = limit {
+            query = query.limit(limit as u64);
+        }
+
+        if let Some(offset) = offset {
+            query = query.offset(offset as u64);
+        }
+
+        let models = query.all(&self.conn).await?;
+
+        Ok(models.into_iter().map(Into::into).collect())
+    }
 }

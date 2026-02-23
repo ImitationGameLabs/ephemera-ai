@@ -48,9 +48,6 @@ impl SystemConfigResponse {
     /// Create a response with multiple system config records
     pub fn multiple(configs: Vec<SystemConfigRecord>) -> Self {
         let total = configs.len();
-        Self {
-            configs,
-            total,
-        }
+        Self { configs, total }
     }
 }

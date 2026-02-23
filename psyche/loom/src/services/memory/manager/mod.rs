@@ -6,8 +6,8 @@ pub use mysql_manager::*;
 
 use async_trait::async_trait;
 
-use crate::memory::types::MemoryFragment;
 use crate::memory::models::{MemoryQuery, MemoryQueryResult};
+use crate::memory::types::MemoryFragment;
 
 /// Trait defining the interface for memory management operations
 #[async_trait]

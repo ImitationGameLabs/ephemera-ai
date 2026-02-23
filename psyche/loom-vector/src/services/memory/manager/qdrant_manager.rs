@@ -67,7 +67,10 @@ impl QdrantMemoryManager {
                 memory.id as u64,
                 embedding.clone(),
                 [
-                    ("created_at", memory.objective_metadata.created_at.unix_timestamp().into()),
+                    (
+                        "created_at",
+                        memory.objective_metadata.created_at.unix_timestamp().into(),
+                    ),
                     (
                         "source",
                         format!("{:?}", memory.objective_metadata.source).into(),

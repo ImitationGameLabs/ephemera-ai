@@ -1,12 +1,63 @@
+use crate::memory::types::MemoryFragment;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
-use crate::memory::types::MemoryFragment;
 
 /// Represents a time range for memory queries
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeRange {
     pub start: i64,
     pub end: i64,
+}
+
+/// Request model for getting recent memories
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentMemoryRequest {
+    /// Maximum number of memories to return (default: 10)
+    pub limit: usize,
+}
+
+/// Request model for querying memories within a time range (timeline view)
+/// Uses ISO 8601 format for timestamps (e.g., "2024-01-15T10:30:00Z" or "2024-01-15T10:30:00+08:00")
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimelineMemoryRequest {
+    /// Start time in ISO 8601 format
+    pub from: String,
+    /// End time in ISO 8601 format
+    pub to: String,
+    /// Maximum number of memories to return
+    pub limit: Option<usize>,
+    /// Number of memories to skip (for pagination)
+    pub offset: Option<usize>,
+}
+
+impl TimelineMemoryRequest {
+    /// Parse ISO 8601 strings into OffsetDateTime
+    pub fn parse(&self) -> Result<ParsedTimeRange, TimeParseError> {
+        use time::format_description::well_known::Iso8601;
+
+        let start = OffsetDateTime::parse(&self.from, &Iso8601::PARSING)
+            .map_err(|e| TimeParseError::InvalidFromTime(e.to_string()))?;
+        let end = OffsetDateTime::parse(&self.to, &Iso8601::PARSING)
+            .map_err(|e| TimeParseError::InvalidToTime(e.to_string()))?;
+
+        Ok(ParsedTimeRange { start, end })
+    }
+}
+
+/// Parsed time range with OffsetDateTime values
+#[derive(Debug, Clone)]
+pub struct ParsedTimeRange {
+    pub start: OffsetDateTime,
+    pub end: OffsetDateTime,
+}
+
+/// Error type for time parsing
+#[derive(Debug, thiserror::Error)]
+pub enum TimeParseError {
+    #[error("Invalid from time: {0}")]
+    InvalidFromTime(String),
+    #[error("Invalid to time: {0}")]
+    InvalidToTime(String),
 }
 
 /// Query parameters for memory retrieval operations
@@ -35,10 +86,7 @@ impl MemoryResponse {
     /// Create a response with multiple memory fragments
     pub fn multiple(fragments: Vec<MemoryFragment>) -> Self {
         let total = fragments.len();
-        Self {
-            fragments,
-            total,
-        }
+        Self { fragments, total }
     }
 
     /// Get the first fragment (convenience method for single fragment responses)
@@ -56,7 +104,6 @@ impl MemoryResponse {
         self.fragments.len()
     }
 }
-
 
 /// Request model for creating memory fragments (supports batch operations)
 #[derive(Debug, Serialize, Deserialize)]
@@ -77,7 +124,6 @@ impl CreateMemoryRequest {
         Self { fragments }
     }
 }
-
 
 /// Request model for memory search
 #[derive(Debug, Serialize, Deserialize)]

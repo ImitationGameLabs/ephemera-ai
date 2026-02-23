@@ -28,3 +28,7 @@ dotenv = "0.15"
 clap = { version = "4.0", features = ["derive"] }
 url = "2.5"
 sha2 = "0.10"
+
+[dev-dependencies]
+testcontainers = "0.27"
+testcontainers-modules = { version = "0.15", features = ["mysql"] }

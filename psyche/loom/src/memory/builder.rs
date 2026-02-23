@@ -1,6 +1,5 @@
-use super::types::{MemoryFragment, MemorySource, SubjectiveMetadata, ObjectiveMetadata};
+use super::types::{MemoryFragment, MemorySource};
 use time::OffsetDateTime;
-use serde_json::Value;
 
 /// Builder for creating MemoryFragment instances with flexible configuration
 pub struct MemoryFragmentBuilder {
@@ -18,18 +17,8 @@ impl MemoryFragmentBuilder {
             fragment: MemoryFragment {
                 id: 0, // Will be set by database when inserted
                 content,
-                subjective_metadata: SubjectiveMetadata {
-                    importance: 128, // Conservative default importance (middle range)
-                    confidence: 128, // Conservative default confidence (not highest)
-                    tags: Vec::new(),
-                    notes: String::new(),
-                },
-                objective_metadata: ObjectiveMetadata {
-                    created_at: OffsetDateTime::now_utc(),
-                    updated_at: OffsetDateTime::now_utc(),
-                    source,
-                },
-                associations: Vec::new(),
+                timestamp: OffsetDateTime::now_utc(),
+                source,
             },
         }
     }
@@ -49,81 +38,22 @@ impl MemoryFragmentBuilder {
         self
     }
 
-    /// Set the importance level (0-255)
-    pub fn importance(mut self, importance: u8) -> Self {
-        self.fragment.subjective_metadata.importance = importance;
-        self
-    }
-
-    /// Set the confidence level (0-255)
-    pub fn confidence(mut self, confidence: u8) -> Self {
-        self.fragment.subjective_metadata.confidence = confidence;
-        self
-    }
-
-    /// Add a tag to the memory fragment
-    pub fn add_tag(mut self, tag: String) -> Self {
-        self.fragment.subjective_metadata.tags.push(tag);
+    /// Set the timestamp
+    pub fn timestamp(mut self, timestamp: OffsetDateTime) -> Self {
+        self.fragment.timestamp = timestamp;
         self
     }
 
     /// Set the source of the memory fragment
     pub fn source(mut self, source: MemorySource) -> Self {
-        self.fragment.objective_metadata.source = source;
-        self
-    }
-
-    /// Set notes for the memory fragment
-    pub fn notes(mut self, notes: String) -> Self {
-        self.fragment.subjective_metadata.notes = notes;
-        self
-    }
-
-    /// Add an association to the memory fragment
-    pub fn add_association(mut self, association: i64) -> Self {
-        self.fragment.associations.push(association);
-        self
-    }
-
-    /// Parse JSON metadata to extract tags and notes
-    /// Safely handles the complex JSON parsing pattern used in HTTP handlers
-    pub fn from_json_metadata(mut self, metadata: Option<Value>) -> Self {
-        if let Some(metadata) = metadata {
-            // Extract tags from metadata
-            if let Some(tags) = metadata.get("tags")
-                .and_then(|v| v.as_array())
-                .map(|arr| arr.iter()
-                    .filter_map(|s| s.as_str())
-                    .map(String::from)
-                    .collect::<Vec<_>>())
-            {
-                for tag in tags {
-                    self = self.add_tag(tag);
-                }
-            }
-
-            // Extract notes from metadata
-            if let Some(notes) = metadata.get("notes")
-                .and_then(|v| v.as_str())
-            {
-                self = self.notes(notes.to_string());
-            }
-        }
-        self
-    }
-
-    /// Set API defaults suitable for HTTP request handlers
-    /// Uses sensible defaults for memory created via API
-    pub fn with_api_defaults(mut self) -> Self {
-        self.fragment.subjective_metadata.importance = 100;
-        self.fragment.subjective_metadata.confidence = 255;
+        self.fragment.source = source;
         self
     }
 
     /// Set source with API-specific defaults
     /// Handles the source mapping pattern used in HTTP handlers
     pub fn with_api_source(mut self, source: Option<String>) -> Self {
-        self.fragment.objective_metadata.source = if let Some(source_identifier) = source {
+        self.fragment.source = if let Some(source_identifier) = source {
             let mut metadata = std::collections::HashMap::new();
             metadata.insert("type".to_string(), "api".to_string());
 
@@ -145,20 +75,6 @@ impl MemoryFragmentBuilder {
         self
     }
 
-    /// Set specific timestamps for testing scenarios
-    /// Useful for deterministic test data
-    pub fn with_test_timestamps(mut self, created_at: OffsetDateTime, updated_at: OffsetDateTime) -> Self {
-        self.fragment.objective_metadata.created_at = created_at;
-        self.fragment.objective_metadata.updated_at = updated_at;
-        self
-    }
-
-    /// Set multiple tags at once
-    pub fn add_tags<I: IntoIterator<Item = String>>(mut self, tags: I) -> Self {
-        self.fragment.subjective_metadata.tags.extend(tags);
-        self
-    }
-
     /// Build the final MemoryFragment
     pub fn build(self) -> MemoryFragment {
         self.fragment
@@ -170,7 +86,9 @@ impl Default for MemoryFragmentBuilder {
         let source = MemorySource {
             channel: "information".to_string(),
             identifier: "unknown".to_string(),
-            metadata: [("type".to_string(), "unknown".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "unknown".to_string())]
+                .into_iter()
+                .collect(),
         };
 
         Self::new(String::new(), source)
@@ -184,27 +102,18 @@ mod tests {
 
     #[test]
     fn test_builder_basic_functionality() {
-        // Test that the basic builder functionality works
         let source = MemorySource {
             channel: "information".to_string(),
             identifier: "test".to_string(),
-            metadata: [("type".to_string(), "unit".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "unit".to_string())]
+                .into_iter()
+                .collect(),
         };
 
-        let fragment = MemoryFragmentBuilder::new(
-            "test content".to_string(),
-            source
-        )
-            .importance(150)
-            .confidence(200)
-            .add_tag("test".to_string())
-            .build();
+        let fragment = MemoryFragmentBuilder::new("test content".to_string(), source).build();
 
         assert_eq!(fragment.content, "test content");
-        assert_eq!(fragment.subjective_metadata.importance, 150);
-        assert_eq!(fragment.subjective_metadata.confidence, 200);
-        assert!(fragment.subjective_metadata.tags.contains(&"test".to_string()));
-        assert_eq!(fragment.objective_metadata.source.channel, "information");
+        assert_eq!(fragment.source.channel, "information");
     }
 
     #[test]
@@ -212,16 +121,23 @@ mod tests {
         let dialogue_source = MemorySource {
             channel: "dialogue".to_string(),
             identifier: "alice".to_string(),
-            metadata: [("type".to_string(), "input".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "input".to_string())]
+                .into_iter()
+                .collect(),
         };
         assert_eq!(dialogue_source.channel, "dialogue");
         assert_eq!(dialogue_source.identifier, "alice");
-        assert_eq!(dialogue_source.metadata.get("type"), Some(&"input".to_string()));
+        assert_eq!(
+            dialogue_source.metadata.get("type"),
+            Some(&"input".to_string())
+        );
 
         let info_source = MemorySource {
             channel: "information".to_string(),
             identifier: "config.json".to_string(),
-            metadata: [("type".to_string(), "file".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "file".to_string())]
+                .into_iter()
+                .collect(),
         };
         assert_eq!(info_source.channel, "information");
         assert_eq!(info_source.identifier, "config.json");
@@ -233,67 +149,41 @@ mod tests {
         let source = MemorySource {
             channel: "dialogue".to_string(),
             identifier: "bob".to_string(),
-            metadata: [("type".to_string(), "input".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "input".to_string())]
+                .into_iter()
+                .collect(),
         };
         assert_eq!(format!("{}", source), "[dialogue:input] bob");
 
         let custom_source = MemorySource {
             channel: "information".to_string(),
             identifier: "example.com".to_string(),
-            metadata: [("type".to_string(), "web".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "web".to_string())]
+                .into_iter()
+                .collect(),
         };
-        assert_eq!(format!("{}", custom_source), "[information:web] example.com");
+        assert_eq!(
+            format!("{}", custom_source),
+            "[information:web] example.com"
+        );
     }
 
     #[test]
-    fn test_convenience_methods() {
-        let metadata = serde_json::json!({
-            "tags": ["test", "convenience"],
-            "notes": "test notes"
-        });
-
+    fn test_with_api_source() {
         let source = MemorySource {
             channel: "information".to_string(),
             identifier: "unknown".to_string(),
-            metadata: [("type".to_string(), "unknown".to_string())].into_iter().collect(),
+            metadata: [("type".to_string(), "unknown".to_string())]
+                .into_iter()
+                .collect(),
         };
 
-        let fragment = MemoryFragmentBuilder::new(
-            "test with convenience methods".to_string(),
-            source
-        )
-            .from_json_metadata(Some(metadata))
-            .with_api_defaults()
+        let fragment = MemoryFragmentBuilder::new("test content".to_string(), source)
             .with_api_source(Some("test_source".to_string()))
             .build();
 
-        assert_eq!(fragment.content, "test with convenience methods");
-        assert_eq!(fragment.subjective_metadata.importance, 100);
-        assert_eq!(fragment.subjective_metadata.confidence, 255);
-        assert_eq!(fragment.subjective_metadata.tags, vec!["test", "convenience"]);
-        assert_eq!(fragment.subjective_metadata.notes, "test notes");
-        assert_eq!(fragment.objective_metadata.source.channel, "information");
-        assert_eq!(fragment.objective_metadata.source.identifier, "test_source");
-    }
-
-    #[test]
-    fn test_add_tags_method() {
-        let source = MemorySource {
-            channel: "information".to_string(),
-            identifier: "unknown".to_string(),
-            metadata: [("type".to_string(), "unknown".to_string())].into_iter().collect(),
-        };
-
-        let fragment = MemoryFragmentBuilder::new(
-            "test multiple tags".to_string(),
-            source
-        )
-            .add_tags(vec!["tag1".to_string(), "tag2".to_string(), "tag3".to_string()])
-            .build();
-
-        assert_eq!(fragment.subjective_metadata.tags.len(), 3);
-        assert!(fragment.subjective_metadata.tags.contains(&"tag1".to_string()));
-        assert!(fragment.subjective_metadata.tags.contains(&"tag2".to_string()));
-        assert!(fragment.subjective_metadata.tags.contains(&"tag3".to_string()));
+        assert_eq!(fragment.content, "test content");
+        assert_eq!(fragment.source.channel, "information");
+        assert_eq!(fragment.source.identifier, "test_source");
     }
 }

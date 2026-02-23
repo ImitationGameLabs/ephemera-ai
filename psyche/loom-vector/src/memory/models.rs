@@ -1,6 +1,6 @@
+use crate::memory::types::MemoryFragment;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
-use crate::memory::types::MemoryFragment;
 
 /// Represents a time range for memory queries
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,10 +35,7 @@ impl MemoryResponse {
     /// Create a response with multiple memory fragments
     pub fn multiple(fragments: Vec<MemoryFragment>) -> Self {
         let total = fragments.len();
-        Self {
-            fragments,
-            total,
-        }
+        Self { fragments, total }
     }
 
     /// Get the first fragment (convenience method for single fragment responses)
@@ -56,7 +53,6 @@ impl MemoryResponse {
         self.fragments.len()
     }
 }
-
 
 /// Request model for creating memory fragments (supports batch operations)
 #[derive(Debug, Serialize, Deserialize)]
@@ -77,7 +73,6 @@ impl CreateMemoryRequest {
         Self { fragments }
     }
 }
-
 
 /// Request model for memory search
 #[derive(Debug, Serialize, Deserialize)]

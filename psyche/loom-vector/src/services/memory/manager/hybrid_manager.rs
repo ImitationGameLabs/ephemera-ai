@@ -35,9 +35,9 @@ impl VectorSearchManager {
     }
 
     async fn generate_embedding(&self, text: &str) -> Result<Vec<f32>, VectorSearchError> {
-        let embedding = self.embedding_model.embed_text(text)
-            .await
-            .map_err(|e| VectorSearchError::Embedding(format!("Failed to generate embedding: {e}")))?;
+        let embedding = self.embedding_model.embed_text(text).await.map_err(|e| {
+            VectorSearchError::Embedding(format!("Failed to generate embedding: {e}"))
+        })?;
 
         Ok(embedding.vec.into_iter().map(|x| x as f32).collect())
     }
@@ -69,7 +69,10 @@ impl VectorSearchManager {
 
     /// Delete a memory embedding by ID
     pub async fn delete(&self, id: i64) -> Result<(), VectorSearchError> {
-        self.qdrant_manager.delete_embedding(id).await.map_err(VectorSearchError::from)
+        self.qdrant_manager
+            .delete_embedding(id)
+            .await
+            .map_err(VectorSearchError::from)
     }
 }
 
@@ -77,7 +80,10 @@ impl VectorSearchManager {
 impl Manager for VectorSearchManager {
     type Error = VectorSearchError;
 
-    async fn append(&self, fragments: &mut Vec<MemoryFragment>) -> Result<Vec<i64>, VectorSearchError> {
+    async fn append(
+        &self,
+        fragments: &mut Vec<MemoryFragment>,
+    ) -> Result<Vec<i64>, VectorSearchError> {
         if fragments.is_empty() {
             return Ok(vec![]);
         }

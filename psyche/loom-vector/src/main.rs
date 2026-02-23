@@ -1,10 +1,10 @@
-mod services;
-mod server;
 mod memory;
+mod server;
+mod services;
 
 use dotenv::dotenv;
-use tracing::info;
 use std::env;
+use tracing::info;
 
 use crate::server::{LoomVectorServer, ServerConfig};
 
@@ -25,8 +25,10 @@ async fn main() -> anyhow::Result<()> {
     let port = get_service_port();
     let config = ServerConfig { port };
 
-    info!("Starting Loom Vector Search Service on {}",
-          config.bind_address());
+    info!(
+        "Starting Loom Vector Search Service on {}",
+        config.bind_address()
+    );
 
     let server = LoomVectorServer::new(config).await?;
     server.run().await?;

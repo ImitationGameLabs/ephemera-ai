@@ -1,22 +1,21 @@
+use crate::agent::EphemeraAI;
+use atrium_client::AuthenticatedClient;
 use dotenv::dotenv;
 use loom_client::LoomClient;
-use atrium_client::AuthenticatedClient;
 use rig::providers::deepseek;
-use tracing::info;
 use std::sync::Arc;
-use crate::agent::EphemeraAI;
+use tracing::info;
 
 mod agent;
+mod context;
 mod tools;
-mod context;  
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
     tracing_subscriber::fmt::init();
 
-    let model_name = std::env::var("MODEL_NAME")
-        .expect("MODEL_NAME not set");
+    let model_name = std::env::var("MODEL_NAME").expect("MODEL_NAME not set");
 
     let llm_client = init_llm_client();
 
@@ -38,10 +37,8 @@ async fn main() -> anyhow::Result<()> {
 
 fn init_llm_client() -> deepseek::Client {
     // Create LLM client (OpenAI-compatible)
-    let api_key = std::env::var("API_KEY")
-        .expect("API_KEY not set");
-    let base_url = std::env::var("BASE_URL")
-        .expect("BASE_URL not set");
+    let api_key = std::env::var("API_KEY").expect("API_KEY not set");
+    let base_url = std::env::var("BASE_URL").expect("BASE_URL not set");
 
     let llm_client = deepseek::Client::builder(&api_key)
         .base_url(&base_url)
@@ -52,14 +49,15 @@ fn init_llm_client() -> deepseek::Client {
 
 async fn init_loom_client() -> anyhow::Result<LoomClient> {
     // Setup loom service connection
-    let loom_service_url = std::env::var("LOOM_SERVICE_URL")
-        .expect("LOOM_SERVICE_URL environment variable not set");
+    let loom_service_url =
+        std::env::var("LOOM_SERVICE_URL").expect("LOOM_SERVICE_URL environment variable not set");
 
     info!("Connecting to loom service at: {}", loom_service_url);
 
     // Test connection with health check
     let client = LoomClient::new(&loom_service_url);
-    client.health_check()
+    client
+        .health_check()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to connect to loom service: {}", e))?;
 
@@ -84,10 +82,15 @@ async fn init_dialogue_client() -> anyhow::Result<AuthenticatedClient> {
 
     info!("Logging in...");
 
-    let authenticated_client = AuthenticatedClient::connect_and_login(&atrium_service_url, username, password).await
-        .map_err(|e| anyhow::anyhow!("Failed to login: {}", e))?;
+    let authenticated_client =
+        AuthenticatedClient::connect_and_login(&atrium_service_url, username, password)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to login: {}", e))?;
 
-    info!("Successfully logged in as: {}!", authenticated_client.credentials().username);
+    info!(
+        "Successfully logged in as: {}!",
+        authenticated_client.credentials().username
+    );
 
     Ok(authenticated_client)
 }

@@ -1,11 +1,11 @@
 use reqwest::Client;
 use serde::Deserialize;
 use thiserror::Error;
-use tracing::info;
 use time;
+use tracing::info;
 
 use loom::system_configs::models::{
-    CreateSystemConfigRequest, SystemConfigQuery, SystemConfigResponse
+    CreateSystemConfigRequest, SystemConfigQuery, SystemConfigResponse,
 };
 
 /// System configs API client error
@@ -65,7 +65,9 @@ impl SystemConfigClient {
                 })
             } else {
                 Err(SystemConfigClientError::ApiError(
-                    api_response.error.unwrap_or_else(|| "Unknown API error".to_string())
+                    api_response
+                        .error
+                        .unwrap_or_else(|| "Unknown API error".to_string()),
                 ))
             }
         } else {
@@ -77,21 +79,23 @@ impl SystemConfigClient {
     }
 
     /// Create a system config record
-    pub async fn create(&self, request: CreateSystemConfigRequest) -> Result<SystemConfigResponse, SystemConfigClientError> {
+    pub async fn create(
+        &self,
+        request: CreateSystemConfigRequest,
+    ) -> Result<SystemConfigResponse, SystemConfigClientError> {
         info!("Creating system config record");
 
         let url = self.url("/");
-        let response = self.client
-            .post(&url)
-            .json(&request)
-            .send()
-            .await?;
+        let response = self.client.post(&url).json(&request).send().await?;
 
         self.handle_response(response).await
     }
 
     /// Query system config records
-    pub async fn query(&self, query: SystemConfigQuery) -> Result<SystemConfigResponse, SystemConfigClientError> {
+    pub async fn query(
+        &self,
+        query: SystemConfigQuery,
+    ) -> Result<SystemConfigResponse, SystemConfigClientError> {
         info!("Querying system config records");
 
         let url = self.url("/");
@@ -108,11 +112,21 @@ impl SystemConfigClient {
         }
 
         if let Some(start_time) = &query.start_time {
-            params.push(format!("start_time={}", start_time.format(&time::format_description::well_known::Iso8601::DEFAULT).unwrap()));
+            params.push(format!(
+                "start_time={}",
+                start_time
+                    .format(&time::format_description::well_known::Iso8601::DEFAULT)
+                    .unwrap()
+            ));
         }
 
         if let Some(end_time) = &query.end_time {
-            params.push(format!("end_time={}", end_time.format(&time::format_description::well_known::Iso8601::DEFAULT).unwrap()));
+            params.push(format!(
+                "end_time={}",
+                end_time
+                    .format(&time::format_description::well_known::Iso8601::DEFAULT)
+                    .unwrap()
+            ));
         }
 
         if let Some(limit) = query.limit {
@@ -129,23 +143,20 @@ impl SystemConfigClient {
             format!("{}?{}", url, params.join("&"))
         };
 
-        let response = self.client
-            .get(&full_url)
-            .send()
-            .await?;
+        let response = self.client.get(&full_url).send().await?;
 
         self.handle_response(response).await
     }
 
     /// Get system config by ID
-    pub async fn get_by_id(&self, id: i64) -> Result<SystemConfigResponse, SystemConfigClientError> {
+    pub async fn get_by_id(
+        &self,
+        id: i64,
+    ) -> Result<SystemConfigResponse, SystemConfigClientError> {
         info!("Getting system config record with id: {}", id);
 
         let url = self.url(&format!("/{}", id));
-        let response = self.client
-            .get(&url)
-            .send()
-            .await?;
+        let response = self.client.get(&url).send().await?;
 
         self.handle_response(response).await
     }

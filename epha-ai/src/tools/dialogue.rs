@@ -1,9 +1,9 @@
-use std::sync::Arc;
+use atrium_client::ClientError as DialogueClientError;
+use atrium_client::{AuthenticatedClient, UnreadMessages};
 use rig::{completion::ToolDefinition, tool::Tool};
 use serde::Deserialize;
 use serde_json::json;
-use atrium_client::{AuthenticatedClient, UnreadMessages};
-use atrium_client::ClientError as DialogueClientError;
+use std::sync::Arc;
 
 const GET_MESSAGES_LIMIT: u64 = 20;
 
@@ -42,31 +42,42 @@ impl Tool for GetMessages {
     }
 
     async fn call(&self, _args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let unread_result: UnreadMessages = self.dialogue_client.get_unread_messages(Some(GET_MESSAGES_LIMIT)).await?;
+        let unread_result: UnreadMessages = self
+            .dialogue_client
+            .get_unread_messages(Some(GET_MESSAGES_LIMIT))
+            .await?;
 
         if unread_result.messages.is_empty() {
             if unread_result.remaining_unread > 0 {
-                Ok(format!("No new messages retrieved. {} messages remain unread in total.", unread_result.remaining_unread))
+                Ok(format!(
+                    "No new messages retrieved. {} messages remain unread in total.",
+                    unread_result.remaining_unread
+                ))
             } else {
                 Ok("No unread messages found. You're all caught up!".to_string())
             }
         } else {
-            let formatted_messages: Vec<String> = unread_result.messages.iter()
-                .map(|msg| {
-                    format!("[{}] {}: {}", msg.created_at, msg.sender, msg.content)
-                })
+            let formatted_messages: Vec<String> = unread_result
+                .messages
+                .iter()
+                .map(|msg| format!("[{}] {}: {}", msg.created_at, msg.sender, msg.content))
                 .collect();
 
             let remaining_text = if unread_result.remaining_unread > 0 {
-                format!("{} more messages remain unread.", unread_result.remaining_unread)
+                format!(
+                    "{} more messages remain unread.",
+                    unread_result.remaining_unread
+                )
             } else {
                 "No more unread messages.".to_string()
             };
 
-            Ok(format!("Retrieved {} unread messages:\n\n{}\n\n{}",
+            Ok(format!(
+                "Retrieved {} unread messages:\n\n{}\n\n{}",
                 unread_result.messages.len(),
                 formatted_messages.join("\n"),
-                remaining_text))
+                remaining_text
+            ))
         }
     }
 }
@@ -107,10 +118,14 @@ impl Tool for SendMessage {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let message = self.dialogue_client.send_message(args.message.clone()).await?;
+        let message = self
+            .dialogue_client
+            .send_message(args.message.clone())
+            .await?;
 
-        Ok(format!("Message sent successfully! ID: {}, Sent at: {}",
-            message.id,
-            message.created_at))
+        Ok(format!(
+            "Message sent successfully! ID: {}, Sent at: {}",
+            message.id, message.created_at
+        ))
     }
 }

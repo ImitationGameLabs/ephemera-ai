@@ -1,12 +1,17 @@
-use sha2::{Sha256, Digest};
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set, NotSet, PaginatorTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, NotSet, PaginatorTrait,
+    QueryFilter, QueryOrder, Set,
+};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 use time::OffsetDateTime;
 
 use crate::services::memory::entity::MemoryEntity;
 use crate::services::memory::entity::memory;
-use crate::services::system_configs::entity::{Entity, SystemConfig, Column, ActiveModel};
-use crate::system_configs::models::{CreateSystemConfigRequest, SystemConfigQuery, SystemConfigRecord};
+use crate::services::system_configs::entity::{ActiveModel, Column, Entity, SystemConfig};
+use crate::system_configs::models::{
+    CreateSystemConfigRequest, SystemConfigQuery, SystemConfigRecord,
+};
 
 #[derive(Error, Debug)]
 pub enum SystemConfigError {
@@ -47,7 +52,10 @@ impl SystemConfigManager {
     }
 
     /// Create a new system config record
-    pub async fn create(&self, request: CreateSystemConfigRequest) -> Result<SystemConfigRecord, SystemConfigError> {
+    pub async fn create(
+        &self,
+        request: CreateSystemConfigRequest,
+    ) -> Result<SystemConfigRecord, SystemConfigError> {
         // Calculate content hash
         let content_hash = Self::calculate_content_hash(&request.content);
 
@@ -83,7 +91,10 @@ impl SystemConfigManager {
     }
 
     /// Query system config records
-    pub async fn query(&self, query: SystemConfigQuery) -> Result<(Vec<SystemConfigRecord>, usize), SystemConfigError> {
+    pub async fn query(
+        &self,
+        query: SystemConfigQuery,
+    ) -> Result<(Vec<SystemConfigRecord>, usize), SystemConfigError> {
         let mut select = Entity::find();
 
         // Apply filters

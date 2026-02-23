@@ -1,8 +1,8 @@
+use epha_agent::state_machine::StateMachine;
 use rig::{completion::ToolDefinition, tool::Tool};
 use serde::Deserialize;
-use epha_agent::state_machine::StateMachine;
-use std::sync::{Arc, Weak, Mutex};
 use std::fmt;
+use std::sync::{Arc, Mutex, Weak};
 
 /// Arguments for state transition
 #[derive(Debug, Deserialize)]
@@ -25,7 +25,6 @@ impl fmt::Display for StateTransitionError {
 
 impl std::error::Error for StateTransitionError {}
 
-
 /// Tool for transitioning between states
 pub struct StateTransition {
     state_machine: Weak<Mutex<StateMachine>>,
@@ -34,7 +33,7 @@ pub struct StateTransition {
 impl StateTransition {
     pub fn new(state_machine: Arc<Mutex<StateMachine>>) -> Self {
         Self {
-            state_machine: Arc::downgrade(&state_machine)
+            state_machine: Arc::downgrade(&state_machine),
         }
     }
 }
@@ -68,9 +67,10 @@ impl Tool for StateTransition {
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
         // Try to upgrade the weak reference to Arc
-        let state_machine_arc = self.state_machine.upgrade().ok_or_else(|| {
-            StateTransitionError("State machine has been dropped".to_string())
-        })?;
+        let state_machine_arc = self
+            .state_machine
+            .upgrade()
+            .ok_or_else(|| StateTransitionError("State machine has been dropped".to_string()))?;
 
         let mut state_machine = state_machine_arc.lock().map_err(|e| {
             StateTransitionError(format!("Failed to acquire state machine lock: {}", e))
@@ -81,7 +81,10 @@ impl Tool for StateTransition {
 
         // Validate target state exists
         if state_machine.get_state(&args.target_state).is_none() {
-            return Ok(format!("Error: Target state '{}' does not exist", args.target_state));
+            return Ok(format!(
+                "Error: Target state '{}' does not exist",
+                args.target_state
+            ));
         }
 
         // Check if already in target state
