@@ -5,10 +5,15 @@ target/
 .env
 .env.local
 
+# Generated config files
+.config/
 
 node_modules
 
 .draft
+
+# Nix
+result
 
 # Devenv
 .devenv*

@@ -1,5 +1,4 @@
 use axum::Router;
-use dotenv::dotenv;
 use sea_orm::{Database, DatabaseConnection};
 use sea_orm_migration::MigratorTrait;
 use std::net::SocketAddr;
@@ -7,6 +6,7 @@ use std::sync::Arc;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use crate::config::Config;
 use crate::services::db_migration::Migrator;
 use crate::services::memory::{manager::HybridMemoryManager, manager::MysqlMemoryManager};
 
@@ -15,32 +15,16 @@ use crate::services::system_configs::{
     AppState as SystemConfigsAppState, handlers::SystemConfigHandler, manager::SystemConfigManager,
 };
 
-/// Server configuration
-#[derive(Debug, Clone)]
-pub struct ServerConfig {
-    pub port: u16,
-}
-
-impl ServerConfig {
-    /// Get the full bind address in [::]:port format for IPv6 compatibility
-    pub fn bind_address(&self) -> String {
-        format!("[::]:{}", self.port)
-    }
-}
-
 /// HTTP server for the Loom memory service
 pub struct LoomServer {
-    config: ServerConfig,
+    config: Config,
     memory_manager: Arc<HybridMemoryManager>,
     system_config_manager: Arc<SystemConfigManager>,
 }
 
 impl LoomServer {
     /// Create a new server instance
-    pub async fn new(config: ServerConfig) -> anyhow::Result<Self> {
-        // Load environment variables
-        dotenv().ok();
-
+    pub async fn new(config: Config) -> anyhow::Result<Self> {
         // Initialize tracing
         tracing_subscriber::registry()
             .with(
@@ -53,7 +37,7 @@ impl LoomServer {
         info!("Initializing Loom memory server");
 
         // Initialize database connection
-        let conn = init_db_connection().await?;
+        let conn = init_db_connection(&config.mysql_url).await?;
 
         // Run migrations first
         run_migrations(&conn).await?;
@@ -132,9 +116,8 @@ impl LoomServer {
     }
 }
 
-async fn init_db_connection() -> anyhow::Result<DatabaseConnection> {
-    let mysql_url = std::env::var("PSYCHE_LOOM_MYSQL_URL").expect("PSYCHE_LOOM_MYSQL_URL not set");
-    Database::connect(&mysql_url)
+async fn init_db_connection(mysql_url: &str) -> anyhow::Result<DatabaseConnection> {
+    Database::connect(mysql_url)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to connect to database: {}", e))
 }

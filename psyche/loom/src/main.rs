@@ -1,30 +1,29 @@
+mod config;
 mod memory;
 mod server;
 mod services;
 mod system_configs;
 
-use dotenv::dotenv;
-use std::env;
+use clap::Parser;
+use std::path::PathBuf;
 use tracing::info;
 
-use crate::server::{LoomServer, ServerConfig};
+use crate::config::Config;
+use crate::server::LoomServer;
 
-/// Get service port from environment variable with default
-fn get_service_port() -> u16 {
-    env::var("LOOM_SERVICE_PORT")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(3001)
+#[derive(Parser)]
+#[command(name = "loom")]
+struct Args {
+    /// Directory containing config files
+    #[arg(long, default_value = ".config")]
+    config_dir: PathBuf,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Load environment variables
-    dotenv().ok();
-
-    // Get service port from environment variable
-    let port = get_service_port();
-    let config = ServerConfig { port };
+    let args = Args::parse();
+    let config_path = args.config_dir.join("loom.json");
+    let config = Config::load(&config_path);
 
     info!("Starting Loom Memory Service on {}", config.bind_address());
 

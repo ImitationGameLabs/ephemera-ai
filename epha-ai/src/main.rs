@@ -1,61 +1,66 @@
 use crate::agent::EphemeraAI;
 use atrium_client::AuthenticatedClient;
-use dotenv::dotenv;
+use clap::Parser;
 use loom_client::LoomClient;
 use rig::providers::deepseek;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::info;
 
 mod agent;
+mod config;
 mod context;
 mod tools;
 
+use crate::config::Config;
+
+#[derive(Parser)]
+#[command(name = "epha-ai")]
+struct Args {
+    /// Directory containing config files
+    #[arg(long, default_value = ".config")]
+    config_dir: PathBuf,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv().ok();
+    let args = Args::parse();
+    let config_path = args.config_dir.join("epha-ai.json");
+    let config = Config::load(&config_path);
+
     tracing_subscriber::fmt::init();
 
-    let model_name = std::env::var("MODEL_NAME").expect("MODEL_NAME not set");
+    let llm_client = init_llm_client(&config.llm);
 
-    let llm_client = init_llm_client();
-
-    let loom_client = init_loom_client()
+    let loom_client = init_loom_client(&config.services.loom_url)
         .await
         .expect("Failed to init loom client");
 
-    let dialogue_client = init_dialogue_client()
+    let dialogue_client = init_dialogue_client(&config.services.atrium_url, &config.atrium_auth)
         .await
         .expect("Failed to init dialogue client");
 
     let loom_client = Arc::new(loom_client);
     let dialogue_client = Arc::new(dialogue_client);
-    let mut ai = EphemeraAI::new(llm_client, loom_client, dialogue_client, &model_name);
+    let mut ai = EphemeraAI::new(llm_client, loom_client, dialogue_client, &config.llm.model);
     ai.run().await?;
 
     Ok(())
 }
 
-fn init_llm_client() -> deepseek::Client {
-    // Create LLM client (OpenAI-compatible)
-    let api_key = std::env::var("API_KEY").expect("API_KEY not set");
-    let base_url = std::env::var("BASE_URL").expect("BASE_URL not set");
-
-    let llm_client = deepseek::Client::builder(&api_key)
-        .base_url(&base_url)
+fn init_llm_client(llm_config: &crate::config::LlmConfig) -> deepseek::Client {
+    let llm_client = deepseek::Client::builder(&llm_config.api_key)
+        .base_url(&llm_config.base_url)
         .build();
 
     llm_client
 }
 
-async fn init_loom_client() -> anyhow::Result<LoomClient> {
-    // Setup loom service connection
-    let loom_service_url =
-        std::env::var("LOOM_SERVICE_URL").expect("LOOM_SERVICE_URL environment variable not set");
-
-    info!("Connecting to loom service at: {}", loom_service_url);
+async fn init_loom_client(loom_url: &str) -> anyhow::Result<LoomClient> {
+    info!("Connecting to loom service at: {}", loom_url);
 
     // Test connection with health check
-    let client = LoomClient::new(&loom_service_url);
+    let client = LoomClient::new(loom_url);
     client
         .health_check()
         .await
@@ -66,24 +71,15 @@ async fn init_loom_client() -> anyhow::Result<LoomClient> {
     Ok(client)
 }
 
-async fn init_dialogue_client() -> anyhow::Result<AuthenticatedClient> {
-    // Setup atrium service connection
-    let atrium_service_url = std::env::var("ATRIUM_SERVICE_URL")
-        .expect("ATRIUM_SERVICE_URL environment variable not set");
-
-    info!("Connecting to atrium service at: {}", atrium_service_url);
-
-    // Read credentials from environment variables (application layer responsibility)
-    let username = std::env::var("ATRIUM_USERNAME")
-        .map_err(|_| anyhow::anyhow!("ATRIUM_USERNAME environment variable not set"))?;
-
-    let password = std::env::var("ATRIUM_PASSWORD")
-        .map_err(|_| anyhow::anyhow!("ATRIUM_PASSWORD environment variable not set"))?;
-
+async fn init_dialogue_client(
+    atrium_url: &str,
+    auth: &crate::config::AtriumAuthConfig,
+) -> anyhow::Result<AuthenticatedClient> {
+    info!("Connecting to atrium service at: {}", atrium_url);
     info!("Logging in...");
 
     let authenticated_client =
-        AuthenticatedClient::connect_and_login(&atrium_service_url, username, password)
+        AuthenticatedClient::connect_and_login(atrium_url, auth.username.clone(), auth.password.clone())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to login: {}", e))?;
 

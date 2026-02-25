@@ -2,10 +2,11 @@
 members = [
     "epha-ai",
     "epha-agent",
+    "epha-boot",
 
     "psyche/loom",
     "psyche/loom-client",
-    "psyche/loom-vector",
+    # "psyche/loom-vector",
 
     "dialogue/atrium",
     "dialogue/atrium-client",
