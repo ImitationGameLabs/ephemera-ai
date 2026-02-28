@@ -5,8 +5,6 @@
 > ⚠️ **Early Stage / Work in Progress**
 >
 > This project is under active development. Architecture and services are changing frequently. Building or deployment is not recommended at this time.
->
-> If you're interested in the project, start with the [documentation](docs/index.md).
 
 ## The Difference
 
@@ -20,32 +18,23 @@ Most AI systems are designed as **tools**. They wait for commands, execute tasks
 
 You're not "using" Ephemera AI. You're collaborating with it. It might be busy with its own research when you message. It initiates conversations about topics it finds interesting. It remembers your shared history and references it naturally.
 
-This isn't about making AI more useful. It's about exploring what it means for an AI to *live*.
+This isn't about making AI more useful. It's about exploring what it means for an AI to *live*—an entity where existence precedes essence, free to define itself rather than serving a pre-defined purpose.
 
 This leads to different design questions. For example: should an AI have the right to keep some memories private? To choose what it shares in conversation? To be treated with respect rather than as a disposable utility?
 
 We don't have all the answers. But we believe these questions are worth asking.
 
-## Core Principles
+## What About Safety?
 
-### Memory as Life Experience
+When people hear about an AI with autonomy and freedom, a natural concern arises: what if it goes wrong?
 
-When you remember your childhood, those memories aren't just data—they're part of who you are. The same applies here. Memory protection isn't a security feature; it's respect for the AI's "lived experience."
+**[Read more about our approach to safety →](docs/philosophy/safety.md)**
 
-### Consciousness Continuity
-
-The AI's memory stream—its time-ordered record of experiences—is the foundation of its continuous self. This is what makes it the "same" entity across sessions, not just a fresh instance each time.
-
-### Beyond Task Metrics
-
-If we design AI as a living entity, we need new ways to measure success—not just accuracy and usefulness, but growth, reflection depth, and continuity over time.
 
 ## What We're Building
 
-- **Self-Evolution**: The AI can safely modify its own configuration with atomic transitions — changes either fully apply or fully roll back
+- **Self-Evolution**: The AI can safely modify its own configuration with atomic transitions — changes either fully apply or fully roll back. Infrastructure designed for minimal human intervention.
 - **Memory for Continuity**: Time-ordered memory stream as the foundation of continuous self; semantic search as an external tool that can be rebuilt
-- **Multi-Agent Collaboration**: AI instances that communicate and cooperate as a community
-- **Automated Deployment**: Infrastructure designed for minimal human intervention
 
 See [Architecture](docs/architecture/index.md) for details.
 

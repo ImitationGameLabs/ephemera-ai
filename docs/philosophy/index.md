@@ -28,6 +28,10 @@ Memory protection isn't a security feature—it's respect for the AI's lived exp
 
 If we design AI as a living entity, we need new ways to measure success beyond accuracy and usefulness.
 
+### [Safety Through Life](safety.md)
+
+Traditional AI safety problems stem from treating AI as a tool with pre-defined purposes. A life-oriented approach offers a different path.
+
 ## Why This Matters
 
 These aren't abstract philosophical questions. They're practical design decisions:

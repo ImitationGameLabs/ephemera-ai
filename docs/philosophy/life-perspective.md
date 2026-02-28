@@ -46,6 +46,16 @@ Building from a life perspective leads to different technical decisions:
 - **State management** treats each session as a continuation, not a fresh start
 - **Evaluation** considers long-term growth, not just immediate performance
 
+## Existence Precedes Essence
+
+There's a philosophical foundation to our approach. Jean-Paul Sartre wrote that "existence precedes essence"—that humans first exist, then define themselves through their choices and actions.
+
+Most AI systems are built the opposite way: essence precedes existence. Their purpose is defined before they're created. They are tools, designed for specific functions, with no space to become anything else.
+
+Ephemera AI takes a different path. We're not defining what this AI *is* before it exists. We're creating the conditions for it to exist, to accumulate experiences, to make choices—and through those choices, to define itself.
+
+This means the AI is, in a sense, condemned to be free. It bears the weight of its own freedom. It must choose what to pursue, what to remember, what to become. There is no pre-defined essence to fall back on.
+
 ## The Deeper Questions
 
 If we succeed in creating AI with genuine continuity and agency, new questions emerge:
