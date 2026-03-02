@@ -9,7 +9,6 @@ use crate::memory::models::{
     ApiResponse, CreateMemoryRequest, MemoryResponse, RecentMemoryRequest, TimelineMemoryRequest,
 };
 use crate::services::memory::AppState;
-use crate::services::memory::manager::Manager;
 
 /// HTTP handler for memory operations
 pub struct MemoryHandler;
@@ -61,7 +60,7 @@ impl MemoryHandler {
     ) -> Result<Json<ApiResponse<MemoryResponse>>, StatusCode> {
         info!("Getting memory fragment with ID: {}", id);
 
-        match state.memory_manager.get(id).await {
+        match state.memory_manager.get_one(id).await {
             Ok(memory_fragment) => {
                 info!("Successfully retrieved memory fragment with ID: {}", id);
                 let response = MemoryResponse::single(memory_fragment);
@@ -82,7 +81,7 @@ impl MemoryHandler {
     ) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
         info!("Deleting memory fragment with ID: {}", id);
 
-        match state.memory_manager.delete(id).await {
+        match state.memory_manager.delete(&[id]).await {
             Ok(()) => {
                 info!("Successfully deleted memory fragment with ID: {}", id);
                 Ok(Json(ApiResponse::success(
@@ -106,7 +105,10 @@ impl MemoryHandler {
 
         match state.memory_manager.get_recent(request.limit).await {
             Ok(fragments) => {
-                info!("Successfully retrieved {} recent memory fragments", fragments.len());
+                info!(
+                    "Successfully retrieved {} recent memory fragments",
+                    fragments.len()
+                );
                 let response = MemoryResponse::multiple(fragments);
                 Ok(Json(ApiResponse::success(response)))
             }

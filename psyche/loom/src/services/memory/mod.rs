@@ -7,12 +7,12 @@ use serde_json::Value;
 use std::sync::Arc;
 use time::OffsetDateTime;
 
-use manager::HybridMemoryManager;
+use manager::MemoryManager;
 
 /// Application state shared across handlers
 #[derive(Clone)]
 pub struct AppState {
-    pub memory_manager: Arc<HybridMemoryManager>,
+    pub memory_manager: Arc<MemoryManager>,
 }
 
 /// Health check endpoint

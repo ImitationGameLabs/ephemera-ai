@@ -21,10 +21,10 @@ impl MemoryFragmentList {
     /// Serialize a single memory fragment with simplified information
     fn serialize_memory(&self, memory: &MemoryFragment) -> String {
         format!(
-            "Memory ID: {}\nTimestamp: {}\nSource: {}\nContent: {}",
+            "Memory ID: {}\nTimestamp: {}\nKind: {}\nContent: {}",
             memory.id,
             self.format_datetime(memory.timestamp),
-            format!("{}::{}", memory.source.channel, memory.source.identifier),
+            memory.kind,
             memory.content
         )
     }
@@ -65,34 +65,24 @@ impl ContextSerialize for MemoryFragmentList {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use loom_client::{MemoryFragmentBuilder, memory::MemorySource};
+    use loom_client::{MemoryFragmentBuilder, MemoryKind};
 
     #[test]
     fn test_memory_fragment_list_serialization() {
-        let source1 = MemorySource {
-            channel: "dialogue".to_string(),
-            identifier: "test_source".to_string(),
-            metadata: [("type".to_string(), "input".to_string())]
-                .into_iter()
-                .collect(),
-        };
-
-        let mut fragment1 =
-            MemoryFragmentBuilder::new("Test perception".to_string(), source1).build();
+        let mut fragment1 = MemoryFragmentBuilder::new(
+            r#"{"type":"input","text":"Test perception"}"#.to_string(),
+            MemoryKind::Message,
+        )
+        .build();
 
         // Override the ID for test purposes
         fragment1.id = 1;
 
-        let source2 = MemorySource {
-            channel: "action".to_string(),
-            identifier: "self_action".to_string(),
-            metadata: [("type".to_string(), "execution".to_string())]
-                .into_iter()
-                .collect(),
-        };
-
-        let mut fragment2 =
-            MemoryFragmentBuilder::new("test_action: test_details".to_string(), source2).build();
+        let mut fragment2 = MemoryFragmentBuilder::new(
+            r#"{"type":"execution","action":"test_action: test_details"}"#.to_string(),
+            MemoryKind::Action,
+        )
+        .build();
 
         // Override the ID for test purposes
         fragment2.id = 2;
@@ -106,7 +96,7 @@ mod tests {
         assert!(serialized.contains("Found 2 memories"));
         assert!(serialized.contains("Memory ID:"));
         assert!(serialized.contains("Timestamp:"));
-        assert!(serialized.contains("Source:"));
+        assert!(serialized.contains("Kind:"));
         assert!(serialized.contains("Content:"));
         assert!(serialized.contains("---"));
         assert!(serialized.contains("Test perception"));

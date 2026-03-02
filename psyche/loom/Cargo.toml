@@ -6,11 +6,11 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-sea-orm = { version = "1.1", features = ["runtime-tokio", "sqlx-mysql", "macros", "with-json"] }
+sea-orm = { version = "1", features = ["runtime-tokio", "sqlx-mysql", "macros"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
-time = { version = "0.3", features = ["serde"] }
+time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3", features = [
@@ -18,7 +18,9 @@ tracing-subscriber = { version = "0.3", features = [
     "std",
     "fmt",
 ] }
-sea-orm-migration = { version = "1.1", features = ["sqlx-mysql"] }
+
+# Database dependencies
+sea-orm-migration = { version = "1", features = ["sqlx-mysql", "runtime-tokio"] }
 
 # HTTP service dependencies
 axum = "0.8"
@@ -26,7 +28,6 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 clap = { version = "4.0", features = ["derive"] }
 url = "2.5"
-sha2 = "0.10"
 
 [dev-dependencies]
 testcontainers = "0.27"

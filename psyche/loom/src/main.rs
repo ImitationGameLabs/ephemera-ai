@@ -2,7 +2,6 @@ mod config;
 mod memory;
 mod server;
 mod services;
-mod system_configs;
 
 use clap::Parser;
 use std::path::PathBuf;

@@ -1,10 +1,8 @@
 use sea_orm::Database;
 use sea_orm_migration::MigratorTrait;
-use std::collections::HashMap;
 use testcontainers_modules::{mysql::Mysql, testcontainers::runners::AsyncRunner};
 
-use loom::memory::types::MemorySource;
-use loom::services::memory::manager::MysqlMemoryManager;
+use loom::services::memory::manager::MemoryManager;
 
 /// Setup a test database using testcontainers.
 /// Returns a tuple of (container, database connection).
@@ -33,29 +31,7 @@ pub async fn setup_test_db() -> (
     (container, db)
 }
 
-/// Create a test memory source with the given channel and identifier
-pub fn test_source(channel: &str, identifier: &str) -> MemorySource {
-    MemorySource {
-        channel: channel.to_string(),
-        identifier: identifier.to_string(),
-        metadata: HashMap::new(),
-    }
-}
-
-/// Create a test memory source with metadata
-pub fn test_source_with_metadata(
-    channel: &str,
-    identifier: &str,
-    metadata: HashMap<String, String>,
-) -> MemorySource {
-    MemorySource {
-        channel: channel.to_string(),
-        identifier: identifier.to_string(),
-        metadata,
-    }
-}
-
-/// Create MysqlMemoryManager from a database connection
-pub fn create_mysql_manager(db: &sea_orm::DatabaseConnection) -> MysqlMemoryManager {
-    MysqlMemoryManager::new(db.clone())
+/// Create MemoryManager from a database connection
+pub fn create_memory_manager(db: &sea_orm::DatabaseConnection) -> MemoryManager {
+    MemoryManager::new(db.clone(), 0)
 }

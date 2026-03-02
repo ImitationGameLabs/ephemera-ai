@@ -1,25 +1,21 @@
 use axum::Router;
 use sea_orm::{Database, DatabaseConnection};
-use sea_orm_migration::MigratorTrait;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
-use crate::services::db_migration::Migrator;
-use crate::services::memory::{manager::HybridMemoryManager, manager::MysqlMemoryManager};
-
-use crate::services::memory::{AppState as MemoryAppState, handlers::MemoryHandler};
-use crate::services::system_configs::{
-    AppState as SystemConfigsAppState, handlers::SystemConfigHandler, manager::SystemConfigManager,
+use crate::services::memory::{
+    AppState as MemoryAppState,
+    handlers::MemoryHandler,
+    manager::MemoryManager,
 };
 
 /// HTTP server for the Loom memory service
 pub struct LoomServer {
     config: Config,
-    memory_manager: Arc<HybridMemoryManager>,
-    system_config_manager: Arc<SystemConfigManager>,
+    memory_manager: Arc<MemoryManager>,
 }
 
 impl LoomServer {
@@ -36,20 +32,12 @@ impl LoomServer {
 
         info!("Initializing Loom memory server");
 
-        // Initialize database connection
-        let conn = init_db_connection(&config.mysql_url).await?;
-
-        // Run migrations first
-        run_migrations(&conn).await?;
-
-        // Initialize memory manager and system config manager
-        let memory_manager = Arc::new(init_memory_service(conn.clone()).await?);
-        let system_config_manager = Arc::new(init_system_configs_service(conn).await?);
+        // Initialize memory manager with MySQL
+        let memory_manager = Arc::new(init_memory_service(&config).await?);
 
         Ok(Self {
             config,
             memory_manager,
-            system_config_manager,
         })
     }
 
@@ -61,12 +49,9 @@ impl LoomServer {
             trace::TraceLayer,
         };
 
-        // Create app states for each service
+        // Create app state
         let memory_app_state = MemoryAppState {
             memory_manager: self.memory_manager.clone(),
-        };
-        let system_configs_app_state = SystemConfigsAppState {
-            system_config_manager: self.system_config_manager.clone(),
         };
 
         let app = Router::new()
@@ -80,14 +65,6 @@ impl LoomServer {
                     .route("/{id}", get(MemoryHandler::get_memory))
                     .route("/{id}", delete(MemoryHandler::delete_memory))
                     .with_state(memory_app_state),
-            )
-            .nest(
-                "/api/v1/system-configs",
-                Router::new()
-                    .route("/", post(SystemConfigHandler::create_system_config))
-                    .route("/", get(SystemConfigHandler::query_system_configs))
-                    .route("/{id}", get(SystemConfigHandler::get_system_config))
-                    .with_state(system_configs_app_state),
             )
             .layer(
                 CorsLayer::new()
@@ -116,28 +93,19 @@ impl LoomServer {
     }
 }
 
-async fn init_db_connection(mysql_url: &str) -> anyhow::Result<DatabaseConnection> {
-    Database::connect(mysql_url)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to connect to database: {}", e))
+async fn init_memory_service(config: &Config) -> anyhow::Result<MemoryManager> {
+    let db = connect_db(config).await?;
+    Ok(MemoryManager::new(db, 0))
 }
 
-async fn init_memory_service(conn: DatabaseConnection) -> anyhow::Result<HybridMemoryManager> {
-    Ok(HybridMemoryManager::new(MysqlMemoryManager::new(conn)))
-}
+async fn connect_db(config: &Config) -> anyhow::Result<DatabaseConnection> {
+    let mut db_options = sea_orm::ConnectOptions::new(config.mysql.url.clone());
 
-async fn init_system_configs_service(
-    conn: DatabaseConnection,
-) -> anyhow::Result<SystemConfigManager> {
-    Ok(SystemConfigManager::new(conn))
-}
+    if let Some(max_conn) = config.mysql.max_connections {
+        db_options.max_connections(max_conn);
+    }
 
-async fn run_migrations(conn: &DatabaseConnection) -> anyhow::Result<()> {
-    info!("Running database migrations...");
-    Migrator::up(conn, None)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to run migrations: {}", e))?;
-    info!("Database migrations completed!");
-
-    Ok(())
+    let db = Database::connect(db_options).await?;
+    info!("Connected to MySQL database");
+    Ok(db)
 }

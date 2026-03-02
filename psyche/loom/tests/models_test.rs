@@ -2,20 +2,12 @@ use loom::memory::builder::MemoryFragmentBuilder;
 use loom::memory::models::{
     ApiResponse, CreateMemoryRequest, MemoryQuery, MemoryResponse, SearchMemoryRequest, TimeRange,
 };
-use loom::memory::types::MemorySource;
-use std::collections::HashMap;
-
-fn test_source() -> MemorySource {
-    MemorySource {
-        channel: "test".to_string(),
-        identifier: "test".to_string(),
-        metadata: HashMap::new(),
-    }
-}
+use loom::memory::types::MemoryKind;
 
 #[test]
 fn test_memory_response_single() {
-    let fragment = MemoryFragmentBuilder::new("single content".to_string(), test_source()).build();
+    let fragment =
+        MemoryFragmentBuilder::new("single content".to_string(), MemoryKind::Message).build();
     let response = MemoryResponse::single(fragment);
 
     assert_eq!(response.total, 1);
@@ -28,9 +20,9 @@ fn test_memory_response_single() {
 #[test]
 fn test_memory_response_multiple() {
     let fragments = vec![
-        MemoryFragmentBuilder::new("first".to_string(), test_source()).build(),
-        MemoryFragmentBuilder::new("second".to_string(), test_source()).build(),
-        MemoryFragmentBuilder::new("third".to_string(), test_source()).build(),
+        MemoryFragmentBuilder::new("first".to_string(), MemoryKind::Message).build(),
+        MemoryFragmentBuilder::new("second".to_string(), MemoryKind::Thought).build(),
+        MemoryFragmentBuilder::new("third".to_string(), MemoryKind::Action).build(),
     ];
 
     let response = MemoryResponse::multiple(fragments);
@@ -55,7 +47,7 @@ fn test_memory_response_empty() {
 #[test]
 fn test_memory_response_first_and_is_empty() {
     // Test with single fragment
-    let fragment = MemoryFragmentBuilder::new("test".to_string(), test_source()).build();
+    let fragment = MemoryFragmentBuilder::new("test".to_string(), MemoryKind::Message).build();
     let response = MemoryResponse::single(fragment);
     assert!(response.first().is_some());
     assert_eq!(response.first().unwrap().content, "test");
@@ -63,8 +55,8 @@ fn test_memory_response_first_and_is_empty() {
 
     // Test with multiple fragments
     let fragments = vec![
-        MemoryFragmentBuilder::new("a".to_string(), test_source()).build(),
-        MemoryFragmentBuilder::new("b".to_string(), test_source()).build(),
+        MemoryFragmentBuilder::new("a".to_string(), MemoryKind::Thought).build(),
+        MemoryFragmentBuilder::new("b".to_string(), MemoryKind::Action).build(),
     ];
     let response = MemoryResponse::multiple(fragments);
     assert_eq!(response.first().unwrap().content, "a");
@@ -72,7 +64,7 @@ fn test_memory_response_first_and_is_empty() {
 
 #[test]
 fn test_create_memory_request_single() {
-    let fragment = MemoryFragmentBuilder::new("single".to_string(), test_source()).build();
+    let fragment = MemoryFragmentBuilder::new("single".to_string(), MemoryKind::Message).build();
     let request = CreateMemoryRequest::single(fragment);
 
     assert_eq!(request.fragments.len(), 1);
@@ -82,8 +74,8 @@ fn test_create_memory_request_single() {
 #[test]
 fn test_create_memory_request_multiple() {
     let fragments = vec![
-        MemoryFragmentBuilder::new("a".to_string(), test_source()).build(),
-        MemoryFragmentBuilder::new("b".to_string(), test_source()).build(),
+        MemoryFragmentBuilder::new("a".to_string(), MemoryKind::Message).build(),
+        MemoryFragmentBuilder::new("b".to_string(), MemoryKind::Thought).build(),
     ];
     let request = CreateMemoryRequest::multiple(fragments);
 
@@ -187,7 +179,8 @@ fn test_memory_query_creation() {
 
 #[test]
 fn test_memory_response_serialization() {
-    let fragment = MemoryFragmentBuilder::new("serialize me".to_string(), test_source()).build();
+    let fragment =
+        MemoryFragmentBuilder::new("serialize me".to_string(), MemoryKind::Message).build();
     let response = MemoryResponse::single(fragment);
 
     let json = serde_json::to_string(&response).unwrap();

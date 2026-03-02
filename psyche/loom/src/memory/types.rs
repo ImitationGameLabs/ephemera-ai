@@ -1,50 +1,60 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fmt;
+
+/// Memory kind - the category of a memory fragment
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MemoryKind {
+    /// AI's internal thinking: reasoning, planning, reflection
+    Thought,
+    /// Tool/function calls: actions taken by the AI
+    Action,
+    /// External triggers: messages, events, notifications
+    Message,
+}
+
+impl MemoryKind {
+    /// Convert to InfluxDB tag value
+    pub fn as_tag(&self) -> &'static str {
+        match self {
+            MemoryKind::Thought => "thought",
+            MemoryKind::Action => "action",
+            MemoryKind::Message => "message",
+        }
+    }
+
+    /// Parse from string (case-insensitive)
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "thought" => MemoryKind::Thought,
+            "action" => MemoryKind::Action,
+            _ => MemoryKind::Message,
+        }
+    }
+}
+
+impl Default for MemoryKind {
+    fn default() -> Self {
+        MemoryKind::Message
+    }
+}
+
+impl std::fmt::Display for MemoryKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.as_tag())
+    }
+}
 
 /// MemoryFragment represents a minimal, immutable event in the memory stream.
 /// Each fragment is a simple record of something that happened, stored in chronological order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryFragment {
-    /// Unique identifier for this memory fragment
+    /// Unique identifier (Snowflake-like ID)
     pub id: i64,
-    /// The content/text of the memory
+    /// JSON content with type-specific structure
     pub content: String,
     /// When this memory was created
     #[serde(with = "time::serde::iso8601")]
     pub timestamp: time::OffsetDateTime,
-    /// Source of the memory, indicating its origin
-    pub source: MemorySource,
-}
-
-/// Represents the origin of a memory fragment with channel-based design.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemorySource {
-    /// Channel category: "dialogue", "information", "thought", "action"
-    pub channel: String,
-    /// Unique identifier for the specific source instance
-    pub identifier: String,
-    /// Additional metadata for rich source information
-    pub metadata: HashMap<String, String>,
-}
-
-impl Default for MemorySource {
-    fn default() -> Self {
-        Self {
-            channel: "unknown".to_string(),
-            identifier: "unknown".to_string(),
-            metadata: HashMap::new(),
-        }
-    }
-}
-
-impl fmt::Display for MemorySource {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let type_str = self
-            .metadata
-            .get("type")
-            .map(|t| format!(":{}", t))
-            .unwrap_or_default();
-        write!(f, "[{}{}] {}", self.channel, type_str, self.identifier)
-    }
+    /// The kind/category of this memory
+    pub kind: MemoryKind,
 }

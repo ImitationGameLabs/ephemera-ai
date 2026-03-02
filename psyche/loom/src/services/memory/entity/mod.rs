@@ -1,3 +1,3 @@
 pub mod memory;
 
-pub use memory::Entity as MemoryEntity;
+pub use memory::{ActiveModel, Column, Entity};

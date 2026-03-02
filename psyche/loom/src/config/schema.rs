@@ -1,9 +1,18 @@
 use serde::Deserialize;
 use std::path::Path;
 
+/// MySQL database configuration
+#[derive(Debug, Clone, Deserialize)]
+pub struct MySqlConfig {
+    /// MySQL server URL (e.g., "mysql://user:password@localhost:3306/loom")
+    pub url: String,
+    /// Maximum number of connections in the pool
+    pub max_connections: Option<u32>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
-    pub mysql_url: String,
+    pub mysql: MySqlConfig,
     pub port: u16,
 }
 
@@ -16,8 +25,8 @@ impl Config {
 
         // Validate required fields
         assert!(
-            !config.mysql_url.trim().is_empty(),
-            "mysql_url cannot be empty"
+            !config.mysql.url.trim().is_empty(),
+            "mysql.url cannot be empty"
         );
         assert!(config.port != 0, "port cannot be 0");
 

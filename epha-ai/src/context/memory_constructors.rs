@@ -3,77 +3,65 @@
 //! This module provides high-level convenience functions for creating MemoryFragmentBuilders
 //! with common patterns used in the Ephemera AI application.
 
-use loom_client::{MemoryFragmentBuilder, memory::MemorySource};
-use std::collections::HashMap;
+use loom_client::{MemoryFragmentBuilder, MemoryKind};
+use serde_json::json;
 
 /// Create a builder for a memory fragment from an AI thought with specified reasoning type
 pub fn from_reasoning(content: String, reasoning_type: &str) -> MemoryFragmentBuilder {
-    let mut metadata = HashMap::new();
-    metadata.insert("type".to_string(), reasoning_type.to_string());
+    let content = json!({
+        "type": reasoning_type,
+        "thought": content,
+    })
+    .to_string();
 
-    let source = MemorySource {
-        channel: "thought".to_string(),
-        identifier: "self_thought".to_string(),
-        metadata,
-    };
-
-    MemoryFragmentBuilder::new(content, source)
+    MemoryFragmentBuilder::new(content, MemoryKind::Thought)
 }
 
 /// Create a builder for a memory fragment from user dialogue input
 pub fn from_dialogue_input(content: String, user: &str) -> MemoryFragmentBuilder {
-    let mut metadata = HashMap::new();
-    metadata.insert("type".to_string(), "input".to_string());
+    let content = json!({
+        "type": "dialogue_input",
+        "text": content,
+        "participant": user,
+    })
+    .to_string();
 
-    let source = MemorySource {
-        channel: "dialogue".to_string(),
-        identifier: user.to_string(),
-        metadata,
-    };
-
-    MemoryFragmentBuilder::new(content, source)
+    MemoryFragmentBuilder::new(content, MemoryKind::Message)
 }
 
 /// Create a builder for a memory fragment from dialogue response from AI
 pub fn from_dialogue_response(content: String) -> MemoryFragmentBuilder {
-    let mut metadata = HashMap::new();
-    metadata.insert("type".to_string(), "output".to_string());
+    let content = json!({
+        "type": "dialogue_output",
+        "text": content,
+        "participant": "self",
+    })
+    .to_string();
 
-    let source = MemorySource {
-        channel: "dialogue".to_string(),
-        identifier: "self".to_string(),
-        metadata,
-    };
-
-    MemoryFragmentBuilder::new(content, source)
+    MemoryFragmentBuilder::new(content, MemoryKind::Message)
 }
 
 /// Create a builder for a memory fragment from an information source
 pub fn from_information(content: String, source: &str, source_type: &str) -> MemoryFragmentBuilder {
-    let mut metadata = HashMap::new();
-    metadata.insert("type".to_string(), source_type.to_string());
+    let content = json!({
+        "type": source_type,
+        "text": content,
+        "source": source,
+    })
+    .to_string();
 
-    let memory_source = MemorySource {
-        channel: "information".to_string(),
-        identifier: source.to_string(),
-        metadata,
-    };
-
-    MemoryFragmentBuilder::new(content, memory_source)
+    MemoryFragmentBuilder::new(content, MemoryKind::Message)
 }
 
 /// Create a builder for a memory fragment from an AI action
 pub fn from_action(content: String, action_type: &str) -> MemoryFragmentBuilder {
-    let mut metadata = HashMap::new();
-    metadata.insert("type".to_string(), action_type.to_string());
+    let content = json!({
+        "type": action_type,
+        "action": content,
+    })
+    .to_string();
 
-    let source = MemorySource {
-        channel: "action".to_string(),
-        identifier: "self_action".to_string(),
-        metadata,
-    };
-
-    MemoryFragmentBuilder::new(content, source)
+    MemoryFragmentBuilder::new(content, MemoryKind::Action)
 }
 
 #[cfg(test)]
@@ -83,36 +71,28 @@ mod tests {
     #[test]
     fn test_convenience_constructors() {
         let thought = from_reasoning("I need to analyze this".to_string(), "reasoning").build();
-        assert_eq!(thought.content, "I need to analyze this");
-        assert_eq!(thought.source.channel, "thought");
-        assert_eq!(thought.source.identifier, "self_thought");
-        assert_eq!(
-            thought.source.metadata.get("type"),
-            Some(&"reasoning".to_string())
-        );
+        assert!(thought.content.contains("\"thought\":\"I need to analyze this\""));
+        assert!(thought.content.contains("\"type\":\"reasoning\""));
+        assert_eq!(thought.kind, MemoryKind::Thought);
 
         let dialogue = from_dialogue_input("Hello world".to_string(), "alice").build();
-        assert_eq!(dialogue.content, "Hello world");
-        assert_eq!(dialogue.source.channel, "dialogue");
-        assert_eq!(dialogue.source.identifier, "alice");
-        assert_eq!(
-            dialogue.source.metadata.get("type"),
-            Some(&"input".to_string())
-        );
+        assert!(dialogue.content.contains("\"text\":\"Hello world\""));
+        assert!(dialogue.content.contains("\"participant\":\"alice\""));
+        assert_eq!(dialogue.kind, MemoryKind::Message);
+
+        let response = from_dialogue_response("Hi there!".to_string()).build();
+        assert!(response.content.contains("\"text\":\"Hi there!\""));
+        assert!(response.content.contains("\"participant\":\"self\""));
+        assert_eq!(response.kind, MemoryKind::Message);
 
         let info = from_information("Config loaded".to_string(), "config.json", "file").build();
-        assert_eq!(info.content, "Config loaded");
-        assert_eq!(info.source.channel, "information");
-        assert_eq!(info.source.identifier, "config.json");
-        assert_eq!(info.source.metadata.get("type"), Some(&"file".to_string()));
+        assert!(info.content.contains("\"text\":\"Config loaded\""));
+        assert!(info.content.contains("\"source\":\"config.json\""));
+        assert_eq!(info.kind, MemoryKind::Message);
 
         let action = from_action("Task completed".to_string(), "execution").build();
-        assert_eq!(action.content, "Task completed");
-        assert_eq!(action.source.channel, "action");
-        assert_eq!(action.source.identifier, "self_action");
-        assert_eq!(
-            action.source.metadata.get("type"),
-            Some(&"execution".to_string())
-        );
+        assert!(action.content.contains("\"action\":\"Task completed\""));
+        assert!(action.content.contains("\"type\":\"execution\""));
+        assert_eq!(action.kind, MemoryKind::Action);
     }
 }
