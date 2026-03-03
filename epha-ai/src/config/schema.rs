@@ -6,6 +6,8 @@ pub struct Config {
     pub llm: LlmConfig,
     pub services: ServicesConfig,
     pub atrium_auth: AtriumAuthConfig,
+    /// Tick interval in milliseconds when in Dormant state
+    pub dormant_tick_interval_ms: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -67,6 +69,10 @@ impl Config {
         assert!(
             !config.atrium_auth.password.trim().is_empty(),
             "atrium_auth.password cannot be empty"
+        );
+        assert!(
+            config.dormant_tick_interval_ms > 0,
+            "dormant_tick_interval_ms cannot be empty or 0"
         );
 
         config

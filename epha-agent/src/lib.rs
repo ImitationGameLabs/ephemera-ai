@@ -1,3 +1,3 @@
 pub mod context;
-pub mod state_machine;
+// pub mod state_machine;  // Deprecated: old focus state machine
 pub mod tools;

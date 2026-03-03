@@ -42,8 +42,8 @@ async fn main() -> anyhow::Result<()> {
 
     let loom_client = Arc::new(loom_client);
     let dialogue_client = Arc::new(dialogue_client);
-    let mut ai = EphemeraAI::new(llm_client, loom_client, dialogue_client, &config.llm.model);
-    ai.run().await?;
+    let mut ai = EphemeraAI::new(llm_client, loom_client, dialogue_client, config);
+    ai.live().await?;
 
     Ok(())
 }
