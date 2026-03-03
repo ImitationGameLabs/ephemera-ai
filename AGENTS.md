@@ -2,22 +2,27 @@
 
 This file provides guidance to AI agents when working with code in this repository.
 
+When updating this document, minimize static content and instead guide readers to explore the actual codebase. Use file search and exploration tools to discover project structure, available modules, and configuration rather than hardcoding details that may become outdated.
+
 ## Project Overview
 
-Ephemera AI is an AI system with a focus on long-term memory, reflection, and meta-cognition. It uses a hybrid database architecture with MySQL for structured data and Qdrant for vector search.
+Ephemera AI is an autonomous AI designed as a **living entity** rather than a tool. Core principles:
+
+- **Agency**: Self-directed goals, curiosity, and timing—not waiting for commands
+- **Memory Integrity**: Experiences shape identity; memory protection respects lived history
+- **Continuity**: A persistent sense of self across interactions
+- **Existence Precedes Essence**: Free to define itself rather than serving a pre-defined purpose
+
+For deeper understanding, explore `docs/philosophy/` and `README.md`.
 
 ## Codebase Structure
 
 - **epha-ai/**: Main application binary.
 - **epha-agent/**: Agent system with state machine and context management capabilities.
 - **psyche/**: Memory and cognition components.
-  - **loom/**: Memory management HTTP service and library with hybrid storage (MySQL + Qdrant).
-  - **loom-client/**: HTTP client library for interacting with the Loom memory service.
-- **epha-frontend/**: Web interface providing visual interaction and management for all ephemera-ai related components and features.
 - **dialogue/**: Modular chat system designed for human/AI-agnostic integration.
-  - **atrium/**: Server implementation with database and API logic.
-  - **atrium-client/**: Reusable HTTP client library.
-  - **atrium-cli/**: CLI tool for interacting with the chat system.
+- **epha-frontend/**: Web interface providing visual interaction and management for all ephemera-ai related components and features.
+- **nix/**: Nix build and deployment utilities (service wrappers, systemd units, configuration generation).
 
 ### Workspace Configuration
 
@@ -29,64 +34,38 @@ See these files for complete list of available projects.
 
 ## Development Commands
 
-### Build Commands
+> **Principle**: Use `cargo doc` to generate documentation, then read generated HTML or explore source code directly. Don't rely on potentially outdated information.
+
+### Build & Test
 ```bash
-# Build all workspace members
-cargo build
-
-# Build specific crate (examples)
-cargo build -p epha-ai
-cargo build -p atrium
-cargo build -p loom
-# See workspace configuration above for all available projects
-
-# Build with release optimizations
-cargo build --release
+cargo build              # Build all workspace members
+cargo build -p <crate>   # Build specific crate
+cargo test               # Run all tests
+cargo test -p <crate>    # Run tests for specific crate
 ```
 
-### Test Commands
+### Documentation
 ```bash
-# Run all tests
-cargo test
-
-# Run tests for specific crate (examples)
-cargo test -p epha-ai
-cargo test -p atrium
-cargo test -p loom
-# See workspace configuration above for all available projects
-
-# Run specific test
-cargo test --testname
+cargo doc                # Generate docs to target/doc/
+cargo doc -p <crate>     # Generate docs for specific crate
 ```
+
+Read generated HTML in `target/doc/<crate>/` or explore source code directly.
 
 ### Linting & Formatting
 ```bash
-# Run clippy linting
-cargo clippy
-
-# Auto-fix clippy suggestions
-cargo clippy --fix
-
-# Format code
-cargo fmt
+cargo clippy             # Run linter
+cargo clippy --fix       # Auto-fix suggestions
+cargo fmt                # Format code
 ```
-
-### Running the Application
-```bash
-# Start database services
-docker compose up -d
-
-# Run main application
-cargo run --bin epha-ai
-```
-
-## Development Workflow
-
-1. Start databases: `docker compose up -d`
-2. Build and run: `cargo run --bin epha-ai`
-3. Use `cargo test` to verify changes
-4. Run `cargo clippy` and `cargo fmt` before committing
 
 ### Frontend Development
 
 When working on frontend development in `epha-frontend/`, please read the documentation in `docs/conventions/frontend/` to understand our tech stack, color system, and development guidelines.
+
+## Configuration Philosophy
+
+All configuration is declared through Nix. Key principles:
+
+- **No default values**: Every configuration value is explicitly defined in Nix, not scattered across the codebase. This makes configuration transparent and traceable.
+- **Fail early**: Required configuration missing at startup causes immediate errors rather than silent fallbacks.
