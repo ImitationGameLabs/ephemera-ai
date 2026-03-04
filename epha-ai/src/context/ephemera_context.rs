@@ -1,6 +1,7 @@
 use super::MemoryFragmentList;
-use super::memory_constructors::from_action;
+use super::memory_constructors::{from_action, from_publisher_message};
 use epha_agent::context::ContextSerialize;
+use epha_agent::publisher::PublisherMessage;
 use loom_client::memory::MemoryFragment;
 use loom_client::{CreateMemoryRequest, LoomClient};
 use std::collections::VecDeque;
@@ -120,6 +121,17 @@ impl EphemeraContext {
             if !self.memory_context.iter().any(|m| m.id == memory.id) {
                 self.memory_context.push(memory);
             }
+        }
+    }
+
+    /// Process Publisher messages and add to recent_activities
+    ///
+    /// Messages are converted to MemoryFragment via from_publisher_message(),
+    /// then added to queue via add_activity(), sharing flow with Thought/Action.
+    pub fn add_publisher_messages(&mut self, messages: Vec<PublisherMessage>) {
+        for msg in messages {
+            let fragment = from_publisher_message(msg).build();
+            self.add_activity(fragment);  // Reuse existing flow
         }
     }
 

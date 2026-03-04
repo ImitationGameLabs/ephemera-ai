@@ -8,6 +8,9 @@ pub struct Config {
     pub atrium_auth: AtriumAuthConfig,
     /// Tick interval in milliseconds when in Dormant state
     pub dormant_tick_interval_ms: u64,
+    /// Subscriber configuration for Publisher-Subscriber system
+    #[serde(default)]
+    pub subscriber: SubscriberConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -28,6 +31,44 @@ pub struct ServicesConfig {
 pub struct AtriumAuthConfig {
     pub username: String,
     pub password: String,
+}
+
+/// Subscriber configuration for the Publisher-Subscriber system
+#[derive(Debug, Clone, Deserialize)]
+pub struct SubscriberConfig {
+    /// Interval between heartbeat checks in seconds
+    #[serde(default = "default_heartbeat_interval")]
+    pub heartbeat_interval_seconds: u64,
+
+    /// Time without heartbeat before status becomes Degraded
+    #[serde(default = "default_degraded_timeout")]
+    pub degraded_timeout_seconds: u64,
+
+    /// Time without heartbeat before auto-disconnect
+    #[serde(default = "default_disconnect_timeout")]
+    pub disconnect_timeout_seconds: u64,
+}
+
+fn default_heartbeat_interval() -> u64 {
+    30
+}
+
+fn default_degraded_timeout() -> u64 {
+    60
+}
+
+fn default_disconnect_timeout() -> u64 {
+    120
+}
+
+impl Default for SubscriberConfig {
+    fn default() -> Self {
+        Self {
+            heartbeat_interval_seconds: default_heartbeat_interval(),
+            degraded_timeout_seconds: default_degraded_timeout(),
+            disconnect_timeout_seconds: default_disconnect_timeout(),
+        }
+    }
 }
 
 impl Config {

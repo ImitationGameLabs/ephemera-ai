@@ -4,7 +4,8 @@ use crate::context::memory_constructors::from_action;
 use crate::tools::{GetMessages, MemoryGet, MemoryRecent, MemoryTimeline, SendMessage, StateTransition};
 use atrium_client::AuthenticatedClient;
 use epha_agent::context::Context;
-use epha_agent::tools::{file_system_tool_set, shell_tool_set, shell::TmuxBackend};
+use epha_agent::subscriber::{SubscriptionManager, SubscriberConfig};
+use epha_agent::tools::{file_system_tool_set, shell_tool_set, subscription_tool_set, shell::TmuxBackend};
 use loom_client::LoomClient;
 use rig::{
     agent::Agent,
@@ -22,6 +23,7 @@ pub struct EphemeraAI {
     state: Arc<std::sync::Mutex<State>>,
     agent: Agent<CompletionModel>,
     context: Context<EphemeraContext>,
+    subscription_manager: Arc<tokio::sync::Mutex<SubscriptionManager>>,
     config: crate::config::Config,
 }
 
@@ -47,7 +49,17 @@ impl EphemeraAI {
         let backend = TmuxBackend::new(&session_name).await
             .map_err(|e| anyhow::anyhow!("Failed to create tmux backend '{}': {}", session_name, e))?;
 
-        // 5. Create tool server with static tools
+        // 5. Create SubscriptionManager
+        let subscriber_config = SubscriberConfig {
+            heartbeat_interval_seconds: config.subscriber.heartbeat_interval_seconds,
+            degraded_timeout_seconds: config.subscriber.degraded_timeout_seconds,
+            disconnect_timeout_seconds: config.subscriber.disconnect_timeout_seconds,
+        };
+        let subscription_manager = Arc::new(tokio::sync::Mutex::new(
+            SubscriptionManager::new(subscriber_config)
+        ));
+
+        // 6. Create tool server with static tools
         let tool_server = ToolServer::new()
             .tool(GetMessages::new(dialogue_client.clone()))
             .tool(SendMessage::new(dialogue_client.clone()))
@@ -58,7 +70,7 @@ impl EphemeraAI {
 
         let tool_server_handle = tool_server.run();
 
-        // 6. Create ToolSet with boxed tools and append to server
+        // 7. Create ToolSet with boxed tools and append to server
         let mut boxed_toolset = ToolSet::default();
 
         // Add file system tools
@@ -71,10 +83,15 @@ impl EphemeraAI {
             boxed_toolset.add_tool_boxed(tool);
         }
 
+        // Add subscription management tools
+        for tool in subscription_tool_set(subscription_manager.clone()) {
+            boxed_toolset.add_tool_boxed(tool);
+        }
+
         // Append the boxed toolset to the running server
         tool_server_handle.append_toolset(boxed_toolset).await?;
 
-        // 7. Build agent with tool server handle
+        // 8. Build agent with tool server handle
         let agent = completion_client
             .agent(&config.llm.model)
             .preamble(&common_prompt.content)
@@ -85,6 +102,7 @@ impl EphemeraAI {
             state,
             agent,
             context: Context::new(context_data),
+            subscription_manager,
             config,
         })
     }
@@ -110,14 +128,27 @@ impl EphemeraAI {
     }
 
     async fn cognitive_cycle(&mut self) -> anyhow::Result<()> {
-        // Prepare context
+        // 1. Process pending Publisher messages first
+        let pending_messages = self.subscription_manager
+            .lock()
+            .await
+            .drain_pending_messages();
+
+        if !pending_messages.is_empty() {
+            self.context.data()
+                .lock()
+                .unwrap()
+                .add_publisher_messages(pending_messages);
+        }
+
+        // 2. Prepare context (including newly added messages)
         let context_str = self.context.serialize();
 
-        // Execute agent (rig handles tool calls including StateTransition internally)
+        // 3. Execute agent (rig handles tool calls including StateTransition internally)
         let prompt = format!("Current Context:\n{}", context_str);
         let result = self.agent.prompt(&prompt).await?;
 
-        // Update context with result
+        // 4. Update context with result
         self.update_context(result).await?;
 
         Ok(())
