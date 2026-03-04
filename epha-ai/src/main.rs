@@ -42,18 +42,17 @@ async fn main() -> anyhow::Result<()> {
 
     let loom_client = Arc::new(loom_client);
     let dialogue_client = Arc::new(dialogue_client);
-    let mut ai = EphemeraAI::new(llm_client, loom_client, dialogue_client, config);
+
+    let mut ai = EphemeraAI::new(config, dialogue_client, loom_client, llm_client).await?;
     ai.live().await?;
 
     Ok(())
 }
 
 fn init_llm_client(llm_config: &crate::config::LlmConfig) -> deepseek::Client {
-    let llm_client = deepseek::Client::builder(&llm_config.api_key)
+    deepseek::Client::builder(&llm_config.api_key)
         .base_url(&llm_config.base_url)
-        .build();
-
-    llm_client
+        .build()
 }
 
 async fn init_loom_client(loom_url: &str) -> anyhow::Result<LoomClient> {

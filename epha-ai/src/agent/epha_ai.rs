@@ -4,54 +4,89 @@ use crate::context::memory_constructors::from_action;
 use crate::tools::{GetMessages, MemoryGet, MemoryRecent, MemoryTimeline, SendMessage, StateTransition};
 use atrium_client::AuthenticatedClient;
 use epha_agent::context::Context;
+use epha_agent::tools::{file_system_tool_set, shell_tool_set, shell::TmuxBackend};
 use loom_client::LoomClient;
-use rig::{agent::Agent, client::CompletionClient, completion::Prompt, providers::deepseek::Client, providers::deepseek::CompletionModel};
-use std::sync::{Arc, Mutex};
+use rig::{
+    agent::Agent,
+    client::CompletionClient,
+    completion::Prompt,
+    providers::deepseek::{Client, CompletionModel},
+    tool::{ToolSet, server::ToolServer},
+};
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::info;
+use uuid::Uuid;
 
 pub struct EphemeraAI {
-    state: Arc<Mutex<State>>,
+    state: Arc<std::sync::Mutex<State>>,
     agent: Agent<CompletionModel>,
     context: Context<EphemeraContext>,
     config: crate::config::Config,
 }
 
 impl EphemeraAI {
-    pub fn new(
-        completion_client: Client,
-        loom_client: Arc<LoomClient>,
-        dialogue_client: Arc<AuthenticatedClient>,
+    pub async fn new(
         config: crate::config::Config,
-    ) -> Self {
+        dialogue_client: Arc<AuthenticatedClient>,
+        loom_client: Arc<LoomClient>,
+        completion_client: Client,
+    ) -> anyhow::Result<Self> {
         // 1. Create shared state
-        let state = Arc::new(Mutex::new(State::default()));
+        let state = Arc::new(std::sync::Mutex::new(State::default()));
 
         // 2. Load common prompt
-        let common_prompt =
-            CommonPrompt::from_file("prompts/common.md").expect("Failed to load common prompt");
+        let common_prompt = CommonPrompt::from_file("prompts/common.md")?;
 
         // 3. Create context
-        let context_data = Arc::new(Mutex::new(EphemeraContext::new(loom_client.clone())));
+        let context_data = Arc::new(std::sync::Mutex::new(EphemeraContext::new(loom_client.clone())));
 
-        // 4. Create single Agent with all tools
-        let agent = completion_client
-            .agent(&config.llm.model)
-            .preamble(&common_prompt.content)
+        // 4. Initialize shell backend
+        let session_name = format!("ephemera-ai-{}", Uuid::new_v4().simple());
+        info!("Creating tmux session: {}", session_name);
+        let backend = TmuxBackend::new(&session_name).await
+            .map_err(|e| anyhow::anyhow!("Failed to create tmux backend '{}': {}", session_name, e))?;
+
+        // 5. Create tool server with static tools
+        let tool_server = ToolServer::new()
             .tool(GetMessages::new(dialogue_client.clone()))
             .tool(SendMessage::new(dialogue_client.clone()))
             .tool(MemoryGet::new(loom_client.clone(), context_data.clone()))
             .tool(MemoryRecent::new(loom_client.clone(), context_data.clone()))
             .tool(MemoryTimeline::new(loom_client.clone(), context_data.clone()))
-            .tool(StateTransition::new(state.clone()))
+            .tool(StateTransition::new(state.clone()));
+
+        let tool_server_handle = tool_server.run();
+
+        // 6. Create ToolSet with boxed tools and append to server
+        let mut boxed_toolset = ToolSet::default();
+
+        // Add file system tools
+        for tool in file_system_tool_set() {
+            boxed_toolset.add_tool_boxed(tool);
+        }
+
+        // Add shell tools
+        for tool in shell_tool_set(Arc::new(tokio::sync::Mutex::new(backend))) {
+            boxed_toolset.add_tool_boxed(tool);
+        }
+
+        // Append the boxed toolset to the running server
+        tool_server_handle.append_toolset(boxed_toolset).await?;
+
+        // 7. Build agent with tool server handle
+        let agent = completion_client
+            .agent(&config.llm.model)
+            .preamble(&common_prompt.content)
+            .tool_server_handle(tool_server_handle)
             .build();
 
-        Self {
+        Ok(Self {
             state,
             agent,
             context: Context::new(context_data),
             config,
-        }
+        })
     }
 
     pub async fn live(&mut self) -> anyhow::Result<()> {
