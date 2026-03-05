@@ -10,7 +10,11 @@ members = [
 
     "dialogue/atrium",
     "dialogue/atrium-client",
-    "dialogue/atrium-cli"
+    "dialogue/atrium-cli",
+
+    "aisthesis/agora",
+    "aisthesis/agora-client",
+    "aisthesis/heralds/timer",
 ]
 
 resolver = "3"

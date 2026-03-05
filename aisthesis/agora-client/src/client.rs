@@ -1,0 +1,207 @@
+//! HTTP client for Agora event hub.
+
+use reqwest::{Client, Error as ReqwestError, Response};
+use serde::de::DeserializeOwned;
+use std::fmt;
+use tracing::{debug, instrument};
+
+use agora::event::{Event, EventStatus, EventsListResponse};
+use agora::herald::{HeraldInfo, HeraldsListResponse};
+
+/// Client error types.
+#[derive(Debug)]
+pub enum AgoraClientError {
+    NetworkError(ReqwestError),
+    ApiError(String),
+    JsonError(serde_json::Error),
+}
+
+impl fmt::Display for AgoraClientError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AgoraClientError::NetworkError(e) => write!(f, "Network error: {}", e),
+            AgoraClientError::ApiError(msg) => write!(f, "API error: {}", msg),
+            AgoraClientError::JsonError(e) => write!(f, "JSON error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for AgoraClientError {}
+
+impl From<ReqwestError> for AgoraClientError {
+    fn from(error: ReqwestError) -> Self {
+        AgoraClientError::NetworkError(error)
+    }
+}
+
+impl From<serde_json::Error> for AgoraClientError {
+    fn from(error: serde_json::Error) -> Self {
+        AgoraClientError::JsonError(error)
+    }
+}
+
+/// HTTP client for Agora event hub.
+#[derive(Clone)]
+pub struct AgoraClient {
+    client: Client,
+    base_url: String,
+}
+
+impl AgoraClient {
+    /// Creates a new Agora client with the given base URL.
+    pub fn new(base_url: impl Into<String>) -> Self {
+        Self {
+            client: Client::new(),
+            base_url: base_url.into(),
+        }
+    }
+
+    /// Creates a new Agora client with custom HTTP client configuration.
+    pub fn with_client(base_url: impl Into<String>, client: Client) -> Self {
+        Self {
+            client,
+            base_url: base_url.into(),
+        }
+    }
+
+    /// Handles HTTP response and converts to expected type.
+    async fn handle_response<T: DeserializeOwned>(
+        response: Response,
+    ) -> Result<T, AgoraClientError> {
+        let status = response.status();
+        let url = response.url().clone();
+
+        debug!("Received response from {}: {}", url, status);
+
+        if !status.is_success() {
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Failed to read error response".to_string());
+            return Err(AgoraClientError::ApiError(format!(
+                "HTTP {}: {}",
+                status, error_text
+            )));
+        }
+
+        let text = response.text().await?;
+        let result: T = serde_json::from_str(&text)?;
+        Ok(result)
+    }
+
+    /// Health check - verifies the service is running.
+    #[instrument(skip(self))]
+    pub async fn health_check(&self) -> Result<String, AgoraClientError> {
+        let url = format!("{}/health", self.base_url);
+        debug!("Making health check request to: {}", url);
+
+        let response = self.client.get(&url).send().await?;
+        let result: String = Self::handle_response(response).await?;
+        Ok(result)
+    }
+
+    // === Event operations ===
+
+    /// Gets pending events.
+    #[instrument(skip(self))]
+    pub async fn get_events(
+        &self,
+        status: Option<EventStatus>,
+        limit: Option<u32>,
+    ) -> Result<Vec<Event>, AgoraClientError> {
+        let url = format!("{}/events", self.base_url);
+        debug!("Getting events from: {}", url);
+
+        let mut query: Vec<(&str, String)> = Vec::new();
+        if let Some(s) = status {
+            query.push(("status", serde_json::to_string(&s).unwrap().trim_matches('"').to_string()));
+        }
+        if let Some(l) = limit {
+            query.push(("limit", l.to_string()));
+        }
+
+        let request = self.client.get(&url).query(&query);
+        let response: EventsListResponse = Self::handle_response(request.send().await?).await?;
+
+        Ok(response.events)
+    }
+
+    /// Acknowledges a single event.
+    #[instrument(skip(self))]
+    pub async fn ack_event(&self, event_id: u64) -> Result<Event, AgoraClientError> {
+        let url = format!("{}/events/{}", self.base_url, event_id);
+        debug!("Acknowledging event at: {}", url);
+
+        let body = serde_json::json!({ "status": "acked" });
+        let response = self.client.patch(&url).json(&body).send().await?;
+        let event: Event = Self::handle_response(response).await?;
+
+        Ok(event)
+    }
+
+    /// Batch acknowledges multiple events.
+    #[instrument(skip(self))]
+    pub async fn ack_events(&self, event_ids: Vec<u64>) -> Result<usize, AgoraClientError> {
+        let url = format!("{}/events", self.base_url);
+        debug!("Batch acknowledging {} events at: {}", event_ids.len(), url);
+
+        let body = serde_json::json!({
+            "event_ids": event_ids,
+            "status": "acked"
+        });
+        let response = self.client.patch(&url).json(&body).send().await?;
+        let result: serde_json::Value = Self::handle_response(response).await?;
+
+        let updated = result["updated"].as_u64().unwrap_or(0) as usize;
+        Ok(updated)
+    }
+
+    // === Herald operations ===
+
+    /// Lists all heralds.
+    #[instrument(skip(self))]
+    pub async fn list_heralds(&self) -> Result<Vec<HeraldInfo>, AgoraClientError> {
+        let url = format!("{}/heralds", self.base_url);
+        debug!("Listing heralds from: {}", url);
+
+        let response = self.client.get(&url).send().await?;
+        let result: HeraldsListResponse = Self::handle_response(response).await?;
+
+        Ok(result.heralds)
+    }
+
+    /// Gets a specific herald by ID.
+    #[instrument(skip(self))]
+    pub async fn get_herald(&self, id: &str) -> Result<HeraldInfo, AgoraClientError> {
+        let url = format!("{}/heralds/{}", self.base_url, id);
+        debug!("Getting herald from: {}", url);
+
+        let response = self.client.get(&url).send().await?;
+        let herald: HeraldInfo = Self::handle_response(response).await?;
+
+        Ok(herald)
+    }
+
+    /// Gets the base URL this client is configured to use.
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_client_creation() {
+        let client = AgoraClient::new("http://localhost:8080");
+        assert_eq!(client.base_url(), "http://localhost:8080");
+    }
+
+    #[test]
+    fn test_client_with_custom_http_client() {
+        let http_client = Client::new();
+        let client = AgoraClient::with_client("http://localhost:8080", http_client);
+        assert_eq!(client.base_url(), "http://localhost:8080");
+    }
+}

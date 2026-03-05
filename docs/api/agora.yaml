@@ -1,0 +1,309 @@
+openapi: 3.0.0
+info:
+  title: Agora API
+  version: 1.0.0
+  description: Event hub for Ephemera AI
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+paths:
+  /heralds:
+    post:
+      summary: Register a herald
+      operationId: registerHerald
+      tags: [Heralds]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterHeraldRequest'
+      responses:
+        '201':
+          description: Herald registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeraldInfo'
+    get:
+      summary: List all heralds
+      operationId: listHeralds
+      tags: [Heralds]
+      responses:
+        '200':
+          description: List of heralds
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  heralds:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HeraldInfo'
+
+  /heralds/{id}:
+    get:
+      summary: Get herald status
+      operationId: getHerald
+      tags: [Heralds]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Herald info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeraldInfo'
+        '404':
+          description: Herald not found
+    delete:
+      summary: Unregister a herald
+      operationId: unregisterHerald
+      tags: [Heralds]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Herald unregistered
+
+  /heralds/{id}/heartbeat:
+    put:
+      summary: Update herald heartbeat
+      operationId: heartbeatHerald
+      tags: [Heralds]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+      responses:
+        '200':
+          description: Heartbeat received
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeartbeatResponse'
+
+  /events:
+    post:
+      summary: Push an event
+      operationId: pushEvent
+      tags: [Events]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEventRequest'
+      responses:
+        '201':
+          description: Event created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+    get:
+      summary: Get pending events
+      operationId: getEvents
+      tags: [Events]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/EventStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Event'
+                  total:
+                    type: integer
+    patch:
+      summary: Batch update event status
+      operationId: batchUpdateEvents
+      tags: [Events]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchUpdateEventsRequest'
+      responses:
+        '200':
+          description: Events updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: integer
+
+  /events/{id}:
+    patch:
+      summary: Update event status
+      operationId: updateEvent
+      tags: [Events]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEventRequest'
+      responses:
+        '200':
+          description: Event updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '404':
+          description: Event not found
+
+components:
+  schemas:
+    RegisterHeraldRequest:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: Unique herald identifier
+        description:
+          type: string
+          description: Herald description
+
+    HeraldInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/HeraldStatus'
+        registered_at:
+          type: string
+          format: date-time
+        last_heartbeat:
+          type: string
+          format: date-time
+
+    HeraldStatus:
+      type: string
+      enum: [active, degraded, disconnected]
+
+    HeartbeatRequest:
+      type: object
+      properties:
+        metrics:
+          type: object
+          additionalProperties: true
+
+    HeartbeatResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/HeraldStatus'
+        last_heartbeat:
+          type: string
+          format: date-time
+
+    CreateEventRequest:
+      type: object
+      required: [event_type, herald_id]
+      properties:
+        event_type:
+          type: string
+          description: Event type (e.g., "timer.trigger", "chat.message")
+        herald_id:
+          type: string
+          description: ID of the herald that produced this event
+        priority:
+          $ref: '#/components/schemas/EventPriority'
+        payload:
+          type: object
+          additionalProperties: true
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+        event_type:
+          type: string
+        herald_id:
+          type: string
+        priority:
+          $ref: '#/components/schemas/EventPriority'
+        payload:
+          type: object
+        status:
+          $ref: '#/components/schemas/EventStatus'
+        timestamp:
+          type: string
+          format: date-time
+
+    EventPriority:
+      type: string
+      enum: [low, normal, high, urgent]
+      default: normal
+
+    EventStatus:
+      type: string
+      enum: [pending, delivered, acked]
+
+    UpdateEventRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/EventStatus'
+
+    BatchUpdateEventsRequest:
+      type: object
+      required: [event_ids, status]
+      properties:
+        event_ids:
+          type: array
+          items:
+            type: integer
+        status:
+          $ref: '#/components/schemas/EventStatus'

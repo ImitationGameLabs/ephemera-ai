@@ -1,0 +1,101 @@
+//! HTTP server for Agora event hub.
+
+use axum::Router;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use tracing::info;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+use crate::config::Config;
+use crate::handlers::{EventHandler, HeraldHandler};
+use crate::herald::HeraldRegistry;
+use crate::queue::MemoryEventQueue;
+
+/// Application state shared across handlers.
+#[derive(Clone)]
+pub struct AppState {
+    pub event_queue: Arc<MemoryEventQueue>,
+    pub herald_registry: Arc<HeraldRegistry>,
+}
+
+/// HTTP server for the Agora event hub.
+pub struct AgoraServer {
+    config: Config,
+    state: Arc<AppState>,
+}
+
+impl AgoraServer {
+    /// Creates a new server instance.
+    pub async fn new(config: Config) -> anyhow::Result<Self> {
+        // Initialize tracing
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| "agora=debug,tower_http=debug".into()),
+            )
+            .with(tracing_subscriber::fmt::layer())
+            .init();
+
+        info!("Initializing Agora event hub");
+
+        let state = Arc::new(AppState {
+            event_queue: Arc::new(MemoryEventQueue::new()),
+            herald_registry: Arc::new(HeraldRegistry::new()),
+        });
+
+        Ok(Self { config, state })
+    }
+
+    /// Starts the server.
+    pub async fn run(self) -> anyhow::Result<()> {
+        use axum::routing::{delete, get, patch, post, put};
+        use tower_http::{
+            cors::{Any, CorsLayer},
+            trace::TraceLayer,
+        };
+
+        let app = Router::new()
+            .route("/health", get(health_check))
+            // Herald routes
+            .route("/heralds", post(HeraldHandler::register))
+            .route("/heralds", get(HeraldHandler::list))
+            .route("/heralds/{id}", get(HeraldHandler::get))
+            .route("/heralds/{id}", delete(HeraldHandler::unregister))
+            .route("/heralds/{id}/heartbeat", put(HeraldHandler::heartbeat))
+            // Event routes
+            .route("/events", post(EventHandler::create))
+            .route("/events", get(EventHandler::list))
+            .route("/events", patch(EventHandler::batch_update))
+            .route("/events/{id}", patch(EventHandler::update))
+            .with_state((*self.state).clone())
+            .layer(
+                CorsLayer::new()
+                    .allow_origin(Any)
+                    .allow_methods(Any)
+                    .allow_headers(Any),
+            )
+            .layer(TraceLayer::new_for_http());
+
+        let bind_address = self.config.bind_address();
+        let addr: SocketAddr = bind_address
+            .parse()
+            .map_err(|e| anyhow::anyhow!("Invalid address: {}", e))?;
+
+        info!("Starting Agora server on {}", bind_address);
+
+        let listener = tokio::net::TcpListener::bind(addr)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to bind to address: {}", e))?;
+
+        axum::serve(listener, app)
+            .await
+            .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
+
+        Ok(())
+    }
+}
+
+/// Health check endpoint.
+async fn health_check() -> &'static str {
+    "OK"
+}
