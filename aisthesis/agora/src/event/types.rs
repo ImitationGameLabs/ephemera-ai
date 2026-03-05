@@ -17,6 +17,17 @@ pub enum EventPriority {
     Urgent,
 }
 
+impl std::fmt::Display for EventPriority {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            EventPriority::Low => write!(f, "low"),
+            EventPriority::Normal => write!(f, "normal"),
+            EventPriority::High => write!(f, "high"),
+            EventPriority::Urgent => write!(f, "urgent"),
+        }
+    }
+}
+
 /// Event processing status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -25,6 +36,16 @@ pub enum EventStatus {
     Pending,
     Delivered,
     Acked,
+}
+
+impl std::fmt::Display for EventStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            EventStatus::Pending => write!(f, "pending"),
+            EventStatus::Delivered => write!(f, "delivered"),
+            EventStatus::Acked => write!(f, "acked"),
+        }
+    }
 }
 
 /// An event produced by a herald.

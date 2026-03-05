@@ -983,6 +983,8 @@ dependencies = [
 name = "epha-ai"
 version = "0.1.0"
 dependencies = [
+ "agora",
+ "agora-client",
  "anyhow",
  "async-trait",
  "atrium-client",

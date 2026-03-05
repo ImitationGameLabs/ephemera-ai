@@ -1,7 +1,7 @@
 use super::MemoryFragmentList;
-use super::memory_constructors::{from_action, from_producer_event};
+use super::memory_constructors::{from_action, from_agora_event};
 use epha_agent::context::ContextSerialize;
-use epha_agent::publisher::PublisherMessage;
+use agora::event::Event;
 use loom_client::memory::MemoryFragment;
 use loom_client::{CreateMemoryRequest, LoomClient};
 use std::collections::VecDeque;
@@ -31,13 +31,11 @@ impl fmt::Display for QueueStatus {
 }
 
 pub struct EphemeraContext {
-    loom_client: Arc<LoomClient>, // HTTP client for memory operations
-
-    memory_context: Vec<MemoryFragment>, // Recalled long-term memories
-    recent_activities: VecDeque<MemoryFragment>, // Recent activities
-
-    current_token_usage: usize, // Current token usage
-    max_token_limit: usize,     // Maximum token limit
+    loom_client: Arc<LoomClient>,
+    memory_context: Vec<MemoryFragment>,
+    recent_activities: VecDeque<MemoryFragment>,
+    current_token_usage: usize,
+    max_token_limit: usize,
 }
 
 impl EphemeraContext {
@@ -46,12 +44,11 @@ impl EphemeraContext {
             memory_context: Vec::new(),
             recent_activities: VecDeque::new(),
             current_token_usage: 0,
-            max_token_limit: 30_000, // 30k token maximum
+            max_token_limit: 30_000,
             loom_client,
         }
     }
 
-    // Token estimation methods
     fn estimate_tokens(&self, text: &str) -> usize {
         // Token estimation using character count
         // Rough estimate: 1 token ≈ 4 characters (more accurate than byte count for UTF-8)
@@ -66,12 +63,9 @@ impl EphemeraContext {
         self.estimate_tokens(&serialized)
     }
 
-    // General activity method - single interface for adding activities
     pub fn add_activity(&mut self, fragment: MemoryFragment) {
-        // Calculate tokens for the fragment
         let fragment_tokens = self.calculate_fragment_tokens(&fragment);
 
-        // Add to queue tail (for tracking purposes)
         let mut temp_fragment = fragment.clone();
         temp_fragment.id = 0; // Temporary ID for tracking
         self.recent_activities.push_back(temp_fragment);
@@ -86,7 +80,6 @@ impl EphemeraContext {
             }
         });
 
-        // Maintain token limit
         self.maintain_token_limit();
     }
 
@@ -94,14 +87,12 @@ impl EphemeraContext {
     pub fn add_memory_context(&mut self, summary: String, memories: Vec<MemoryFragment>) {
         let memory_count = memories.len();
 
-        // Add memories to context (avoiding duplicates)
         for memory in memories {
             if !self.memory_context.iter().any(|m| m.id == memory.id) {
                 self.memory_context.push(memory);
             }
         }
 
-        // Add activity entry with agent's summary
         let summary_fragment = from_action(
             format!(
                 "Added {} memories to context. Summary: {}",
@@ -114,7 +105,6 @@ impl EphemeraContext {
         self.add_activity(summary_fragment);
     }
 
-    /// Add memory fragments to context without creating activities (for testing)
     #[cfg(test)]
     pub fn add_memories_for_testing(&mut self, memories: Vec<MemoryFragment>) {
         for memory in memories {
@@ -124,19 +114,14 @@ impl EphemeraContext {
         }
     }
 
-    /// Process Producer events and add to recent_activities
-    ///
-    /// Events are converted to MemoryFragment via from_producer_event(),
-    /// then added to queue via add_activity(), sharing flow with Thought/Action.
-    pub fn add_producer_events(&mut self, events: Vec<PublisherMessage>) {
+    pub fn add_agora_events(&mut self, events: Vec<Event>) {
         for event in events {
-            let fragment = from_producer_event(event).build();
-            self.add_activity(fragment);  // Reuse existing flow
+            let fragment = from_agora_event(event).build();
+            self.add_activity(fragment);
         }
     }
 
     fn maintain_token_limit(&mut self) {
-        // Remove oldest activities if exceeding maximum limit
         while self.current_token_usage > self.max_token_limit && !self.recent_activities.is_empty()
         {
             if let Some(removed_fragment) = self.recent_activities.pop_front() {
@@ -146,7 +131,6 @@ impl EphemeraContext {
         }
     }
 
-    // Get current status information
     pub fn get_queue_status(&self) -> QueueStatus {
         QueueStatus {
             activity_count: self.recent_activities.len(),
@@ -156,10 +140,9 @@ impl EphemeraContext {
         }
     }
 
-    // Token limit configuration
     pub fn set_token_limit(&mut self, max_limit: usize) {
         self.max_token_limit = max_limit;
-        self.maintain_token_limit(); // Re-adjust queue
+        self.maintain_token_limit();
     }
 }
 
@@ -167,7 +150,6 @@ impl ContextSerialize for EphemeraContext {
     fn serialize(&self) -> String {
         let mut output = String::new();
 
-        // Memory context
         if !self.memory_context.is_empty() {
             output.push_str("Active Memory Context:\n");
             output.push_str("---\n");
@@ -177,7 +159,6 @@ impl ContextSerialize for EphemeraContext {
             output.push_str("---\n");
         }
 
-        // Recent activities
         if !self.recent_activities.is_empty() {
             let status = self.get_queue_status();
             output.push_str(&format!("Recent Activities ({}):\n", status));
@@ -192,17 +173,12 @@ impl ContextSerialize for EphemeraContext {
     }
 }
 
-// Default implementation removed since EphemeraContext now requires a memory_manager
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::context::memory_constructors::*;
 
-    /// Helper function to create a mock LoomClient for testing
     fn create_mock_loom_client() -> Arc<LoomClient> {
-        // Note: This is a simplified approach. In real implementation,
-        // you might need to mock LoomClient or use a test double.
         Arc::new(LoomClient::new("http://localhost:8080".to_string()))
     }
 
@@ -220,15 +196,6 @@ mod tests {
             "Activities: 5, Tokens: 15000/30000 (50.0%)"
         );
     }
-
-    // ========================================================================
-    // SERIALIZATION OBSERVATION TESTS
-    // These tests are designed to observe the serialization output of EphemeraContext
-    // in various scenarios to evaluate context engineering quality.
-    //
-    // All tests use #[ignore] to prevent automatic execution during cargo test.
-    // Run manually with: cargo test -- --ignored
-    // ========================================================================
 
     #[test]
     #[ignore]
@@ -256,7 +223,6 @@ mod tests {
             .id(1)
             .build();
 
-        // Use test helper method to avoid async operations
         context.add_memories_for_testing(vec![memory]);
 
         let serialized = context.serialize();
@@ -346,7 +312,6 @@ mod tests {
         let loom_client = create_mock_loom_client();
         let mut context = EphemeraContext::new(loom_client);
 
-        // Add some memories first
         let memory1 = from_dialogue_input(
             "Previous conversation about programming".to_string(),
             "user_789",
@@ -358,7 +323,6 @@ mod tests {
 
         context.add_memory_context("Added context memories".to_string(), memories);
 
-        // Add some activities
         let activity1_fragment = from_action(
             "Analyzed user request for Rust code help".to_string(),
             "analysis",
@@ -437,8 +401,6 @@ mod tests {
         let loom_client = create_mock_loom_client();
         let mut context = EphemeraContext::new(loom_client);
 
-        // Add a complex mix of memories
-        // Normal dialogue
         let memory1 = from_dialogue_input(
             "Can you help me debug my Rust code?".to_string(),
             "user_dev",
@@ -446,7 +408,6 @@ mod tests {
         .id(1)
         .build();
 
-        // Internal thought
         let memory2 = from_reasoning(
             "Need to analyze the error message and suggest debugging steps".to_string(),
             "analysis",
@@ -454,17 +415,14 @@ mod tests {
         .id(2)
         .build();
 
-        // Retrieved information
         let memory3 = from_information("Common Rust compilation errors include: borrow checker issues, type mismatches, and lifetime errors".to_string(), "rust_docs", "common_errors")
             .id(3)
             .build();
 
-        // Special character content
         let memory4 = from_dialogue_input("Error: cannot borrow `*self` as mutable more than once at a time\n\nHint: consider using RefCell or restructuring your code".to_string(), "error_message")
             .id(4)
             .build();
 
-        // Action taken
         let memory5 = from_action(
             "Provided detailed explanation of borrow checker and suggested code restructuring"
                 .to_string(),
@@ -477,7 +435,6 @@ mod tests {
 
         context.add_memory_context("Added comprehensive complex scenario".to_string(), memories);
 
-        // Add some activities
         let code_review_fragment = from_action(
             "Reviewed user's Rust code and identified borrow checker issue".to_string(),
             "code_analysis",

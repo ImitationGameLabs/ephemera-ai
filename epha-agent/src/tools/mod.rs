@@ -7,11 +7,9 @@
 //!
 //! - [`file_system`] - File operations (read, write, edit, list, glob, grep)
 //! - [`shell`] - Shell session management (bash, session management)
-//! - [`subscription`] - Subscription management (subscribe, unsubscribe, list)
 
 pub mod file_system;
 pub mod shell;
-pub mod subscription;
 
 // Re-export commonly used types for convenience
 pub use file_system::{
@@ -27,11 +25,4 @@ pub use shell::{
     RestartSessionOutput, RestartSessionTool, SendInputArgs, SendInputOutput, SendInputTool,
     SessionInfo, ShellBackend, ShellError, ShellOutput, SwitchSessionArgs, SwitchSessionOutput,
     SwitchSessionTool, shell_tool_set,
-};
-
-pub use subscription::{
-    GetSubscriptionInfoArgs, GetSubscriptionInfoOutput, GetSubscriptionInfoTool,
-    ListSubscriptionsArgs, ListSubscriptionsOutput, ListSubscriptionsTool, SubscribeArgs,
-    SubscribeOutput, SubscribeTool, UnsubscribeArgs, UnsubscribeOutput, UnsubscribeTool,
-    subscription_tool_set,
 };

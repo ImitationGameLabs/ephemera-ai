@@ -2,10 +2,11 @@ use crate::agent::{CommonPrompt, State};
 use crate::context::EphemeraContext;
 use crate::context::memory_constructors::from_action;
 use crate::tools::{GetMessages, MemoryGet, MemoryRecent, MemoryTimeline, SendMessage, StateTransition};
+use agora::event::EventStatus;
+use agora_client::AgoraClient;
 use atrium_client::AuthenticatedClient;
 use epha_agent::context::Context;
-use epha_agent::subscriber::{SubscriptionManager, SubscriberConfig};
-use epha_agent::tools::{file_system_tool_set, shell_tool_set, subscription_tool_set, shell::TmuxBackend};
+use epha_agent::tools::{file_system_tool_set, shell_tool_set, shell::TmuxBackend};
 use loom_client::LoomClient;
 use rig::{
     agent::Agent,
@@ -23,7 +24,7 @@ pub struct EphemeraAI {
     state: Arc<std::sync::Mutex<State>>,
     agent: Agent<CompletionModel>,
     context: Context<EphemeraContext>,
-    subscription_manager: Arc<tokio::sync::Mutex<SubscriptionManager>>,
+    agora_client: Arc<AgoraClient>,
     config: crate::config::Config,
 }
 
@@ -49,15 +50,12 @@ impl EphemeraAI {
         let backend = TmuxBackend::new(&session_name).await
             .map_err(|e| anyhow::anyhow!("Failed to create tmux backend '{}': {}", session_name, e))?;
 
-        // 5. Create SubscriptionManager
-        let subscriber_config = SubscriberConfig {
-            heartbeat_interval_seconds: config.subscriber.heartbeat_interval_seconds,
-            degraded_timeout_seconds: config.subscriber.degraded_timeout_seconds,
-            disconnect_timeout_seconds: config.subscriber.disconnect_timeout_seconds,
-        };
-        let subscription_manager = Arc::new(tokio::sync::Mutex::new(
-            SubscriptionManager::new(subscriber_config)
-        ));
+        // 5. Initialize Agora client with health check
+        let agora_client = Arc::new(AgoraClient::new(&config.agora.url));
+        info!("Initializing Agora client: {}", config.agora.url);
+        agora_client.health_check().await
+            .map_err(|e| anyhow::anyhow!("Agora service unavailable at '{}': {}", config.agora.url, e))?;
+        info!("Agora service is available");
 
         // 6. Create tool server with static tools
         let tool_server = ToolServer::new()
@@ -83,11 +81,6 @@ impl EphemeraAI {
             boxed_toolset.add_tool_boxed(tool);
         }
 
-        // Add subscription management tools
-        for tool in subscription_tool_set(subscription_manager.clone()) {
-            boxed_toolset.add_tool_boxed(tool);
-        }
-
         // Append the boxed toolset to the running server
         tool_server_handle.append_toolset(boxed_toolset).await?;
 
@@ -102,7 +95,7 @@ impl EphemeraAI {
             state,
             agent,
             context: Context::new(context_data),
-            subscription_manager,
+            agora_client,
             config,
         })
     }
@@ -128,17 +121,23 @@ impl EphemeraAI {
     }
 
     async fn cognitive_cycle(&mut self) -> anyhow::Result<()> {
-        // 1. Process pending Producer events first
-        let pending_events = self.subscription_manager
-            .lock()
-            .await
-            .drain_pending_messages();
+        // 1. Fetch pending events from Agora
+        let events = self.agora_client
+            .get_events(Some(EventStatus::Pending), None)
+            .await?;
 
-        if !pending_events.is_empty() {
+        if !events.is_empty() {
+            // Collect event IDs for acknowledgment
+            let event_ids: Vec<u64> = events.iter().map(|e| e.id).collect();
+            
+            // Add events to context
             self.context.data()
                 .lock()
                 .unwrap()
-                .add_producer_events(pending_events);
+                .add_agora_events(events);
+
+            // Acknowledge processed events
+            self.agora_client.ack_events(event_ids).await?;
         }
 
         // 2. Prepare context (including newly added events)
