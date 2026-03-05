@@ -78,7 +78,7 @@ impl AgoraServer {
             .route("/heralds", get(HeraldHandler::list))
             .route("/heralds/{id}", get(HeraldHandler::get))
             .route("/heralds/{id}", delete(HeraldHandler::unregister))
-            .route("/heralds/{id}/heartbeat", put(HeraldHandler::heartbeat))
+            .route("/heralds/{id}/heartbeat", post(HeraldHandler::heartbeat))
             // Event routes
             .route("/events", post(EventHandler::create))
             .route("/events", get(EventHandler::list))

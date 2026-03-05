@@ -79,7 +79,7 @@ paths:
           description: Herald unregistered
 
   /heralds/{id}/heartbeat:
-    put:
+    post:
       summary: Update herald heartbeat
       operationId: heartbeatHerald
       tags: [Heralds]
@@ -228,7 +228,7 @@ components:
 
     HeraldStatus:
       type: string
-      enum: [active, degraded, disconnected]
+      enum: [active, disconnected]
 
     HeartbeatRequest:
       type: object
