@@ -1,15 +1,25 @@
 use serde::{Deserialize, Serialize};
 
 /// Memory kind - the category of a memory fragment
+///
+/// Classification based on source and agency:
+/// - Thought: AI's internal cognitive processes (reasoning, planning, reflection)
+/// - Action: AI's initiated activities (tool calls, execution results)
+/// - Event: External information injected into AI context
+///   - System events (startup, shutdown, config changes)
+///   - Producer events (dialogue, timer, notifications via EventHub)
+/// - Unknown: Classification error - should be investigated
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum MemoryKind {
-    /// AI's internal thinking: reasoning, planning, reflection
+    /// AI's internal cognitive processes: reasoning, planning, reflection
     Thought,
-    /// Tool/function calls: actions taken by the AI
+    /// AI's initiated activities: tool calls, execution results
     Action,
-    /// External triggers: messages, events, notifications
-    Message,
+    /// External information: system events, producer events
+    Event,
+    /// Unrecognized kind - indicates classification error
+    Unknown,
 }
 
 impl MemoryKind {
@@ -18,7 +28,8 @@ impl MemoryKind {
         match self {
             MemoryKind::Thought => "thought",
             MemoryKind::Action => "action",
-            MemoryKind::Message => "message",
+            MemoryKind::Event => "event",
+            MemoryKind::Unknown => "unknown",
         }
     }
 
@@ -27,14 +38,16 @@ impl MemoryKind {
         match s.to_lowercase().as_str() {
             "thought" => MemoryKind::Thought,
             "action" => MemoryKind::Action,
-            _ => MemoryKind::Message,
+            "event" => MemoryKind::Event,
+            // Unknown indicates classification error
+            _ => MemoryKind::Unknown,
         }
     }
 }
 
 impl Default for MemoryKind {
     fn default() -> Self {
-        MemoryKind::Message
+        MemoryKind::Event
     }
 }
 

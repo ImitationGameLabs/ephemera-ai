@@ -71,7 +71,7 @@ mod tests {
     fn test_memory_fragment_list_serialization() {
         let mut fragment1 = MemoryFragmentBuilder::new(
             r#"{"type":"input","text":"Test perception"}"#.to_string(),
-            MemoryKind::Message,
+            MemoryKind::Event,
         )
         .build();
 

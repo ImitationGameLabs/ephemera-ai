@@ -128,20 +128,20 @@ impl EphemeraAI {
     }
 
     async fn cognitive_cycle(&mut self) -> anyhow::Result<()> {
-        // 1. Process pending Publisher messages first
-        let pending_messages = self.subscription_manager
+        // 1. Process pending Producer events first
+        let pending_events = self.subscription_manager
             .lock()
             .await
             .drain_pending_messages();
 
-        if !pending_messages.is_empty() {
+        if !pending_events.is_empty() {
             self.context.data()
                 .lock()
                 .unwrap()
-                .add_publisher_messages(pending_messages);
+                .add_producer_events(pending_events);
         }
 
-        // 2. Prepare context (including newly added messages)
+        // 2. Prepare context (including newly added events)
         let context_str = self.context.serialize();
 
         // 3. Execute agent (rig handles tool calls including StateTransition internally)

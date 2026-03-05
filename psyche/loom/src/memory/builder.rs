@@ -58,7 +58,7 @@ impl MemoryFragmentBuilder {
 
 impl Default for MemoryFragmentBuilder {
     fn default() -> Self {
-        Self::new(String::new(), MemoryKind::Message)
+        Self::new(String::new(), MemoryKind::Event)
     }
 }
 
@@ -70,12 +70,12 @@ mod tests {
     fn test_builder_basic_functionality() {
         let fragment = MemoryFragmentBuilder::new(
             r#"{"type":"test","text":"content"}"#.to_string(),
-            MemoryKind::Message,
+            MemoryKind::Event,
         )
         .build();
 
         assert_eq!(fragment.content, r#"{"type":"test","text":"content"}"#);
-        assert_eq!(fragment.kind, MemoryKind::Message);
+        assert_eq!(fragment.kind, MemoryKind::Event);
     }
 
     #[test]
@@ -88,9 +88,13 @@ mod tests {
             MemoryFragmentBuilder::new("action...".to_string(), MemoryKind::Action).build();
         assert_eq!(action_fragment.kind, MemoryKind::Action);
 
-        let message_fragment =
-            MemoryFragmentBuilder::new("message...".to_string(), MemoryKind::Message).build();
-        assert_eq!(message_fragment.kind, MemoryKind::Message);
+        let event_fragment =
+            MemoryFragmentBuilder::new("event...".to_string(), MemoryKind::Event).build();
+        assert_eq!(event_fragment.kind, MemoryKind::Event);
+
+        let unknown_fragment =
+            MemoryFragmentBuilder::new("unknown...".to_string(), MemoryKind::Unknown).build();
+        assert_eq!(unknown_fragment.kind, MemoryKind::Unknown);
     }
 
     #[test]
@@ -99,20 +103,24 @@ mod tests {
         assert_eq!(MemoryKind::from_str("THOUGHT"), MemoryKind::Thought);
         assert_eq!(MemoryKind::from_str("action"), MemoryKind::Action);
         assert_eq!(MemoryKind::from_str("Action"), MemoryKind::Action);
-        assert_eq!(MemoryKind::from_str("message"), MemoryKind::Message);
-        assert_eq!(MemoryKind::from_str("unknown"), MemoryKind::Message);
+        assert_eq!(MemoryKind::from_str("event"), MemoryKind::Event);
+        assert_eq!(MemoryKind::from_str("unknown"), MemoryKind::Unknown);
+        // Unrecognized strings should return Unknown
+        assert_eq!(MemoryKind::from_str("invalid"), MemoryKind::Unknown);
+        assert_eq!(MemoryKind::from_str(""), MemoryKind::Unknown);
     }
 
     #[test]
     fn test_memory_kind_as_tag() {
         assert_eq!(MemoryKind::Thought.as_tag(), "thought");
         assert_eq!(MemoryKind::Action.as_tag(), "action");
-        assert_eq!(MemoryKind::Message.as_tag(), "message");
+        assert_eq!(MemoryKind::Event.as_tag(), "event");
+        assert_eq!(MemoryKind::Unknown.as_tag(), "unknown");
     }
 
     #[test]
     fn test_with_id() {
-        let fragment = MemoryFragmentBuilder::new("content".to_string(), MemoryKind::Message)
+        let fragment = MemoryFragmentBuilder::new("content".to_string(), MemoryKind::Event)
             .id(12345)
             .build();
 

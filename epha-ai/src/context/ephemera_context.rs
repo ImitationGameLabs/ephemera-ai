@@ -1,5 +1,5 @@
 use super::MemoryFragmentList;
-use super::memory_constructors::{from_action, from_publisher_message};
+use super::memory_constructors::{from_action, from_producer_event};
 use epha_agent::context::ContextSerialize;
 use epha_agent::publisher::PublisherMessage;
 use loom_client::memory::MemoryFragment;
@@ -124,13 +124,13 @@ impl EphemeraContext {
         }
     }
 
-    /// Process Publisher messages and add to recent_activities
+    /// Process Producer events and add to recent_activities
     ///
-    /// Messages are converted to MemoryFragment via from_publisher_message(),
+    /// Events are converted to MemoryFragment via from_producer_event(),
     /// then added to queue via add_activity(), sharing flow with Thought/Action.
-    pub fn add_publisher_messages(&mut self, messages: Vec<PublisherMessage>) {
-        for msg in messages {
-            let fragment = from_publisher_message(msg).build();
+    pub fn add_producer_events(&mut self, events: Vec<PublisherMessage>) {
+        for event in events {
+            let fragment = from_producer_event(event).build();
             self.add_activity(fragment);  // Reuse existing flow
         }
     }

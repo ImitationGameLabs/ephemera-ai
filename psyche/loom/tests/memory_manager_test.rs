@@ -44,7 +44,7 @@ async fn test_save_and_get_memory() {
     let (_container, db) = setup_test_db().await;
     let manager = MemoryManager::new(db, 0);
 
-    let fragment = create_test_fragment("Test memory content", MemoryKind::Message);
+    let fragment = create_test_fragment("Test memory content", MemoryKind::Event);
     let ids = manager.append(&mut vec![fragment.clone()]).await.unwrap();
 
     assert_eq!(ids.len(), 1);
@@ -54,7 +54,7 @@ async fn test_save_and_get_memory() {
     // Verify we can retrieve it
     let retrieved = manager.get_one(saved_id).await.unwrap();
     assert_eq!(retrieved.content, "Test memory content");
-    assert_eq!(retrieved.kind, MemoryKind::Message);
+    assert_eq!(retrieved.kind, MemoryKind::Event);
 }
 
 #[tokio::test]
@@ -65,7 +65,7 @@ async fn test_save_multiple_memories() {
     let mut fragments = vec![
         create_test_fragment("First thought", MemoryKind::Thought),
         create_test_fragment("Second action", MemoryKind::Action),
-        create_test_fragment("Third message", MemoryKind::Message),
+        create_test_fragment("Third message", MemoryKind::Event),
     ];
 
     let ids = manager.append(&mut fragments).await.unwrap();
@@ -84,9 +84,9 @@ async fn test_get_recent_memories() {
 
     // Create multiple memories with small delays to ensure different timestamps
     let mut fragments = vec![
-        create_test_fragment("Memory 1", MemoryKind::Message),
-        create_test_fragment("Memory 2", MemoryKind::Message),
-        create_test_fragment("Memory 3", MemoryKind::Message),
+        create_test_fragment("Memory 1", MemoryKind::Event),
+        create_test_fragment("Memory 2", MemoryKind::Event),
+        create_test_fragment("Memory 3", MemoryKind::Event),
     ];
 
     manager.append(&mut fragments).await.unwrap();
@@ -101,7 +101,7 @@ async fn test_delete_memory() {
     let (_container, db) = setup_test_db().await;
     let manager = MemoryManager::new(db, 0);
 
-    let fragment = create_test_fragment("To be deleted", MemoryKind::Message);
+    let fragment = create_test_fragment("To be deleted", MemoryKind::Event);
     let ids = manager.append(&mut vec![fragment.clone()]).await.unwrap();
     let saved_id = ids[0];
 
@@ -148,7 +148,7 @@ async fn test_get_range_with_pagination() {
 
     // Create 5 memories
     let mut fragments: Vec<MemoryFragment> = (0..5)
-        .map(|i| create_test_fragment(&format!("Memory {}", i), MemoryKind::Message))
+        .map(|i| create_test_fragment(&format!("Memory {}", i), MemoryKind::Event))
         .collect();
 
     manager.append(&mut fragments).await.unwrap();

@@ -11,7 +11,7 @@ fn test_memory_fragment_to_model_conversion() {
         id: 123,
         content: "test content".to_string(),
         timestamp,
-        kind: MemoryKind::Message,
+        kind: MemoryKind::Event,
     };
 
     let model: memory::Model = fragment.into();
@@ -19,7 +19,7 @@ fn test_memory_fragment_to_model_conversion() {
     assert_eq!(model.id, 123);
     assert_eq!(model.content, "test content");
     assert_eq!(model.timestamp, timestamp);
-    assert_eq!(model.kind, "message");
+    assert_eq!(model.kind, "event");
 }
 
 #[test]
@@ -73,11 +73,17 @@ fn test_memory_kind_serialization() {
     let model: memory::Model = fragment.into();
     assert_eq!(model.kind, "action");
 
-    // Test Message
+    // Test Event
     let fragment =
-        MemoryFragmentBuilder::new("messaging...".to_string(), MemoryKind::Message).build();
+        MemoryFragmentBuilder::new("event...".to_string(), MemoryKind::Event).build();
     let model: memory::Model = fragment.into();
-    assert_eq!(model.kind, "message");
+    assert_eq!(model.kind, "event");
+
+    // Test Unknown
+    let fragment =
+        MemoryFragmentBuilder::new("unknown...".to_string(), MemoryKind::Unknown).build();
+    let model: memory::Model = fragment.into();
+    assert_eq!(model.kind, "unknown");
 }
 
 #[test]
@@ -104,20 +110,40 @@ fn test_memory_kind_deserialization() {
     let fragment: MemoryFragment = model.into();
     assert_eq!(fragment.kind, MemoryKind::Action);
 
-    // Test Message (default for unknown)
+    // Test Event
     let model = memory::Model {
         id: 3,
+        content: "content".to_string(),
+        timestamp,
+        kind: "event".to_string(),
+    };
+    let fragment: MemoryFragment = model.into();
+    assert_eq!(fragment.kind, MemoryKind::Event);
+
+    // Test Unknown - "unknown" string maps to Unknown variant
+    let model = memory::Model {
+        id: 4,
         content: "content".to_string(),
         timestamp,
         kind: "unknown".to_string(),
     };
     let fragment: MemoryFragment = model.into();
-    assert_eq!(fragment.kind, MemoryKind::Message);
+    assert_eq!(fragment.kind, MemoryKind::Unknown);
+
+    // Test Unknown - unrecognized strings map to Unknown variant
+    let model = memory::Model {
+        id: 5,
+        content: "content".to_string(),
+        timestamp,
+        kind: "invalid_kind".to_string(),
+    };
+    let fragment: MemoryFragment = model.into();
+    assert_eq!(fragment.kind, MemoryKind::Unknown);
 }
 
 #[test]
 fn test_all_memory_kinds_roundtrip() {
-    let kinds = [MemoryKind::Thought, MemoryKind::Action, MemoryKind::Message];
+    let kinds = [MemoryKind::Thought, MemoryKind::Action, MemoryKind::Event, MemoryKind::Unknown];
 
     for expected_kind in kinds {
         let fragment =
