@@ -1,3 +1,3 @@
 mod schema;
 
-pub use schema::{AtriumAuthConfig, Config, LlmConfig};
+pub use schema::{AgoraConfig, Config, LlmConfig, ServicesConfig};

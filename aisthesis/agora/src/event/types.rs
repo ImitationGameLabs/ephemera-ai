@@ -81,6 +81,9 @@ pub struct CreateEventRequest {
     /// Event payload as JSON.
     #[serde(default)]
     pub payload: serde_json::Value,
+    /// Event occurrence timestamp (provided by herald, defaults to now).
+    #[serde(default = "OffsetDateTime::now_utc", with = "time::serde::rfc3339")]
+    pub timestamp: OffsetDateTime,
 }
 
 /// Request to update event status.

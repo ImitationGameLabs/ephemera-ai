@@ -93,14 +93,13 @@ impl TimerScheduler {
         info!("Pushing timer.tick event at {}", now);
 
         let url = format!("{}/events", self.agora_url);
-        // Use unix timestamp for simplicity
-        let timestamp = now.unix_timestamp();
         let body = json!({
             "event_type": "timer.tick",
             "herald_id": self.herald_id,
             "priority": "normal",
+            "timestamp": now,
             "payload": {
-                "timestamp": timestamp,
+                "tick_time": now.unix_timestamp(),
             }
         });
 

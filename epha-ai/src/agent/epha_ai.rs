@@ -1,10 +1,9 @@
 use crate::agent::{CommonPrompt, State};
 use crate::context::EphemeraContext;
 use crate::context::memory_constructors::from_action;
-use crate::tools::{GetMessages, MemoryGet, MemoryRecent, MemoryTimeline, SendMessage, StateTransition};
+use crate::tools::{MemoryGet, MemoryRecent, MemoryTimeline, StateTransition};
 use agora::event::EventStatus;
 use agora_client::AgoraClient;
-use atrium_client::AuthenticatedClient;
 use epha_agent::context::Context;
 use epha_agent::tools::{file_system_tool_set, shell_tool_set, shell::TmuxBackend};
 use loom_client::LoomClient;
@@ -31,7 +30,6 @@ pub struct EphemeraAI {
 impl EphemeraAI {
     pub async fn new(
         config: crate::config::Config,
-        dialogue_client: Arc<AuthenticatedClient>,
         loom_client: Arc<LoomClient>,
         completion_client: Client,
     ) -> anyhow::Result<Self> {
@@ -59,8 +57,6 @@ impl EphemeraAI {
 
         // 6. Create tool server with static tools
         let tool_server = ToolServer::new()
-            .tool(GetMessages::new(dialogue_client.clone()))
-            .tool(SendMessage::new(dialogue_client.clone()))
             .tool(MemoryGet::new(loom_client.clone(), context_data.clone()))
             .tool(MemoryRecent::new(loom_client.clone(), context_data.clone()))
             .tool(MemoryTimeline::new(loom_client.clone(), context_data.clone()))

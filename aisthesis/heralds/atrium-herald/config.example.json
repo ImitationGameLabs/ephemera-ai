@@ -1,0 +1,8 @@
+{
+  "atrium_url": "http://localhost:3001",
+  "agora_url": "http://localhost:8080",
+  "username": "ephemera-ai",
+  "password": "your-password-here",
+  "poll_interval_ms": 1000,
+  "heartbeat_interval_ms": 30000
+}

@@ -261,6 +261,10 @@ components:
         payload:
           type: object
           additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+          description: Event occurrence timestamp (provided by herald, defaults to current time)
 
     Event:
       type: object

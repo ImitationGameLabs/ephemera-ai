@@ -1,5 +1,4 @@
 use crate::agent::EphemeraAI;
-use atrium_client::AuthenticatedClient;
 use clap::Parser;
 use loom_client::LoomClient;
 use rig::providers::deepseek;
@@ -36,14 +35,11 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Failed to init loom client");
 
-    let dialogue_client = init_dialogue_client(&config.services.atrium_url, &config.atrium_auth)
-        .await
-        .expect("Failed to init dialogue client");
+    let llm_client = init_llm_client(&config.llm);
 
     let loom_client = Arc::new(loom_client);
-    let dialogue_client = Arc::new(dialogue_client);
 
-    let mut ai = EphemeraAI::new(config, dialogue_client, loom_client, llm_client).await?;
+    let mut ai = EphemeraAI::new(config, loom_client, llm_client).await?;
     ai.live().await?;
 
     Ok(())
@@ -68,24 +64,4 @@ async fn init_loom_client(loom_url: &str) -> anyhow::Result<LoomClient> {
     info!("Successfully connected to loom service!");
 
     Ok(client)
-}
-
-async fn init_dialogue_client(
-    atrium_url: &str,
-    auth: &crate::config::AtriumAuthConfig,
-) -> anyhow::Result<AuthenticatedClient> {
-    info!("Connecting to atrium service at: {}", atrium_url);
-    info!("Logging in...");
-
-    let authenticated_client =
-        AuthenticatedClient::connect_and_login(atrium_url, auth.username.clone(), auth.password.clone())
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to login: {}", e))?;
-
-    info!(
-        "Successfully logged in as: {}!",
-        authenticated_client.credentials().username
-    );
-
-    Ok(authenticated_client)
 }

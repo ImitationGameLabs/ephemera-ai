@@ -37,7 +37,7 @@ impl MemoryEventQueue {
             herald_id: request.herald_id,
             payload: request.payload,
             priority: request.priority,
-            timestamp: OffsetDateTime::now_utc(),
+            timestamp: request.timestamp,
             status: EventStatus::Pending,
         };
 

@@ -5,7 +5,6 @@ use std::path::Path;
 pub struct Config {
     pub llm: LlmConfig,
     pub services: ServicesConfig,
-    pub atrium_auth: AtriumAuthConfig,
     /// Tick interval in milliseconds when in Dormant state
     pub dormant_tick_interval_ms: u64,
     /// Agora event hub configuration
@@ -22,14 +21,7 @@ pub struct LlmConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ServicesConfig {
     pub loom_url: String,
-    pub atrium_url: String,
     pub loom_vector_url: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct AtriumAuthConfig {
-    pub username: String,
-    pub password: String,
 }
 
 /// Agora event hub configuration
@@ -64,20 +56,8 @@ impl Config {
             "services.loom_url cannot be empty"
         );
         assert!(
-            !config.services.atrium_url.trim().is_empty(),
-            "services.atrium_url cannot be empty"
-        );
-        assert!(
             !config.services.loom_vector_url.trim().is_empty(),
             "services.loom_vector_url cannot be empty"
-        );
-        assert!(
-            !config.atrium_auth.username.trim().is_empty(),
-            "atrium_auth.username cannot be empty"
-        );
-        assert!(
-            !config.atrium_auth.password.trim().is_empty(),
-            "atrium_auth.password cannot be empty"
         );
         assert!(
             config.dormant_tick_interval_ms > 0,

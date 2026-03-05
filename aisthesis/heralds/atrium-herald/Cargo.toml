@@ -1,0 +1,22 @@
+[package]
+name = "atrium-herald"
+version = "0.1.0"
+edition = "2024"
+description = "Atrium herald for Agora event hub"
+
+[dependencies]
+agora = { path = "../../agora" }
+atrium-client = { path = "../../../dialogue/atrium-client" }
+anyhow = "1.0"
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3", features = [
+    "env-filter",
+    "std",
+    "fmt",
+] }
+clap = { version = "4.0", features = ["derive"] }
+time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros"] }
