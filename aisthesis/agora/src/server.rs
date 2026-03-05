@@ -3,6 +3,7 @@
 use axum::Router;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -53,6 +54,22 @@ impl AgoraServer {
             cors::{Any, CorsLayer},
             trace::TraceLayer,
         };
+
+        // Spawn background heartbeat timeout checker
+        let herald_registry = self.state.herald_registry.clone();
+        let check_interval = Duration::from_millis(self.config.heartbeat_check_interval_ms);
+        let timeout_ms = self.config.timeout_ms;
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(check_interval);
+            loop {
+                interval.tick().await;
+                let changed = herald_registry.check_timeouts(timeout_ms).await;
+                for (id, status) in changed {
+                    info!("Herald '{}' status changed to {:?}", id, status);
+                }
+            }
+        });
 
         let app = Router::new()
             .route("/health", get(health_check))

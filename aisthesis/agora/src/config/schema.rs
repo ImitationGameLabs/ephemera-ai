@@ -8,6 +8,10 @@ use std::path::Path;
 pub struct Config {
     /// Server listen port.
     pub port: u16,
+    /// Interval between heartbeat timeout checks in milliseconds
+    pub heartbeat_check_interval_ms: u64,
+    /// Milliseconds without heartbeat before marking herald as Disconnected
+    pub timeout_ms: i64,
 }
 
 impl Config {
@@ -24,6 +28,11 @@ impl Config {
 
         // Validate required fields
         assert!(config.port != 0, "port cannot be 0");
+        assert!(
+            config.heartbeat_check_interval_ms > 0,
+            "heartbeat_check_interval_ms must be greater than 0"
+        );
+        assert!(config.timeout_ms > 0, "timeout_ms must be greater than 0");
 
         config
     }

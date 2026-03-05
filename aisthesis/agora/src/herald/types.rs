@@ -12,9 +12,7 @@ pub enum HeraldStatus {
     /// Herald is active and sending heartbeats.
     #[default]
     Active,
-    /// Herald missed one heartbeat (degraded but functional).
-    Degraded,
-    /// Herald missed multiple heartbeats (disconnected).
+    /// Herald has not sent heartbeat within timeout threshold.
     Disconnected,
 }
 
@@ -134,26 +132,23 @@ impl HeraldRegistry {
     }
 
     /// Updates herald statuses based on heartbeat timeout.
-    /// Returns list of heralds that changed status.
-    pub async fn check_timeouts(&self) -> Vec<(String, HeraldStatus)> {
+    /// Returns list of heralds that changed status to Disconnected.
+    pub async fn check_timeouts(&self, timeout_ms: i64) -> Vec<(String, HeraldStatus)> {
         let mut changed = Vec::new();
         let mut heralds = self.heralds.write().await;
         let now = OffsetDateTime::now_utc();
 
         for (id, info) in heralds.iter_mut() {
-            let elapsed = (now - info.last_heartbeat).whole_seconds();
-
-            let new_status = if elapsed > 120 {
-                HeraldStatus::Disconnected
-            } else if elapsed > 60 {
-                HeraldStatus::Degraded
-            } else {
+            // Skip already disconnected heralds
+            if info.status == HeraldStatus::Disconnected {
                 continue;
-            };
+            }
 
-            if info.status != new_status {
-                info.status = new_status;
-                changed.push((id.clone(), new_status));
+            let elapsed_ms = (now - info.last_heartbeat).whole_milliseconds() as i64;
+
+            if elapsed_ms > timeout_ms {
+                info.status = HeraldStatus::Disconnected;
+                changed.push((id.clone(), HeraldStatus::Disconnected));
             }
         }
 
