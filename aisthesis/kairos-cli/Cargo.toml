@@ -1,0 +1,17 @@
+[package]
+name = "kairos-cli"
+version = "0.1.0"
+edition = "2024"
+description = "CLI client for Kairos time management service"
+
+[dependencies]
+kairos-client = { path = "../kairos-client" }
+
+anyhow = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+time = { version = "0.3", features = ["formatting", "parsing"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "std", "fmt"] }

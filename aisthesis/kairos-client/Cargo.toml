@@ -1,0 +1,17 @@
+[package]
+name = "kairos-client"
+version = "0.1.0"
+edition = "2024"
+description = "Client library for Kairos time management service"
+
+[dependencies]
+# Kairos server dependency for shared types
+kairos = { path = "../kairos" }
+
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1.41"
+thiserror = "2.0"
+time = { version = "0.3", features = ["serde", "formatting"] }

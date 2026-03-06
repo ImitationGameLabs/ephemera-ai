@@ -14,8 +14,11 @@ members = [
 
     "aisthesis/agora",
     "aisthesis/agora-client",
-    "aisthesis/heralds/timer",
     "aisthesis/heralds/atrium-herald",
+    "aisthesis/kairos",
+    "aisthesis/kairos-client",
+    "aisthesis/kairos-cli",
+    "aisthesis/kairos-herald",
 ]
 
 resolver = "3"
