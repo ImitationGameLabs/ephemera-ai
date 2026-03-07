@@ -8,7 +8,7 @@ use serde_json::json;
 use crate::db::user_manager::{UserManager, CreateUserDto, UpdateUserDto, UserError};
 use crate::models::{
     CreateUserRequest, User, UpdateProfileRequest,
-    PasswordAuth, UsersList
+    UsersList
 };
 
 pub async fn create_user(
@@ -69,47 +69,23 @@ pub async fn get_user_profile(
     }
 }
 
-pub async fn get_own_profile(
-    State(user_manager): State<UserManager>,
-    Json(request): Json<PasswordAuth>,
-) -> Result<Json<User>, (StatusCode, Json<serde_json::Value>)> {
-    // For now, we'll need to determine the username from the password
-    // This is a simplified approach - in a real system you might want to include username in auth
-    match user_manager.authenticate_user(&request.password, &request.password).await {
-        Ok(user) => {
-            Ok(Json(user))
-        }
-        Err(e) => {
-            match e {
-                UserError::InvalidPassword(_) => Err((
-                    StatusCode::UNAUTHORIZED,
-                    Json(json!({ "error": "Invalid password" })),
-                )),
-                _ => {
-                    tracing::error!("Failed to authenticate user: {:?}", e);
-                    Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({ "error": "Authentication failed" })),
-                    ))
-                }
-            }
-        }
-    }
-}
-
+/// Update the authenticated user's own profile.
+///
+/// This endpoint is reserved for future expansion to include private user settings
+/// (personal preferences) that only the user themselves can modify.
 pub async fn update_profile(
     State(user_manager): State<UserManager>,
     Json(request): Json<UpdateProfileRequest>,
 ) -> Result<Json<User>, (StatusCode, Json<serde_json::Value>)> {
     // First authenticate with current password
-    match user_manager.authenticate_user(&request.current_password, &request.current_password).await {
-        Ok(user) => {
+    match user_manager.authenticate_user(&request.username, &request.current_password).await {
+        Ok(_user) => {
             let update_dto = UpdateUserDto {
                 bio: request.bio,
                 new_password: request.new_password,
             };
 
-            match user_manager.update_user(&user.name, &update_dto).await {
+            match user_manager.update_user(&request.username, &update_dto).await {
                 Ok(updated_user) => {
                     Ok(Json(updated_user))
                 }
@@ -126,7 +102,7 @@ pub async fn update_profile(
             match e {
                 UserError::InvalidPassword(_) => Err((
                     StatusCode::UNAUTHORIZED,
-                    Json(json!({ "error": "Invalid password" })),
+                    Json(json!({ "error": "Invalid credentials" })),
                 )),
                 _ => {
                     tracing::error!("Failed to authenticate user for profile update: {:?}", e);

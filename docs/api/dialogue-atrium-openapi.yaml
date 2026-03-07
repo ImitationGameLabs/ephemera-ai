@@ -90,31 +90,13 @@ paths:
           $ref: '#/components/responses/NotFound'
 
   /profile:
-    get:
-      summary: Get Own Profile
-      description: Retrieve your own profile information
-      operationId: getOwnProfile
-      tags:
-        - Profile
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PasswordAuth'
-      responses:
-        '200':
-          description: Successful response with own profile
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
     put:
       summary: Update Profile
-      description: Update your own profile information
+      description: |
+        Update your own profile information (bio and/or password).
+
+        This endpoint is reserved for future expansion to include private user settings
+        (personal preferences) that only the user themselves can modify.
       operationId: updateProfile
       tags:
         - Profile
@@ -359,15 +341,19 @@ components:
         bio:
           type: string
           description: User biography
-        passkey:
+        password:
           type: string
           description: User password for authentication
 
     UpdateProfileRequest:
       type: object
       required:
-        - current_passkey
+        - username
+        - current_password
       properties:
+        username:
+          type: string
+          description: Username to update
         current_password:
           type: string
           description: Current password for authentication
@@ -378,15 +364,6 @@ components:
           type: string
           description: New password
 
-    PasswordAuth:
-      type: object
-      required:
-        - password
-      properties:
-        passkey:
-          type: string
-          description: User password
-
     UserCredentials:
       type: object
       required:
@@ -396,7 +373,7 @@ components:
         username:
           type: string
           description: Username
-        passkey:
+        password:
           type: string
           description: User password
 
@@ -447,7 +424,7 @@ components:
         username:
           type: string
           description: Sender username
-        passkey:
+        password:
           type: string
           description: Sender password
 

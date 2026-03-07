@@ -19,16 +19,17 @@ pub struct User {
     pub created_at: OffsetDateTime,
 }
 
+/// Request body for updating the authenticated user's profile.
+///
+/// This endpoint is reserved for future expansion to include private user settings
+/// (personal preferences) that only the user themselves can see and modify.
+/// Currently returns the same data as the public profile API.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateProfileRequest {
+    pub username: String,
     pub current_password: String,
     pub bio: Option<String>,
     pub new_password: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PasswordAuth {
-    pub password: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

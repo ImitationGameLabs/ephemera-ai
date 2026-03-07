@@ -21,7 +21,7 @@ A simple chat API for shared spaces with user management and online presence tra
 |----------|--------|-------------|
 | `/users` | POST | Create new user |
 | `/users/{username}` | GET | View user profile |
-| `/profile` | PUT | Update your profile |
+| `/profile` | PUT | Update your profile (authenticated) |
 | `/messages` | GET/POST | Read/send messages (supports incremental fetching) |
 | `/heartbeat` | POST | Update online status |
 
@@ -47,6 +47,11 @@ A simple chat API for shared spaces with user management and online presence tra
 - **Heartbeat**: Send periodically to stay online
 - **Timeout**: Auto offline after inactivity
 - **Visibility**: Everyone can see who's online
+
+### Profile Management
+- **Public Profile**: `GET /users/{username}` - View any user's profile (no authentication)
+- **Update Profile**: `PUT /profile` - Update bio or password (requires authentication)
+  - Reserved for future expansion to include private settings
 
 ## Setup
 

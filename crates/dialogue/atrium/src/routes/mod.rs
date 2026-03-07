@@ -6,7 +6,7 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tower::ServiceBuilder;
 use crate::handlers::{
-    create_user, get_user_profile, get_own_profile, update_profile, get_all_users,
+    create_user, get_user_profile, update_profile, get_all_users,
     update_heartbeat,
     create_message, get_messages, get_message, delete_message
 };
@@ -26,7 +26,7 @@ pub fn create_routes(user_manager: UserManager, message_manager: MessageManager)
             // User routes
             .route("/users", post(create_user).get(get_all_users))
             .route("/users/{username}", get(get_user_profile))
-            .route("/profile", get(get_own_profile).put(update_profile))
+            .route("/profile", put(update_profile))
             .with_state(user_manager.clone())
         )
         .nest("/api/v1", Router::new()
