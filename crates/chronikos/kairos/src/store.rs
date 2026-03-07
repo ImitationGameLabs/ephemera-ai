@@ -2,13 +2,24 @@
 
 use anyhow::Result;
 use sqlx::SqlitePool;
-use time::OffsetDateTime;
+use time::{OffsetDateTime, Month};
+use time::util::is_leap_year;
 
 use crate::schedule::*;
 
 /// SQLite-based schedule store.
 pub struct ScheduleStore {
     pool: SqlitePool,
+}
+
+/// Serialized trigger fields for database storage.
+struct TriggerRow {
+    trigger_type: String,
+    trigger_at: Option<String>,
+    trigger_duration_seconds: Option<i64>,
+    trigger_period: Option<String>,
+    trigger_at_time: Option<String>,
+    trigger_cron_expression: Option<String>,
 }
 
 impl ScheduleStore {
@@ -53,8 +64,7 @@ impl ScheduleStore {
 
     /// Creates a new schedule.
     pub async fn create(&self, schedule: &Schedule) -> Result<()> {
-        let (trigger_type, trigger_at, trigger_duration_seconds, trigger_period, trigger_at_time, trigger_cron_expression) =
-            self.serialize_trigger(&schedule.trigger);
+        let trigger_row = self.serialize_trigger(&schedule.trigger);
 
         sqlx::query(
             r#"
@@ -67,12 +77,12 @@ impl ScheduleStore {
         )
         .bind(&schedule.id)
         .bind(&schedule.name)
-        .bind(&trigger_type)
-        .bind(trigger_at.as_ref())
-        .bind(trigger_duration_seconds)
-        .bind(trigger_period.as_ref())
-        .bind(trigger_at_time.as_ref())
-        .bind(trigger_cron_expression.as_ref())
+        .bind(&trigger_row.trigger_type)
+        .bind(trigger_row.trigger_at.as_ref())
+        .bind(trigger_row.trigger_duration_seconds)
+        .bind(trigger_row.trigger_period.as_ref())
+        .bind(trigger_row.trigger_at_time.as_ref())
+        .bind(trigger_row.trigger_cron_expression.as_ref())
         .bind(serde_json::to_string(&schedule.payload)?)
         .bind(serde_json::to_string(&schedule.tags)?)
         .bind(schedule.priority.to_string())
@@ -267,40 +277,40 @@ impl ScheduleStore {
         Ok((active as usize, pending as usize, next_fire_time))
     }
 
-    fn serialize_trigger(&self, trigger: &TriggerSpec) -> (String, Option<String>, Option<i64>, Option<String>, Option<String>, Option<String>) {
+    fn serialize_trigger(&self, trigger: &TriggerSpec) -> TriggerRow {
         match trigger {
-            TriggerSpec::Once { at } => (
-                "once".to_string(),
-                Some(at.format(&time::format_description::well_known::Rfc3339).unwrap()),
-                None,
-                None,
-                None,
-                None,
-            ),
-            TriggerSpec::In { duration_seconds } => (
-                "in".to_string(),
-                None,
-                Some(*duration_seconds as i64),
-                None,
-                None,
-                None,
-            ),
-            TriggerSpec::Every { period, at_time } => (
-                "every".to_string(),
-                None,
-                None,
-                Some(period.to_string()),
-                at_time.clone(),
-                None,
-            ),
-            TriggerSpec::Cron { expression } => (
-                "cron".to_string(),
-                None,
-                None,
-                None,
-                None,
-                Some(expression.clone()),
-            ),
+            TriggerSpec::Once { at } => TriggerRow {
+                trigger_type: "once".to_string(),
+                trigger_at: Some(at.format(&time::format_description::well_known::Rfc3339).unwrap()),
+                trigger_duration_seconds: None,
+                trigger_period: None,
+                trigger_at_time: None,
+                trigger_cron_expression: None,
+            },
+            TriggerSpec::In { duration_seconds } => TriggerRow {
+                trigger_type: "in".to_string(),
+                trigger_at: None,
+                trigger_duration_seconds: Some(*duration_seconds as i64),
+                trigger_period: None,
+                trigger_at_time: None,
+                trigger_cron_expression: None,
+            },
+            TriggerSpec::Every { period, at_time } => TriggerRow {
+                trigger_type: "every".to_string(),
+                trigger_at: None,
+                trigger_duration_seconds: None,
+                trigger_period: Some(period.to_string()),
+                trigger_at_time: at_time.clone(),
+                trigger_cron_expression: None,
+            },
+            TriggerSpec::Cron { expression } => TriggerRow {
+                trigger_type: "cron".to_string(),
+                trigger_at: None,
+                trigger_duration_seconds: None,
+                trigger_period: None,
+                trigger_at_time: None,
+                trigger_cron_expression: Some(expression.clone()),
+            },
         }
     }
 
@@ -390,6 +400,79 @@ fn parse_status(s: &str) -> Result<ScheduleStatus> {
     }
 }
 
+#[cfg(test)]
+mod store_tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_priority_valid() {
+        assert!(matches!(parse_priority("low"), Ok(Priority::Low)));
+        assert!(matches!(parse_priority("normal"), Ok(Priority::Normal)));
+        assert!(matches!(parse_priority("high"), Ok(Priority::High)));
+        assert!(matches!(parse_priority("urgent"), Ok(Priority::Urgent)));
+    }
+
+    #[test]
+    fn test_parse_priority_invalid() {
+        assert!(parse_priority("LOW").is_err());      // Case-sensitive
+        assert!(parse_priority("Normal").is_err());   // Case-sensitive
+        assert!(parse_priority("invalid").is_err());
+        assert!(parse_priority("").is_err());
+    }
+
+    #[test]
+    fn test_parse_status_valid() {
+        assert!(matches!(parse_status("active"), Ok(ScheduleStatus::Active)));
+        assert!(matches!(parse_status("paused"), Ok(ScheduleStatus::Paused)));
+        assert!(matches!(parse_status("completed"), Ok(ScheduleStatus::Completed)));
+        assert!(matches!(parse_status("triggered"), Ok(ScheduleStatus::Triggered)));
+    }
+
+    #[test]
+    fn test_parse_status_invalid() {
+        assert!(parse_status("ACTIVE").is_err());     // Case-sensitive
+        assert!(parse_status("Active").is_err());     // Case-sensitive
+        assert!(parse_status("invalid").is_err());
+        assert!(parse_status("").is_err());
+    }
+}
+
+/// Adds one month to the given datetime, clamping day if next month is shorter.
+fn add_one_month(dt: OffsetDateTime) -> OffsetDateTime {
+    let next_month = dt.month().next();
+    let next_year = if dt.month() == Month::December {
+        dt.year() + 1
+    } else {
+        dt.year()
+    };
+
+    // Clamp day to max days in next month BEFORE changing month
+    // (e.g., Jan 31 -> Feb 28/29)
+    let max_day = next_month.length(next_year);
+    let day = dt.day().min(max_day);
+
+    // Build new date: first set year and day, then month
+    // This order matters because replace_month validates day
+    dt.replace_year(next_year)
+        .and_then(|d| d.replace_day(day))
+        .and_then(|d| d.replace_month(next_month))
+        .expect("valid date components")
+}
+
+/// Adds one year to the given datetime, handling Feb 29 on non-leap years.
+fn add_one_year(dt: OffsetDateTime) -> OffsetDateTime {
+    let next_year = dt.year() + 1;
+
+    // Handle Feb 29 -> Feb 28 on non-leap years
+    if dt.month() == Month::February && dt.day() == 29 && !is_leap_year(next_year) {
+        dt.replace_day(28)
+            .and_then(|d| d.replace_year(next_year))
+            .expect("valid date components")
+    } else {
+        dt.replace_year(next_year).expect("valid year")
+    }
+}
+
 /// Calculates the next fire time for a recurring schedule.
 pub fn calculate_next_fire(
     period: &Period,
@@ -397,7 +480,8 @@ pub fn calculate_next_fire(
     from: OffsetDateTime,
 ) -> Result<OffsetDateTime> {
     // Parse at_time if provided (e.g., "09:00")
-    let (hour, minute) = if let Some(time_str) = at_time {
+    // When at_time is None, preserve the original time including seconds
+    let (hour, minute, second) = if let Some(time_str) = at_time {
         let parts: Vec<&str> = time_str.split(':').collect();
         if parts.len() != 2 {
             return Err(anyhow::anyhow!("Invalid at_time format: {}", time_str));
@@ -405,9 +489,10 @@ pub fn calculate_next_fire(
         (
             parts[0].parse::<u8>()?,
             parts[1].parse::<u8>()?,
+            0u8, // Reset seconds when explicit time is provided
         )
     } else {
-        (from.hour(), from.minute())
+        (from.hour(), from.minute(), from.second())
     };
 
     let next = match period {
@@ -421,7 +506,7 @@ pub fn calculate_next_fire(
         }
         Period::Daily => {
             // Next day at the specified time
-            let candidate = from.replace_hour(hour)?.replace_minute(minute)?.replace_second(0)?;
+            let candidate = from.replace_hour(hour)?.replace_minute(minute)?.replace_second(second)?;
             if candidate > from {
                 candidate
             } else {
@@ -430,7 +515,7 @@ pub fn calculate_next_fire(
         }
         Period::Weekly => {
             // Next week at the specified time
-            let candidate = from.replace_hour(hour)?.replace_minute(minute)?.replace_second(0)?;
+            let candidate = from.replace_hour(hour)?.replace_minute(minute)?.replace_second(second)?;
             if candidate > from {
                 candidate
             } else {
@@ -438,22 +523,19 @@ pub fn calculate_next_fire(
             }
         }
         Period::Monthly => {
-            // Next month at the specified time (same day)
-            let candidate = from.replace_hour(hour)?.replace_minute(minute)?.replace_second(0)?;
+            let candidate = from.replace_hour(hour)?.replace_minute(minute)?.replace_second(second)?;
             if candidate > from {
                 candidate
             } else {
-                // Add approximately 30 days (simplified)
-                candidate + time::Duration::days(30)
+                add_one_month(candidate)
             }
         }
         Period::Yearly => {
-            // Next year at the specified time
-            let candidate = from.replace_hour(hour)?.replace_minute(minute)?.replace_second(0)?;
+            let candidate = from.replace_hour(hour)?.replace_minute(minute)?.replace_second(second)?;
             if candidate > from {
                 candidate
             } else {
-                candidate + time::Duration::days(365)
+                add_one_year(candidate)
             }
         }
     };

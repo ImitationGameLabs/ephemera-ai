@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use kairos_client::{CreateScheduleRequest, KairosClient, Period, Priority, Schedule, ScheduleStatus, TriggerSpec};
 use std::env;
 use time::{format_description, OffsetDateTime};
@@ -39,7 +39,7 @@ enum Commands {
     Schedule {
         /// Schedule name/description
         name: String,
-        /// When to trigger (RFC3339 timestamp or relative like +1h, +30m)
+        /// When to trigger (RFC3339 timestamp or relative time like +1h, +30m; relative units are lowercase)
         #[arg(long)]
         when: String,
         /// Repeat period (minutely, hourly, daily, weekly, monthly, yearly)
@@ -70,7 +70,7 @@ enum Commands {
     },
     /// Schedule an event after a delay
     In {
-        /// Duration (e.g., 30s, 5m, 2h, 1d)
+        /// Duration (e.g., 30s, 5m, 2h, 1d; units must be lowercase)
         duration: String,
         /// Schedule name/description
         name: String,
@@ -99,7 +99,7 @@ enum Commands {
     },
     /// List schedules
     List {
-        /// Filter by status (active, paused, completed, triggered)
+        /// Filter by status (active, paused, completed, triggered; case-sensitive)
         #[arg(long)]
         status: Option<String>,
         /// Filter by tag
@@ -280,7 +280,7 @@ async fn handle_list(
         println!("No schedules found.");
     } else {
         for schedule in &schedules {
-            print_schedule(&schedule);
+            print_schedule(schedule);
         }
     }
     Ok(())
@@ -346,10 +346,8 @@ fn parse_datetime(s: &str) -> Result<OffsetDateTime> {
         return Ok(dt);
     }
 
-    // Try relative time (e.g., +1h, +30m, +1d)
-    let lower = s.to_lowercase();
-    if lower.starts_with('+') {
-        let rest = &lower[1..];
+    // Try relative time (e.g., +1h, +30m, +1d) - strictly lowercase
+    if let Some(rest) = s.strip_prefix('+') {
         let seconds = parse_relative_time(rest)?;
         return Ok(OffsetDateTime::now_utc() + time::Duration::seconds(seconds));
     }
@@ -379,8 +377,8 @@ fn parse_relative_time(s: &str) -> Result<i64> {
         return Err(anyhow!("Missing unit in relative time: {}", s));
     }
 
-    let unit = std::str::from_utf8(&chars[i..]).unwrap().to_lowercase();
-    let seconds = match unit.as_str() {
+    let unit = std::str::from_utf8(&chars[i..]).unwrap();
+    let seconds = match unit {
         "s" | "sec" | "secs" | "second" | "seconds" => num,
         "m" | "min" | "mins" | "minute" | "minutes" => num * 60,
         "h" | "hr" | "hrs" | "hour" | "hours" => num * 3600,
@@ -435,15 +433,173 @@ fn parse_tags(s: Option<&str>) -> Vec<String> {
 fn parse_status(s: Option<&str>) -> Result<Option<ScheduleStatus>> {
     match s {
         Some(status) => {
-            let status = match status.to_lowercase().as_str() {
+            let parsed = match status {
                 "active" => ScheduleStatus::Active,
                 "paused" => ScheduleStatus::Paused,
                 "completed" => ScheduleStatus::Completed,
                 "triggered" => ScheduleStatus::Triggered,
                 _ => return Err(anyhow!("Invalid status: {}. Use active, paused, completed, or triggered", status)),
             };
-            Ok(Some(status))
+            Ok(Some(parsed))
         }
         None => Ok(None),
+    }
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    // === parse_relative_time tests ===
+
+    #[test]
+    fn test_parse_relative_time_seconds() {
+        assert_eq!(parse_relative_time("30s").unwrap(), 30);
+        assert_eq!(parse_relative_time("1sec").unwrap(), 1);
+        assert_eq!(parse_relative_time("45seconds").unwrap(), 45);
+    }
+
+    #[test]
+    fn test_parse_relative_time_minutes() {
+        assert_eq!(parse_relative_time("5m").unwrap(), 300);
+        assert_eq!(parse_relative_time("2min").unwrap(), 120);
+        assert_eq!(parse_relative_time("90minutes").unwrap(), 5400);
+    }
+
+    #[test]
+    fn test_parse_relative_time_hours() {
+        assert_eq!(parse_relative_time("1h").unwrap(), 3600);
+        assert_eq!(parse_relative_time("24hr").unwrap(), 86400);
+        assert_eq!(parse_relative_time("2hours").unwrap(), 7200);
+    }
+
+    #[test]
+    fn test_parse_relative_time_days() {
+        assert_eq!(parse_relative_time("1d").unwrap(), 86400);
+        assert_eq!(parse_relative_time("7day").unwrap(), 604800);
+        assert_eq!(parse_relative_time("3days").unwrap(), 259200);
+    }
+
+    #[test]
+    fn test_parse_relative_time_weeks() {
+        assert_eq!(parse_relative_time("1w").unwrap(), 604800);
+        assert_eq!(parse_relative_time("2wk").unwrap(), 1209600);
+        assert_eq!(parse_relative_time("4weeks").unwrap(), 2419200);
+    }
+
+    #[test]
+    fn test_parse_relative_time_case_sensitive() {
+        // Strict case-sensitive: only lowercase accepted
+        assert!(parse_relative_time("30S").is_err());
+        assert!(parse_relative_time("5M").is_err());
+        assert!(parse_relative_time("1H").is_err());
+        assert!(parse_relative_time("1D").is_err());
+        assert!(parse_relative_time("1W").is_err());
+    }
+
+    #[test]
+    fn test_parse_relative_time_invalid() {
+        assert!(parse_relative_time("").is_err());
+        assert!(parse_relative_time("abc").is_err());
+        assert!(parse_relative_time("30").is_err());  // Missing unit
+        assert!(parse_relative_time("s").is_err());   // Missing number
+    }
+
+    // === parse_datetime tests ===
+
+    #[test]
+    fn test_parse_datetime_rfc3339() {
+        let result = parse_datetime("2026-03-15T14:30:00Z");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_datetime_relative() {
+        let result = parse_datetime("+1h");
+        assert!(result.is_ok());
+        let dt = result.unwrap();
+        let now = OffsetDateTime::now_utc();
+        let diff = (dt - now).whole_seconds();
+        assert!(diff >= 3599 && diff <= 3601);  // ~1 hour
+    }
+
+    #[test]
+    fn test_parse_datetime_case_sensitive() {
+        // Strict case-sensitive: +1H should fail
+        assert!(parse_datetime("+1H").is_err());
+        assert!(parse_datetime("+30M").is_err());
+    }
+
+    #[test]
+    fn test_parse_datetime_invalid() {
+        assert!(parse_datetime("invalid").is_err());
+        assert!(parse_datetime("2026-13-01T00:00:00Z").is_err());  // Invalid month
+    }
+
+    // === parse_payload tests ===
+
+    #[test]
+    fn test_parse_payload_null() {
+        assert!(matches!(parse_payload(None), Ok(serde_json::Value::Null)));
+        assert!(matches!(parse_payload(Some("")), Ok(serde_json::Value::Null)));
+    }
+
+    #[test]
+    fn test_parse_payload_valid_json() {
+        let result = parse_payload(Some(r#"{"key": "value"}"#));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_payload_invalid_json() {
+        assert!(parse_payload(Some("not json")).is_err());
+        assert!(parse_payload(Some("{invalid}")).is_err());
+    }
+
+    // === parse_tags tests ===
+
+    #[test]
+    fn test_parse_tags_empty() {
+        assert!(parse_tags(None).is_empty());
+        assert!(parse_tags(Some("")).is_empty());
+    }
+
+    #[test]
+    fn test_parse_tags_single() {
+        let tags = parse_tags(Some("urgent"));
+        assert_eq!(tags, vec!["urgent"]);
+    }
+
+    #[test]
+    fn test_parse_tags_multiple() {
+        let tags = parse_tags(Some("urgent,backup,critical"));
+        assert_eq!(tags, vec!["urgent", "backup", "critical"]);
+    }
+
+    #[test]
+    fn test_parse_tags_with_spaces() {
+        let tags = parse_tags(Some("  tag1  ,  tag2  ,  tag3  "));
+        assert_eq!(tags, vec!["tag1", "tag2", "tag3"]);
+    }
+
+    // === parse_status tests (kairos-cli version) ===
+
+    #[test]
+    fn test_cli_parse_status_valid() {
+        assert!(matches!(parse_status(Some("active")), Ok(Some(ScheduleStatus::Active))));
+        assert!(matches!(parse_status(Some("paused")), Ok(Some(ScheduleStatus::Paused))));
+        assert!(matches!(parse_status(Some("completed")), Ok(Some(ScheduleStatus::Completed))));
+        assert!(matches!(parse_status(Some("triggered")), Ok(Some(ScheduleStatus::Triggered))));
+    }
+
+    #[test]
+    fn test_cli_parse_status_none() {
+        assert!(matches!(parse_status(None), Ok(None)));
+    }
+
+    #[test]
+    fn test_cli_parse_status_invalid() {
+        assert!(parse_status(Some("ACTIVE")).is_err());  // Case-sensitive
+        assert!(parse_status(Some("invalid")).is_err());
     }
 }

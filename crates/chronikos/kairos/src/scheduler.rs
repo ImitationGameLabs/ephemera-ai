@@ -57,39 +57,20 @@ impl Scheduler {
             }
 
             // Check if schedule is due
-            if let Some(next_fire) = schedule.next_fire {
-                if next_fire <= now {
-                    info!("Schedule {} '{}' is due, marking as triggered", schedule.id, schedule.name);
+            if let Some(next_fire) = schedule.next_fire
+                && next_fire <= now
+            {
+                info!("Schedule {} '{}' is due, marking as triggered", schedule.id, schedule.name);
 
-                    // Mark as triggered so kairos-herald can pick it up
-                    self.store
-                        .update_fire_times(&schedule.id, Some(next_fire), Some(next_fire), ScheduleStatus::Triggered)
-                        .await?;
-                }
+                // Mark as triggered so kairos-herald can pick it up
+                self.store
+                    .update_fire_times(&schedule.id, Some(next_fire), Some(next_fire), ScheduleStatus::Triggered)
+                    .await?;
             }
         }
 
         Ok(())
     }
-}
-
-/// Initializes next_fire times for schedules that don't have one.
-pub async fn initialize_schedule(store: &ScheduleStore, schedule_id: &str) -> anyhow::Result<()> {
-    let schedule = store
-        .get(schedule_id)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("Schedule not found: {}", schedule_id))?;
-
-    if schedule.next_fire.is_some() {
-        return Ok(());
-    }
-
-    let next = calculate_initial_next_fire(&schedule.trigger, schedule.created_at)?;
-    store
-        .update_fire_times(schedule_id, Some(next), None, ScheduleStatus::Active)
-        .await?;
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -98,6 +79,7 @@ mod tests {
     use crate::schedule::{Period, TriggerSpec};
     use crate::store::calculate_next_fire;
     use time::ext::NumericalDuration;
+    use time::macros::datetime;
 
     #[test]
     fn test_calculate_next_fire_daily() {
@@ -145,5 +127,143 @@ mod tests {
 
         assert!(next > now);
         assert!(next - now <= 2.hours());
+    }
+
+    // === Monthly Tests ===
+
+    #[test]
+    fn test_calculate_next_fire_monthly_normal() {
+        let now = datetime!(2025-03-15 10:00 UTC);
+        let next = calculate_next_fire(&Period::Monthly, &None, now).unwrap();
+        assert_eq!(next.month(), time::Month::April);
+        assert_eq!(next.day(), 15);
+    }
+
+    #[test]
+    fn test_calculate_next_fire_monthly_31_to_28() {
+        // Jan 31 -> Feb 28 (non-leap year)
+        let now = datetime!(2025-01-31 10:00 UTC);
+        let next = calculate_next_fire(&Period::Monthly, &None, now).unwrap();
+        assert_eq!(next.month(), time::Month::February);
+        assert_eq!(next.day(), 28);
+        assert_eq!(next.year(), 2025);
+    }
+
+    #[test]
+    fn test_calculate_next_fire_monthly_31_to_29_leap_year() {
+        // Jan 31 -> Feb 29 (leap year)
+        let now = datetime!(2024-01-31 10:00 UTC);
+        let next = calculate_next_fire(&Period::Monthly, &None, now).unwrap();
+        assert_eq!(next.month(), time::Month::February);
+        assert_eq!(next.day(), 29);
+        assert_eq!(next.year(), 2024);
+    }
+
+    #[test]
+    fn test_calculate_next_fire_monthly_december_wrap() {
+        // Dec 15 -> Jan 15 next year
+        let now = datetime!(2025-12-15 10:00 UTC);
+        let next = calculate_next_fire(&Period::Monthly, &None, now).unwrap();
+        assert_eq!(next.month(), time::Month::January);
+        assert_eq!(next.day(), 15);
+        assert_eq!(next.year(), 2026);
+    }
+
+    #[test]
+    fn test_calculate_next_fire_monthly_30_day_month() {
+        // Mar 31 -> Apr 30 (April has only 30 days)
+        let now = datetime!(2025-03-31 10:00 UTC);
+        let next = calculate_next_fire(&Period::Monthly, &None, now).unwrap();
+        assert_eq!(next.month(), time::Month::April);
+        assert_eq!(next.day(), 30);
+    }
+
+    #[test]
+    fn test_calculate_next_fire_monthly_feb_28_to_march() {
+        // Feb 28 -> Mar 28
+        let now = datetime!(2025-02-28 10:00 UTC);
+        let next = calculate_next_fire(&Period::Monthly, &None, now).unwrap();
+        assert_eq!(next.month(), time::Month::March);
+        assert_eq!(next.day(), 28);
+    }
+
+    #[test]
+    fn test_calculate_next_fire_monthly_preserves_time() {
+        let now = datetime!(2025-03-15 14:30:45 UTC);
+        let next = calculate_next_fire(&Period::Monthly, &None, now).unwrap();
+        assert_eq!(next.hour(), 14);
+        assert_eq!(next.minute(), 30);
+        assert_eq!(next.second(), 45);
+    }
+
+    // === Yearly Tests ===
+
+    #[test]
+    fn test_calculate_next_fire_yearly_normal() {
+        let now = datetime!(2025-03-15 10:00 UTC);
+        let next = calculate_next_fire(&Period::Yearly, &None, now).unwrap();
+        assert_eq!(next.year(), 2026);
+        assert_eq!(next.month(), time::Month::March);
+        assert_eq!(next.day(), 15);
+    }
+
+    #[test]
+    fn test_calculate_next_fire_yearly_leap_to_non_leap() {
+        // Feb 29 (leap year) -> Feb 28 (non-leap year)
+        let now = datetime!(2024-02-29 10:00 UTC);
+        let next = calculate_next_fire(&Period::Yearly, &None, now).unwrap();
+        assert_eq!(next.year(), 2025);
+        assert_eq!(next.month(), time::Month::February);
+        assert_eq!(next.day(), 28);
+    }
+
+    #[test]
+    fn test_calculate_next_fire_yearly_leap_to_leap() {
+        // Feb 29 schedule downgrades to Feb 28 and stays there
+        // (we don't upgrade back to Feb 29 to avoid affecting explicit Feb 28 schedules)
+        let now = datetime!(2024-02-29 10:00 UTC);
+        let next1 = calculate_next_fire(&Period::Yearly, &None, now).unwrap();
+        assert_eq!(next1.day(), 28); // 2025
+        assert_eq!(next1.year(), 2025);
+        let next2 = calculate_next_fire(&Period::Yearly, &None, next1).unwrap();
+        assert_eq!(next2.day(), 28); // 2026
+        let next3 = calculate_next_fire(&Period::Yearly, &None, next2).unwrap();
+        assert_eq!(next3.day(), 28); // 2027
+        let next4 = calculate_next_fire(&Period::Yearly, &None, next3).unwrap();
+        assert_eq!(next4.year(), 2028);
+        assert_eq!(next4.day(), 28); // Stays on Feb 28 even in leap year
+    }
+
+    #[test]
+    fn test_calculate_next_fire_yearly_explicit_feb_28() {
+        // Explicit Feb 28 schedule should stay on Feb 28, never upgrade to Feb 29
+        let now = datetime!(2025-02-28 10:00 UTC);
+        let next1 = calculate_next_fire(&Period::Yearly, &None, now).unwrap();
+        assert_eq!(next1.day(), 28);
+        assert_eq!(next1.year(), 2026);
+        // Transition to leap year 2028
+        let next2 = calculate_next_fire(&Period::Yearly, &None, next1).unwrap();
+        assert_eq!(next2.day(), 28); // 2027
+        let next3 = calculate_next_fire(&Period::Yearly, &None, next2).unwrap();
+        assert_eq!(next3.year(), 2028);
+        assert_eq!(next3.day(), 28); // Still Feb 28, not upgraded to Feb 29
+    }
+
+    #[test]
+    fn test_calculate_next_fire_yearly_preserves_time() {
+        let now = datetime!(2025-06-15 08:45:30 UTC);
+        let next = calculate_next_fire(&Period::Yearly, &None, now).unwrap();
+        assert_eq!(next.hour(), 8);
+        assert_eq!(next.minute(), 45);
+        assert_eq!(next.second(), 30);
+    }
+
+    #[test]
+    fn test_calculate_next_fire_yearly_dec_31() {
+        let now = datetime!(2025-12-31 23:59:59 UTC);
+        let next = calculate_next_fire(&Period::Yearly, &None, now).unwrap();
+        assert_eq!(next.year(), 2026);
+        assert_eq!(next.month(), time::Month::December);
+        assert_eq!(next.day(), 31);
     }
 }
