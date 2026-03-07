@@ -1,24 +1,25 @@
 [workspace]
 members = [
-    "epha-ai",
-    "epha-agent",
-    "epha-boot",
+    "crates/epha-ai",
+    "crates/epha-agent",
+    "crates/epha-boot",
 
-    "psyche/loom",
-    "psyche/loom-client",
-    # "psyche/loom-vector",
+    "crates/agora",
+    "crates/agora-client",
 
-    "dialogue/atrium",
-    "dialogue/atrium-client",
-    "dialogue/atrium-cli",
+    "crates/chronikos/kairos",
+    "crates/chronikos/kairos-client",
+    "crates/chronikos/kairos-cli",
+    "crates/chronikos/kairos-herald",
 
-    "aisthesis/agora",
-    "aisthesis/agora-client",
-    "aisthesis/heralds/atrium-herald",
-    "aisthesis/kairos",
-    "aisthesis/kairos-client",
-    "aisthesis/kairos-cli",
-    "aisthesis/kairos-herald",
+    "crates/psyche/loom",
+    "crates/psyche/loom-client",
+    # "crates/psyche/loom-vector",
+
+    "crates/dialogue/atrium",
+    "crates/dialogue/atrium-client",
+    "crates/dialogue/atrium-cli",
+    "crates/dialogue/atrium-herald",
 ]
 
 resolver = "3"

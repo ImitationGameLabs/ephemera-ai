@@ -24,7 +24,7 @@ log = "0.4"
 epha-agent = { path = "../epha-agent" }
 loom-client = { path = "../psyche/loom-client" }
 atrium-client = { path = "../dialogue/atrium-client" }
-agora-client = { path = "../aisthesis/agora-client" }
-agora = { path = "../aisthesis/agora" }
+agora-client = { path = "../agora-client" }
+agora = { path = "../agora" }
 clap = { version = "4.0", features = ["derive"] }
 uuid = { version = "1", features = ["v4"] }

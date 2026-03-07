@@ -96,16 +96,21 @@
               fileset = lib.fileset.unions [
                 ./Cargo.toml
                 ./Cargo.lock
-                (craneLib.fileset.commonCargoSources ./dialogue/atrium)
-                (craneLib.fileset.commonCargoSources ./dialogue/atrium-cli)
-                (craneLib.fileset.commonCargoSources ./dialogue/atrium-client)
-                (craneLib.fileset.commonCargoSources ./psyche/loom)
-                (craneLib.fileset.commonCargoSources ./psyche/loom-client)
-                (craneLib.fileset.commonCargoSources ./epha-agent)
-                (craneLib.fileset.commonCargoSources ./epha-ai)
-                (craneLib.fileset.commonCargoSources ./epha-boot)
-                # (craneLib.fileset.commonCargoSources ./crates/my-common)
-                # (craneLib.fileset.commonCargoSources ./crates/my-workspace-hack)
+                (craneLib.fileset.commonCargoSources ./crates/agora)
+                (craneLib.fileset.commonCargoSources ./crates/agora-client)
+                (craneLib.fileset.commonCargoSources ./crates/chronikos/kairos)
+                (craneLib.fileset.commonCargoSources ./crates/chronikos/kairos-client)
+                (craneLib.fileset.commonCargoSources ./crates/chronikos/kairos-cli)
+                (craneLib.fileset.commonCargoSources ./crates/chronikos/kairos-herald)
+                (craneLib.fileset.commonCargoSources ./crates/dialogue/atrium)
+                (craneLib.fileset.commonCargoSources ./crates/dialogue/atrium-cli)
+                (craneLib.fileset.commonCargoSources ./crates/dialogue/atrium-client)
+                (craneLib.fileset.commonCargoSources ./crates/dialogue/atrium-herald)
+                (craneLib.fileset.commonCargoSources ./crates/psyche/loom)
+                (craneLib.fileset.commonCargoSources ./crates/psyche/loom-client)
+                (craneLib.fileset.commonCargoSources ./crates/epha-agent)
+                (craneLib.fileset.commonCargoSources ./crates/epha-ai)
+                (craneLib.fileset.commonCargoSources ./crates/epha-boot)
                 (craneLib.fileset.commonCargoSources crate)
               ];
             };
@@ -123,7 +128,7 @@
             // {
               pname = "epha-ai";
               cargoExtraArgs = "-p epha-ai";
-              src = fileSetForCrate ./epha-ai;
+              src = fileSetForCrate ./crates/epha-ai;
             }
           );
           loom = craneLib.buildPackage (
@@ -131,7 +136,7 @@
             // {
               pname = "loom";
               cargoExtraArgs = "-p loom";
-              src = fileSetForCrate ./psyche/loom;
+              src = fileSetForCrate ./crates/psyche/loom;
             }
           );
 
@@ -140,7 +145,7 @@
             // {
               pname = "epha-boot";
               cargoExtraArgs = "-p epha-boot";
-              src = fileSetForCrate ./epha-boot;
+              src = fileSetForCrate ./crates/epha-boot;
             }
           );
 
@@ -149,7 +154,7 @@
             // {
               pname = "atrium";
               cargoExtraArgs = "-p atrium";
-              src = fileSetForCrate ./dialogue/atrium;
+              src = fileSetForCrate ./crates/dialogue/atrium;
             }
           );
 
@@ -158,7 +163,7 @@
             // {
               pname = "atrium-cli";
               cargoExtraArgs = "-p atrium-cli";
-              src = fileSetForCrate ./dialogue/atrium-cli;
+              src = fileSetForCrate ./crates/dialogue/atrium-cli;
             }
           );
 

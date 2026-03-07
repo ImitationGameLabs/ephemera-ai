@@ -1,12 +1,12 @@
 [package]
-name = "kairos-herald"
+name = "atrium-herald"
 version = "0.1.0"
 edition = "2024"
-description = "Bridge service between Kairos and Agora - pushes triggered schedules to the event hub"
+description = "Atrium herald for Agora event hub"
 
 [dependencies]
-agora-client = { path = "../agora-client" }
-kairos-client = { path = "../kairos-client" }
+agora = { path = "../../agora" }
+atrium-client = { path = "../atrium-client" }
 anyhow = "1.0"
 reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -19,4 +19,4 @@ tracing-subscriber = { version = "0.3", features = [
     "fmt",
 ] }
 clap = { version = "4.0", features = ["derive"] }
-time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
+time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros"] }

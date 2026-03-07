@@ -29,10 +29,18 @@ Configuration-driven agent orchestration enabling runtime flexibility, performan
 ## Component Overview
 
 ```
-epha-ai (main program)
+crates/
+├── epha-ai (main program)
 ├── epha-agent (state machine framework)
-├── loom-client → loom (memory service: MySQL + Qdrant)
-└── atrium-client → atrium (dialogue service: MySQL)
+├── agora (event hub)
+├── agora-client
+├── chronikos/ (time management)
+│   └── kairos/
+├── psyche/
+│   ├── loom-client → loom (memory service: MySQL + Qdrant)
+└── dialogue/
+    ├── atrium-client → atrium (dialogue service: MySQL)
+    └── atrium-herald
 ```
 
 ### State Machine Loop
