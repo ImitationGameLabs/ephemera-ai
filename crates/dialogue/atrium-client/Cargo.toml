@@ -8,10 +8,10 @@ description = "Client library for Dialogue Atrium chat system"
 # Atrium server dependency for shared types
 atrium = { path = "../atrium" }
 
-reqwest = { version = "0.12", features = ["json"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tokio = { version = "1", features = ["full"] }
-tracing = "0.1.41"
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
 rpassword = "7.3"
 urlencoding = "2.1"

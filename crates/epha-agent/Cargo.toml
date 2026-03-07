@@ -4,27 +4,25 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0"
-rig-core = "0.22"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "2.0"
-tokio = { version = "1", features = ["full"] }
-tracing = "0.1.41"
-uuid = { version = "1.0", features = ["v4", "serde"] }
-time = { version = "0.3", features = ["serde", "serde-well-known"] }
-async-trait = "0.1.89"
+anyhow = { workspace = true }
+rig-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+async-trait = { workspace = true }
 serde_yaml = "0.9"
-tracing-subscriber = { version = "0.3", features = [
-    "env-filter",
-    "std",
-    "fmt",
-] }
+tracing-subscriber = { workspace = true }
+
 # File system tools dependencies
 regex = "1"
 glob = "0.3"
+
 # Shell tools dependencies
 tmux_interface = "0.3"
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }

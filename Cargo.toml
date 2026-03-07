@@ -23,3 +23,41 @@ members = [
 ]
 
 resolver = "3"
+
+[workspace.dependencies]
+# Common dependencies
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "std", "fmt"] }
+time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros", "serde-well-known"] }
+clap = { version = "4", features = ["derive"] }
+async-trait = "0.1"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# HTTP/Web
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+
+# Database
+sea-orm = { version = "1.1", features = ["runtime-tokio", "sqlx-mysql", "macros", "with-json", "with-time", "with-uuid"] }
+sea-orm-migration = "1.1"
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "time"] }
+
+# Other common
+url = "2.5"
+
+# AI/ML
+rig-core = "0.22"
+
+# Dev dependencies
+tempfile = "3"
+testcontainers = "0.27"
+testcontainers-modules = { version = "0.15", features = ["mysql"] }
+tokio-test = "0.4"
+serial_test = "3.0"

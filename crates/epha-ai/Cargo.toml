@@ -5,20 +5,16 @@ edition = "2024"
 
 
 [dependencies]
-anyhow = "1.0"
-async-trait = "0.1"
-time = "0.3"
-rig-core = "0.22"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "2.0"
-tokio = { version = "1", features = ["full"] }
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3", features = [
-    "env-filter",
-    "std",
-    "fmt",
-] }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+time = { workspace = true }
+rig-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 log = "0.4"
 
 epha-agent = { path = "../epha-agent" }
@@ -26,5 +22,5 @@ loom-client = { path = "../psyche/loom-client" }
 atrium-client = { path = "../dialogue/atrium-client" }
 agora-client = { path = "../agora-client" }
 agora = { path = "../agora" }
-clap = { version = "4.0", features = ["derive"] }
-uuid = { version = "1", features = ["v4"] }
+clap = { workspace = true }
+uuid = { workspace = true }
