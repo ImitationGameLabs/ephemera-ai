@@ -10,12 +10,12 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::config::Config;
 use crate::handlers::{EventHandler, HeraldHandler};
 use crate::herald::HeraldRegistry;
-use crate::queue::MemoryEventQueue;
+use crate::queue::EventQueue;
 
 /// Application state shared across handlers.
 #[derive(Clone)]
 pub struct AppState {
-    pub event_queue: Arc<MemoryEventQueue>,
+    pub event_queue: Arc<EventQueue>,
     pub herald_registry: Arc<HeraldRegistry>,
 }
 
@@ -39,9 +39,14 @@ impl AgoraServer {
 
         info!("Initializing Agora event hub");
 
+        let event_queue = Arc::new(
+            EventQueue::new(&config.database_path, config.retry.clone()).await?,
+        );
+        let herald_registry = Arc::new(HeraldRegistry::new());
+
         let state = Arc::new(AppState {
-            event_queue: Arc::new(MemoryEventQueue::new()),
-            herald_registry: Arc::new(HeraldRegistry::new()),
+            event_queue,
+            herald_registry,
         });
 
         Ok(Self { config, state })
@@ -49,7 +54,7 @@ impl AgoraServer {
 
     /// Starts the server.
     pub async fn run(self) -> anyhow::Result<()> {
-        use axum::routing::{delete, get, patch, post, put};
+        use axum::routing::{delete, get, patch, post};
         use tower_http::{
             cors::{Any, CorsLayer},
             trace::TraceLayer,
@@ -81,8 +86,8 @@ impl AgoraServer {
             .route("/heralds/{id}/heartbeat", post(HeraldHandler::heartbeat))
             // Event routes
             .route("/events", post(EventHandler::create))
-            .route("/events", get(EventHandler::list))
             .route("/events", patch(EventHandler::batch_update))
+            .route("/events/fetch", post(EventHandler::fetch))
             .route("/events/{id}", patch(EventHandler::update))
             .with_state((*self.state).clone())
             .layer(

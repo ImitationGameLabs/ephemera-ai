@@ -105,8 +105,8 @@ pub struct BatchUpdateEventsRequest {
 /// Response for batch update operation.
 #[derive(Debug, Clone, Serialize)]
 pub struct BatchUpdateEventsResponse {
-    /// Number of events updated.
-    pub updated: usize,
+    /// IDs of successfully acknowledged events.
+    pub acked_ids: Vec<EventId>,
 }
 
 /// Events list response.

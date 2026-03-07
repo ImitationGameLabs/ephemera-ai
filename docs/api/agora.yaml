@@ -89,11 +89,6 @@ paths:
           required: true
           schema:
             type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/HeartbeatRequest'
       responses:
         '200':
           description: Heartbeat received
@@ -120,35 +115,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Event'
-    get:
-      summary: Get pending events
-      operationId: getEvents
-      tags: [Events]
-      parameters:
-        - name: status
-          in: query
-          schema:
-            $ref: '#/components/schemas/EventStatus'
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-      responses:
-        '200':
-          description: List of events
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  events:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Event'
-                  total:
-                    type: integer
     patch:
       summary: Batch update event status
       operationId: batchUpdateEvents
@@ -165,10 +131,32 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  updated:
-                    type: integer
+                $ref: '#/components/schemas/BatchUpdateEventsResponse'
+
+  /events/fetch:
+    post:
+      summary: Fetch events for delivery
+      description: Returns pending events and retry-ready delivered events. Changes state (Pending → Delivered).
+      operationId: fetchEvents
+      tags: [Events]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                  default: 10
+      responses:
+        '200':
+          description: Events for delivery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventsListResponse'
 
   /events/{id}:
     patch:
@@ -229,13 +217,6 @@ components:
     HeraldStatus:
       type: string
       enum: [active, disconnected]
-
-    HeartbeatRequest:
-      type: object
-      properties:
-        metrics:
-          type: object
-          additionalProperties: true
 
     HeartbeatResponse:
       type: object
@@ -309,5 +290,27 @@ components:
           type: array
           items:
             type: integer
+          description: Event IDs to acknowledge
         status:
           $ref: '#/components/schemas/EventStatus'
+
+    BatchUpdateEventsResponse:
+      type: object
+      required: [acked_ids]
+      properties:
+        acked_ids:
+          type: array
+          items:
+            type: integer
+          description: IDs of successfully acknowledged events
+
+    EventsListResponse:
+      type: object
+      required: [events, total]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        total:
+          type: integer

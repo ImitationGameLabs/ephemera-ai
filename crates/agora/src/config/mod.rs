@@ -1,3 +1,3 @@
 mod schema;
 
-pub use schema::Config;
+pub use schema::{Config, RetryConfig};

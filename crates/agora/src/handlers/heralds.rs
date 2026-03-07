@@ -9,7 +9,7 @@ use axum::extract::State;
 use tracing::{info, instrument};
 
 use crate::herald::{
-    HeartbeatRequest, HeartbeatResponse, HeraldsListResponse, HeraldInfo, RegisterHeraldRequest,
+    HeartbeatResponse, HeraldsListResponse, HeraldInfo, RegisterHeraldRequest,
 };
 use crate::server::AppState;
 
@@ -61,12 +61,11 @@ impl HeraldHandler {
         }
     }
 
-    /// Update herald heartbeat (PUT /heralds/{id}/heartbeat).
-    #[instrument(skip(state, _request))]
+    /// Update herald heartbeat (POST /heralds/{id}/heartbeat).
+    #[instrument(skip(state))]
     pub async fn heartbeat(
         State(state): State<AppState>,
         Path(id): Path<String>,
-        Json(_request): Json<HeartbeatRequest>,
     ) -> Result<Json<HeartbeatResponse>, StatusCode> {
         info!("Herald heartbeat: {}", id);
 

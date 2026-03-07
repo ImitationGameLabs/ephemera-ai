@@ -2,7 +2,6 @@ use crate::agent::{CommonPrompt, State};
 use crate::context::EphemeraContext;
 use crate::context::memory_constructors::from_action;
 use crate::tools::{MemoryGet, MemoryRecent, MemoryTimeline, StateTransition};
-use agora::event::EventStatus;
 use agora_client::AgoraClient;
 use epha_agent::context::Context;
 use epha_agent::tools::{file_system_tool_set, shell_tool_set, shell::TmuxBackend};
@@ -117,9 +116,9 @@ impl EphemeraAI {
     }
 
     async fn cognitive_cycle(&mut self) -> anyhow::Result<()> {
-        // 1. Fetch pending events from Agora
+        // 1. Fetch events from Agora (POST /events/fetch)
         let events = self.agora_client
-            .get_events(Some(EventStatus::Pending), None)
+            .fetch_events(None)
             .await?;
 
         if !events.is_empty() {

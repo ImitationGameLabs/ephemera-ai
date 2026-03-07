@@ -5,7 +5,7 @@ use serde::de::DeserializeOwned;
 use std::fmt;
 use tracing::{debug, instrument};
 
-use agora::event::{Event, EventStatus, EventsListResponse};
+use agora::event::{Event, EventsListResponse};
 use agora::herald::{HeraldInfo, HeraldsListResponse};
 
 /// Client error types.
@@ -102,28 +102,18 @@ impl AgoraClient {
 
     // === Event operations ===
 
-    /// Gets pending events.
+    /// Fetches events for delivery (POST /events/fetch).
+    /// This changes state: Pending → Delivered.
     #[instrument(skip(self))]
-    pub async fn get_events(
-        &self,
-        status: Option<EventStatus>,
-        limit: Option<u32>,
-    ) -> Result<Vec<Event>, AgoraClientError> {
-        let url = format!("{}/events", self.base_url);
-        debug!("Getting events from: {}", url);
+    pub async fn fetch_events(&self, limit: Option<u32>) -> Result<Vec<Event>, AgoraClientError> {
+        let url = format!("{}/events/fetch", self.base_url);
+        debug!("Fetching events from: {}", url);
 
-        let mut query: Vec<(&str, String)> = Vec::new();
-        if let Some(s) = status {
-            query.push(("status", serde_json::to_string(&s).unwrap().trim_matches('"').to_string()));
-        }
-        if let Some(l) = limit {
-            query.push(("limit", l.to_string()));
-        }
+        let body = serde_json::json!({ "limit": limit.unwrap_or(10) });
+        let response = self.client.post(&url).json(&body).send().await?;
+        let result: EventsListResponse = Self::handle_response(response).await?;
 
-        let request = self.client.get(&url).query(&query);
-        let response: EventsListResponse = Self::handle_response(request.send().await?).await?;
-
-        Ok(response.events)
+        Ok(result.events)
     }
 
     /// Acknowledges a single event.

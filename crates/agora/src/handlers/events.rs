@@ -1,12 +1,12 @@
 //! Event HTTP handlers.
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     response::Json,
 };
 use serde::Deserialize;
-use tracing::{error, info, instrument};
+use tracing::{error, info, instrument, warn};
 
 use crate::event::{
     BatchUpdateEventsRequest, BatchUpdateEventsResponse, CreateEventRequest, Event,
@@ -14,11 +14,9 @@ use crate::event::{
 };
 use crate::server::AppState;
 
-/// Query parameters for GET /events.
+/// Request body for POST /events/fetch.
 #[derive(Debug, Deserialize)]
-pub struct GetEventsQuery {
-    /// Filter by status.
-    pub status: Option<EventStatus>,
+pub struct FetchEventsRequest {
     /// Maximum number of events to return.
     pub limit: Option<u32>,
 }
@@ -38,29 +36,31 @@ impl EventHandler {
             request.event_type, request.herald_id
         );
 
-        let event = state.event_queue.push(request).await;
-        info!("Created event with id={}", event.id);
-        Ok(Json(event))
+        match state.event_queue.push(request).await {
+            Ok(event) => {
+                info!("Created event with id={}", event.id);
+                Ok(Json(event))
+            }
+            Err(e) => {
+                error!("Failed to create event: {}", e);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
     }
 
-    /// Get pending events (GET /events).
+    /// Fetch events for delivery (POST /events/fetch).
+    /// Changes state: Pending → Delivered.
     #[instrument(skip(state))]
-    pub async fn list(
+    pub async fn fetch(
         State(state): State<AppState>,
-        Query(query): Query<GetEventsQuery>,
+        Json(query): Json<FetchEventsRequest>,
     ) -> Result<Json<EventsListResponse>, StatusCode> {
-        info!(
-            "Getting events: status={:?}, limit={:?}",
-            query.status, query.limit
-        );
+        info!("Fetching events: limit={}", query.limit.unwrap_or(10));
 
-        let events = state
-            .event_queue
-            .get_by_status(query.status, query.limit)
-            .await;
+        let events = state.event_queue.fetch(query.limit.unwrap_or(10)).await;
 
         let total = events.len();
-        info!("Found {} events", total);
+        info!("Fetched {} events", total);
 
         Ok(Json(EventsListResponse { events, total }))
     }
@@ -74,14 +74,24 @@ impl EventHandler {
     ) -> Result<Json<Event>, StatusCode> {
         info!("Updating event {}: status={:?}", id, request.status);
 
+        // Only allow acking events
+        if request.status != EventStatus::Acked {
+            warn!("Rejecting non-ack status update for event {}", id);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
         match state.event_queue.update_status(id, request.status).await {
-            Some(event) => {
-                info!("Updated event {}", id);
+            Ok(Some(event)) => {
+                info!("Acked event {}", id);
                 Ok(Json(event))
             }
-            None => {
-                error!("Event {} not found", id);
+            Ok(None) => {
+                warn!("Event {} not found for ack", id);
                 Err(StatusCode::NOT_FOUND)
+            }
+            Err(e) => {
+                error!("Failed to ack event {}: {}", id, e);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
             }
         }
     }
@@ -98,12 +108,28 @@ impl EventHandler {
             request.status
         );
 
-        let updated = state
+        // Only allow acking events (consistent with single update)
+        if request.status != EventStatus::Acked {
+            warn!(
+                "Rejecting batch update with non-ack status {:?}",
+                request.status
+            );
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
+        match state
             .event_queue
             .batch_update_status(request.event_ids, request.status)
-            .await;
-
-        info!("Updated {} events", updated);
-        Ok(Json(BatchUpdateEventsResponse { updated }))
+            .await
+        {
+            Ok(acked_ids) => {
+                info!("Batch acked {} events: {:?}", acked_ids.len(), acked_ids);
+                Ok(Json(BatchUpdateEventsResponse { acked_ids }))
+            }
+            Err(e) => {
+                error!("Failed to batch update events: {}", e);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
     }
 }

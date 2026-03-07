@@ -44,14 +44,6 @@ pub struct RegisterHeraldRequest {
     pub description: Option<String>,
 }
 
-/// Request to update herald heartbeat.
-#[derive(Debug, Clone, Deserialize, Default)]
-pub struct HeartbeatRequest {
-    /// Optional metrics from the herald.
-    #[serde(default)]
-    pub metrics: HashMap<String, serde_json::Value>,
-}
-
 /// Response for heartbeat operation.
 #[derive(Debug, Clone, Serialize)]
 pub struct HeartbeatResponse {
