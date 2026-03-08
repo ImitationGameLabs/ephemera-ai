@@ -9,6 +9,15 @@ pub struct Config {
     pub dormant_tick_interval_ms: u64,
     /// Agora event hub configuration
     pub agora: AgoraConfig,
+    /// Context management configuration
+    pub context: ContextConfig,
+}
+
+/// Context management configuration
+#[derive(Debug, Clone, Deserialize)]
+pub struct ContextConfig {
+    /// Maximum number of pinned items (required, no default)
+    pub max_pinned_count: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -16,6 +25,8 @@ pub struct LlmConfig {
     pub base_url: String,
     pub model: String,
     pub api_key: String,
+    /// Maximum number of tool call iterations per cognitive cycle
+    pub max_turns: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -66,6 +77,14 @@ impl Config {
         assert!(
             !config.agora.url.trim().is_empty(),
             "agora.url cannot be empty"
+        );
+        assert!(
+            config.context.max_pinned_count > 0,
+            "context.max_pinned_count must be greater than 0"
+        );
+        assert!(
+            config.llm.max_turns > 0,
+            "llm.max_turns must be greater than 0"
         );
 
         config

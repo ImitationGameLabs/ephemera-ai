@@ -2,7 +2,8 @@ use crate::agent::State;
 use rig::{completion::ToolDefinition, tool::Tool};
 use serde::Deserialize;
 use std::fmt;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// Arguments for state transition
 #[derive(Debug, Deserialize)]
@@ -65,9 +66,7 @@ impl Tool for StateTransition {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let mut state = self.state.lock().map_err(|e| {
-            StateTransitionError(format!("Failed to acquire state lock: {}", e))
-        })?;
+        let mut state = self.state.lock().await;
 
         let current = *state;
         *state = args.mode;

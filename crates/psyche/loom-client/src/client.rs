@@ -156,7 +156,7 @@ impl LoomClient {
 
     /// Get recent memory fragments
     #[instrument(skip(self))]
-    pub async fn get_recent_memory(
+    pub async fn get_recent_memories(
         &self,
         limit: usize,
     ) -> Result<MemoryResponse, LoomClientError> {
@@ -212,6 +212,63 @@ impl LoomClient {
         api_response
             .data
             .ok_or_else(|| LoomClientError::ApiError("No data returned from API".to_string()))
+    }
+
+    // ========================================================================
+    // Pinned Memory Operations
+    // ========================================================================
+
+    /// Get all pinned memories
+    #[instrument(skip(self))]
+    pub async fn get_pinned_memories(&self) -> Result<PinnedMemoriesResponse, LoomClientError> {
+        let url = format!("{}/api/v1/pinned-memories", self.base_url);
+        debug!("Getting pinned memories from: {}", url);
+
+        let response = self.client.get(&url).send().await?;
+        let api_response: ApiResponse<PinnedMemoriesResponse> = Self::handle_response(response).await?;
+
+        api_response
+            .data
+            .ok_or_else(|| LoomClientError::ApiError("No data returned from API".to_string()))
+    }
+
+    /// Pin a memory by ID
+    #[instrument(skip(self))]
+    pub async fn pin_memory(
+        &self,
+        memory_id: i64,
+        reason: Option<String>,
+    ) -> Result<PinnedMemory, LoomClientError> {
+        let url = format!("{}/api/v1/pinned-memories", self.base_url);
+        debug!("Pinning memory {} at: {}", memory_id, url);
+
+        let request = PinMemoryRequest { memory_id, reason };
+        let response = self.client.post(&url).json(&request).send().await?;
+        Self::handle_response(response).await
+    }
+
+    /// Unpin a memory by ID
+    #[instrument(skip(self))]
+    pub async fn unpin_memory(&self, memory_id: i64) -> Result<(), LoomClientError> {
+        let url = format!("{}/api/v1/pinned-memories/{}", self.base_url, memory_id);
+        debug!("Unpinning memory {} at: {}", memory_id, url);
+
+        let response = self.client.delete(&url).send().await?;
+        let status = response.status();
+
+        if status.is_success() {
+            Ok(())
+        } else {
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Failed to read error response".to_string());
+            Err(LoomClientError::ApiError(format!(
+                "HTTP {}: {}",
+                status,
+                error_text
+            )))
+        }
     }
 
     /// Get the base URL this client is configured to use

@@ -1,4 +1,4 @@
-use crate::memory::types::MemoryFragment;
+use crate::memory::types::{MemoryFragment, MemoryKind};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
@@ -184,5 +184,61 @@ impl<T> ApiResponse<T> {
             data: None,
             error: Some(message.into()),
         }
+    }
+}
+
+// ============================================================================
+// Pinned Memory Types
+// ============================================================================
+
+/// A pinned memory item that stays at the top of context
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PinnedMemory {
+    /// The memory fragment that is pinned
+    pub fragment: MemoryFragment,
+    /// Reason for pinning this memory
+    pub reason: Option<String>,
+    /// When this memory was pinned
+    #[serde(with = "time::serde::iso8601")]
+    pub pinned_at: OffsetDateTime,
+}
+
+impl PinnedMemory {
+    /// Create a new pinned memory
+    pub fn new(fragment: MemoryFragment, reason: Option<String>) -> Self {
+        Self {
+            fragment,
+            reason,
+            pinned_at: OffsetDateTime::now_utc(),
+        }
+    }
+}
+
+/// Request model for pinning a memory
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PinMemoryRequest {
+    /// ID of the memory to pin
+    pub memory_id: i64,
+    /// Reason for pinning
+    pub reason: Option<String>,
+}
+
+/// Response model for listing pinned memories
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PinnedMemoriesResponse {
+    pub items: Vec<PinnedMemory>,
+}
+
+impl PinnedMemoriesResponse {
+    pub fn new(items: Vec<PinnedMemory>) -> Self {
+        Self { items }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
     }
 }

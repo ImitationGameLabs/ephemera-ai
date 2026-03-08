@@ -8,7 +8,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::config::Config;
 use crate::services::memory::{
     AppState as MemoryAppState,
-    handlers::MemoryHandler,
+    handlers::{MemoryHandler, PinnedMemoryHandler},
     manager::MemoryManager,
 };
 
@@ -64,6 +64,14 @@ impl LoomServer {
                     .route("/views/timeline", get(MemoryHandler::get_timeline))
                     .route("/{id}", get(MemoryHandler::get_memory))
                     .route("/{id}", delete(MemoryHandler::delete_memory))
+                    .with_state(memory_app_state.clone()),
+            )
+            .nest(
+                "/api/v1/pinned-memories",
+                Router::new()
+                    .route("/", get(PinnedMemoryHandler::get_pinned))
+                    .route("/", post(PinnedMemoryHandler::pin_memory))
+                    .route("/{memory_id}", delete(PinnedMemoryHandler::unpin_memory))
                     .with_state(memory_app_state),
             )
             .layer(

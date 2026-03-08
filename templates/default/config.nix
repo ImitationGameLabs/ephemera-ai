@@ -26,6 +26,11 @@
       username = "admin";
       password = "password";
     };
+
+    # Context management configuration
+    context = {
+      max_pinned_count = 5;
+    };
   };
 
   # Memory Service (MySQL-based storage)

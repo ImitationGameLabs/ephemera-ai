@@ -161,3 +161,120 @@ async fn test_get_range_with_pagination() {
     let results_offset = manager.get_range(start, end, Some(2), Some(2)).await.unwrap();
     assert_eq!(results_offset.len(), 2);
 }
+
+// ==================== Pin/Unpin Tests (Consolidated) ====================
+
+use loom::services::memory::manager::MemoryError;
+
+#[tokio::test]
+async fn test_pin_operations() {
+    let (_container, db) = setup_test_db().await;
+    let manager = MemoryManager::new(db, 0);
+
+    // 1. pin 不存在的 memory 应该报错
+    let result = manager.pin(99999, Some("Nonexistent".to_string())).await;
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(matches!(err, MemoryError::NotFound(id) if id == 99999));
+
+    // 2. 创建 memory 并 pin 成功
+    let mut fragments = vec![create_test_fragment("Memory to pin", MemoryKind::Thought)];
+    let ids = manager.append(&mut fragments).await.unwrap();
+
+    // 初始状态: is_pinned 应为 false
+    assert!(!manager.is_pinned(ids[0]).await.unwrap());
+
+    // pin 成功
+    let result = manager.pin(ids[0], Some("Important context".to_string())).await;
+    assert!(result.is_ok());
+
+    // pin 后: is_pinned 应为 true
+    assert!(manager.is_pinned(ids[0]).await.unwrap());
+
+    // 3. 重复 pin 应该报错
+    let result = manager.pin(ids[0], Some("Second pin".to_string())).await;
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(matches!(err, MemoryError::AlreadyPinned(id) if id == ids[0]));
+}
+
+#[tokio::test]
+async fn test_unpin_operations() {
+    let (_container, db) = setup_test_db().await;
+    let manager = MemoryManager::new(db, 0);
+
+    // 1. unpin 不存在的 pinned 应该报错
+    let result = manager.unpin(99999).await;
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(matches!(err, MemoryError::NotFound(id) if id == 99999));
+
+    // 2. 创建、pin、然后 unpin
+    let mut fragments = vec![create_test_fragment("To be unpinned", MemoryKind::Thought)];
+    let ids = manager.append(&mut fragments).await.unwrap();
+
+    manager.pin(ids[0], Some("Will unpin".to_string())).await.unwrap();
+    assert!(manager.is_pinned(ids[0]).await.unwrap());
+
+    // unpin 成功
+    let result = manager.unpin(ids[0]).await;
+    assert!(result.is_ok());
+
+    // unpin 后: is_pinned 应为 false
+    assert!(!manager.is_pinned(ids[0]).await.unwrap());
+}
+
+#[tokio::test]
+async fn test_pinned_queries_and_protection() {
+    let (_container, db) = setup_test_db().await;
+    let manager = MemoryManager::new(db, 0);
+
+    // 1. 初始状态: get_pinned 应返回空
+    let pinned = manager.get_pinned().await.unwrap();
+    assert!(pinned.is_empty());
+
+    // 2. 创建 memories 并 pin 部分内容
+    let mut fragments = vec![
+        create_test_fragment("Pinned memory 1", MemoryKind::Thought),
+        create_test_fragment("Pinned memory 2", MemoryKind::Action),
+        create_test_fragment("Unpinned memory", MemoryKind::Event),
+    ];
+    let ids = manager.append(&mut fragments).await.unwrap();
+
+    manager.pin(ids[0], Some("Reason 1".to_string())).await.unwrap();
+    manager.pin(ids[1], Some("Reason 2".to_string())).await.unwrap();
+    // ids[2] 不 pin
+
+    // 3. get_pinned 应返回正确的数据
+    let pinned = manager.get_pinned().await.unwrap();
+    assert_eq!(pinned.len(), 2);
+
+    let contents: Vec<&str> = pinned.iter().map(|p| p.fragment.content.as_str()).collect();
+    assert!(contents.contains(&"Pinned memory 1"));
+    assert!(contents.contains(&"Pinned memory 2"));
+    assert!(!contents.contains(&"Unpinned memory"));
+
+    // 4. 验证 JOIN 数据完整性 (data integrity)
+    let reasons: Vec<Option<&String>> = pinned.iter().map(|p| p.reason.as_ref()).collect();
+    assert!(reasons.iter().any(|r| r.map(|s| s.as_str()) == Some("Reason 1")));
+    assert!(reasons.iter().any(|r| r.map(|s| s.as_str()) == Some("Reason 2")));
+
+    // 验证 kind 正确关联
+    for p in &pinned {
+        if p.fragment.content == "Pinned memory 1" {
+            assert_eq!(p.fragment.kind, MemoryKind::Thought);
+        } else if p.fragment.content == "Pinned memory 2" {
+            assert_eq!(p.fragment.kind, MemoryKind::Action);
+        }
+    }
+
+    // 5. 不能删除 pinned memory
+    let result = manager.delete(&[ids[0]]).await;
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(matches!(err, MemoryError::MemoryPinned(id) if id == ids[0]));
+
+    // 验证 memory 仍然存在
+    let memory = manager.get_one(ids[0]).await.unwrap();
+    assert_eq!(memory.content, "Pinned memory 1");
+}

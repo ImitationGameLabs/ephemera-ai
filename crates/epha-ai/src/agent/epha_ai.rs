@@ -1,29 +1,35 @@
 use crate::agent::{CommonPrompt, State};
 use crate::context::EphemeraContext;
-use crate::context::memory_constructors::from_action;
-use crate::tools::{MemoryGet, MemoryRecent, MemoryTimeline, StateTransition};
+use crate::sync::{start_sync_task, SyncSender};
+use crate::tools::{MemoryGet, MemoryPin, MemoryRecent, MemoryTimeline, MemoryUnpin, StateTransition};
 use agora_client::AgoraClient;
 use epha_agent::context::Context;
 use epha_agent::tools::{file_system_tool_set, shell_tool_set, shell::TmuxBackend};
+use loom_client::memory::{MemoryFragment, MemoryKind};
 use loom_client::LoomClient;
 use rig::{
     agent::Agent,
     client::CompletionClient,
-    completion::Prompt,
+    completion::{AssistantContent, Completion, Message},
+    message::{ToolResult, ToolResultContent, UserContent},
     providers::deepseek::{Client, CompletionModel},
     tool::{ToolSet, server::ToolServer},
+    OneOrMany,
 };
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use std::time::Duration;
-use tracing::info;
+use time::OffsetDateTime;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 pub struct EphemeraAI {
-    state: Arc<std::sync::Mutex<State>>,
+    state: Arc<Mutex<State>>,
     agent: Agent<CompletionModel>,
     context: Context<EphemeraContext>,
     agora_client: Arc<AgoraClient>,
     config: crate::config::Config,
+    sync_sender: SyncSender,
 }
 
 impl EphemeraAI {
@@ -33,13 +39,34 @@ impl EphemeraAI {
         completion_client: Client,
     ) -> anyhow::Result<Self> {
         // 1. Create shared state
-        let state = Arc::new(std::sync::Mutex::new(State::default()));
+        let state = Arc::new(Mutex::new(State::default()));
 
         // 2. Load common prompt
         let common_prompt = CommonPrompt::from_file("prompts/common.md")?;
 
-        // 3. Create context
-        let context_data = Arc::new(std::sync::Mutex::new(EphemeraContext::new(loom_client.clone())));
+        // 3. Create sync channel and context
+        let (sync_sender, sync_receiver) = SyncSender::channel();
+
+        let context_data = Arc::new(Mutex::new(EphemeraContext::new(
+            loom_client.clone(),
+            sync_sender.clone(),
+            config.context.max_pinned_count,
+        )));
+
+        // 3.5 Start background sync task
+        let _sync_handle = start_sync_task(sync_receiver, loom_client.clone());
+        info!("Loom sync task started");
+
+        // 3.6 Restore recent activities and pinned memories from Loom
+        {
+            let mut ctx = context_data.lock().await;
+            if let Err(e) = ctx.restore_from_loom(50).await {
+                tracing::warn!("Failed to restore from Loom: {}. Starting with empty context.", e);
+            }
+            if let Err(e) = ctx.restore_pinned_from_loom().await {
+                tracing::warn!("Failed to restore pinned memories from Loom: {}", e);
+            }
+        }
 
         // 4. Initialize shell backend
         let session_name = format!("ephemera-ai-{}", Uuid::new_v4().simple());
@@ -59,6 +86,8 @@ impl EphemeraAI {
             .tool(MemoryGet::new(loom_client.clone(), context_data.clone()))
             .tool(MemoryRecent::new(loom_client.clone(), context_data.clone()))
             .tool(MemoryTimeline::new(loom_client.clone(), context_data.clone()))
+            .tool(MemoryPin::new(loom_client.clone(), context_data.clone()))
+            .tool(MemoryUnpin::new(loom_client.clone(), context_data.clone()))
             .tool(StateTransition::new(state.clone()));
 
         let tool_server_handle = tool_server.run();
@@ -92,12 +121,13 @@ impl EphemeraAI {
             context: Context::new(context_data),
             agora_client,
             config,
+            sync_sender,
         })
     }
 
     pub async fn live(&mut self) -> anyhow::Result<()> {
         loop {
-            let state = *self.state.lock().unwrap();
+            let state = *self.state.lock().await;
             match state {
                 State::Active => {
                     // Full speed - no delay
@@ -124,11 +154,11 @@ impl EphemeraAI {
         if !events.is_empty() {
             // Collect event IDs for acknowledgment
             let event_ids: Vec<u64> = events.iter().map(|e| e.id).collect();
-            
+
             // Add events to context
             self.context.data()
                 .lock()
-                .unwrap()
+                .await
                 .add_agora_events(events);
 
             // Acknowledge processed events
@@ -136,21 +166,123 @@ impl EphemeraAI {
         }
 
         // 2. Prepare context (including newly added events)
-        let context_str = self.context.serialize();
+        let context_str = self.context.serialize().await;
 
-        // 3. Execute agent (rig handles tool calls including StateTransition internally)
-        let prompt = format!("Current Context:\n{}", context_str);
-        let result = self.agent.prompt(&prompt).await?;
+        // 3. Explicit multi-turn loop
+        let initial_prompt = format!("Current Context:\n{}", context_str);
+        let mut chat_history: Vec<Message> = vec![];
+        let mut current_prompt = initial_prompt;
+        let mut current_depth = 0;
 
-        // 4. Update context with result
-        self.update_context(result).await?;
+        loop {
+            // 3.1 Get completion
+            let builder = self.agent
+                .completion(&current_prompt, chat_history.clone())
+                .await?;
+
+            let response = builder.send().await?;
+
+            // 3.2 Extract and save Thought (AI text response)
+            let texts: Vec<String> = response.choice
+                .iter()
+                .filter_map(|c| match c {
+                    AssistantContent::Text(t) => Some(t.text.clone()),
+                    _ => None,
+                })
+                .collect();
+
+            if !texts.is_empty() {
+                let thought = texts.join("\n");
+                self.save_thought(&thought);
+            }
+
+            // 3.3 Extract tool calls
+            let tool_calls: Vec<_> = response.choice
+                .iter()
+                .filter_map(|c| match c {
+                    AssistantContent::ToolCall(tc) => Some(tc.clone()),
+                    _ => None,
+                })
+                .collect();
+
+            // 3.4 If no tool calls, we're done
+            if tool_calls.is_empty() {
+                break;
+            }
+
+            // 3.5 Check depth limit
+            current_depth += 1;
+            if current_depth > self.config.llm.max_turns {
+                warn!("Max depth {} reached, continuing next cycle", current_depth);
+                break;
+            }
+
+            // 3.6 Execute tools and build results
+            let mut tool_results: Vec<ToolResult> = vec![];
+
+            for tc in &tool_calls {
+                let args_str = tc.function.arguments.to_string();
+                let result = self.agent.tool_server_handle
+                    .call_tool(&tc.function.name, &args_str)
+                    .await?;
+
+                // Save Action memory
+                self.save_action(&tc.function.name, &args_str, &result);
+
+                // Build tool result for chat history
+                tool_results.push(ToolResult {
+                    id: tc.id.clone(),
+                    call_id: tc.call_id.clone(),
+                    content: OneOrMany::one(ToolResultContent::text(result)),
+                });
+            }
+
+            // 3.7 Update chat history for next iteration
+            chat_history.push(Message::Assistant {
+                id: None,
+                content: response.choice,
+            });
+            let user_contents: Vec<UserContent> = tool_results
+                .into_iter()
+                .map(UserContent::ToolResult)
+                .collect();
+            chat_history.push(Message::User {
+                content: OneOrMany::many(user_contents)
+                    .expect("tool_results should have at least one item"),
+            });
+
+            // 3.8 Clear prompt for subsequent iterations
+            current_prompt = String::new();
+        }
 
         Ok(())
     }
 
-    async fn update_context(&mut self, result: String) -> anyhow::Result<()> {
-        let fragment = from_action(format!("cognitive_cycle: {}", result), "cycle").build();
-        self.context.data().lock().unwrap().add_activity(fragment);
-        Ok(())
+    /// Save a Thought memory (AI's text response)
+    fn save_thought(&self, text: &str) {
+        let fragment = MemoryFragment {
+            id: 0,
+            content: text.to_string(),
+            timestamp: OffsetDateTime::now_utc(),
+            kind: MemoryKind::Thought,
+        };
+        self.sync_sender.send(fragment);
+    }
+
+    /// Save an Action memory (tool call)
+    fn save_action(&self, tool: &str, args: &str, result: &str) {
+        let content = serde_json::json!({
+            "tool": tool,
+            "args": serde_json::from_str(args).unwrap_or(serde_json::json!(args)),
+            "result": result,
+            "status": "success"
+        });
+        let fragment = MemoryFragment {
+            id: 0,
+            content: content.to_string(),
+            timestamp: OffsetDateTime::now_utc(),
+            kind: MemoryKind::Action,
+        };
+        self.sync_sender.send(fragment);
     }
 }

@@ -6,8 +6,10 @@ use axum::{
 use tracing::{error, info, instrument};
 
 use crate::memory::models::{
-    ApiResponse, CreateMemoryRequest, MemoryResponse, RecentMemoryRequest, TimelineMemoryRequest,
+    ApiResponse, CreateMemoryRequest, MemoryResponse, PinMemoryRequest, PinnedMemoriesResponse,
+    RecentMemoryRequest, TimelineMemoryRequest,
 };
+use crate::services::memory::manager::MemoryError;
 use crate::services::memory::AppState;
 
 /// HTTP handler for memory operations
@@ -88,6 +90,10 @@ impl MemoryHandler {
                     serde_json::json!({"deleted": true}),
                 )))
             }
+            Err(MemoryError::MemoryPinned(id)) => {
+                error!("Cannot delete pinned memory with ID {}", id);
+                Err(StatusCode::CONFLICT)
+            }
             Err(e) => {
                 error!("Failed to delete memory fragment with ID {}: {}", id, e);
                 Err(StatusCode::NOT_FOUND)
@@ -156,6 +162,83 @@ impl MemoryHandler {
             }
             Err(e) => {
                 error!("Failed to get memory fragments in time range: {}", e);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
+    }
+}
+
+/// HTTP handler for pinned memory operations
+pub struct PinnedMemoryHandler;
+
+impl PinnedMemoryHandler {
+    /// Get all pinned memories
+    #[instrument(skip(state))]
+    pub async fn get_pinned(
+        State(state): State<AppState>,
+    ) -> Result<Json<ApiResponse<PinnedMemoriesResponse>>, StatusCode> {
+        info!("Getting all pinned memories");
+
+        match state.memory_manager.get_pinned().await {
+            Ok(pinned_memories) => {
+                info!("Successfully retrieved {} pinned memories", pinned_memories.len());
+                let response = PinnedMemoriesResponse::new(pinned_memories);
+                Ok(Json(ApiResponse::success(response)))
+            }
+            Err(e) => {
+                error!("Failed to get pinned memories: {}", e);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
+    }
+
+    /// Pin a memory
+    #[instrument(skip(state))]
+    pub async fn pin_memory(
+        State(state): State<AppState>,
+        Json(request): Json<PinMemoryRequest>,
+    ) -> Result<(StatusCode, Json<crate::memory::models::PinnedMemory>), StatusCode> {
+        info!("Pinning memory with ID: {}", request.memory_id);
+
+        match state.memory_manager.pin(request.memory_id, request.reason).await {
+            Ok(pinned) => {
+                info!("Successfully pinned memory with ID: {}", request.memory_id);
+                Ok((StatusCode::CREATED, Json(pinned)))
+            }
+            Err(MemoryError::AlreadyPinned(id)) => {
+                error!("Memory {} is already pinned", id);
+                Err(StatusCode::CONFLICT)
+            }
+            Err(MemoryError::NotFound(id)) => {
+                error!("Memory {} not found", id);
+                Err(StatusCode::NOT_FOUND)
+            }
+            Err(e) => {
+                error!("Failed to pin memory {}: {}", request.memory_id, e);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
+    }
+
+    /// Unpin a memory
+    #[instrument(skip(state))]
+    pub async fn unpin_memory(
+        State(state): State<AppState>,
+        Path(memory_id): Path<i64>,
+    ) -> Result<StatusCode, StatusCode> {
+        info!("Unpinning memory with ID: {}", memory_id);
+
+        match state.memory_manager.unpin(memory_id).await {
+            Ok(()) => {
+                info!("Successfully unpinned memory with ID: {}", memory_id);
+                Ok(StatusCode::NO_CONTENT)
+            }
+            Err(MemoryError::NotFound(id)) => {
+                error!("Pinned memory {} not found", id);
+                Err(StatusCode::NOT_FOUND)
+            }
+            Err(e) => {
+                error!("Failed to unpin memory {}: {}", memory_id, e);
                 Err(StatusCode::INTERNAL_SERVER_ERROR)
             }
         }

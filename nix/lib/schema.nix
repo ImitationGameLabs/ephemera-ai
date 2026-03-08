@@ -44,6 +44,12 @@
           description = "Atrium authentication password";
         };
       };
+      context = {
+        max_pinned_count = lib.mkOption {
+          type = lib.types.ints.positive;
+          description = "Maximum number of pinned content items in context";
+        };
+      };
     };
 
     loom = {

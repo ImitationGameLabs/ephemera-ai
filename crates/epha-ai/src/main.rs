@@ -9,6 +9,7 @@ use tracing::info;
 mod agent;
 mod config;
 mod context;
+mod sync;
 mod tools;
 
 use crate::config::Config;
@@ -29,17 +30,14 @@ async fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::fmt::init();
 
-    let llm_client = init_llm_client(&config.llm);
-
     let loom_client = init_loom_client(&config.services.loom_url)
         .await
         .expect("Failed to init loom client");
 
     let llm_client = init_llm_client(&config.llm);
-
     let loom_client = Arc::new(loom_client);
 
-    let mut ai = EphemeraAI::new(config, loom_client, llm_client).await?;
+    let mut ai = EphemeraAI::new(config, loom_client.clone(), llm_client.clone()).await?;
     ai.live().await?;
 
     Ok(())

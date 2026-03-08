@@ -1,6 +1,7 @@
 
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub trait ContextSerialize {
     fn serialize(&self) -> String;
@@ -19,8 +20,8 @@ impl<T: ContextSerialize> Context<T> {
         self.data.clone()
     }
 
-    pub fn serialize(&self) -> String {
-        let guard = self.data.lock().unwrap();
+    pub async fn serialize(&self) -> String {
+        let guard = self.data.lock().await;
         let content = guard.serialize();
         let escaped_content = Self::escape_system_tags(content);
 

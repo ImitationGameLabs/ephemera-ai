@@ -4,7 +4,8 @@ use loom_client::LoomClient;
 use rig::{completion::ToolDefinition, tool::Tool};
 use serde::Deserialize;
 use serde_json::json;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 // ============================================================================
 // MemoryGet - Get memory fragments by IDs
@@ -95,7 +96,7 @@ impl Tool for MemoryGet {
         } else {
             // Add to context
             {
-                let mut context = self.context.lock().unwrap();
+                let mut context = self.context.lock().await;
                 context.add_memory_context(
                     format!("Retrieved {} memories by ID", fragments.len()),
                     fragments.clone(),
@@ -171,7 +172,7 @@ impl Tool for MemoryRecent {
     async fn call(&self, args: Self::Args) -> Result<Self::Output, MemoryRecentError> {
         let limit = args.limit.max(1).min(100);
 
-        match self.loom_client.get_recent_memory(limit).await {
+        match self.loom_client.get_recent_memories(limit).await {
             Ok(response) => {
                 if response.fragments.is_empty() {
                     Ok("No recent memories found.".to_string())
@@ -180,7 +181,7 @@ impl Tool for MemoryRecent {
 
                     // Add to context
                     {
-                        let mut context = self.context.lock().unwrap();
+                        let mut context = self.context.lock().await;
                         context.add_memory_context(
                             format!("Retrieved {} most recent memories", fragments.len()),
                             fragments.clone(),
@@ -290,7 +291,7 @@ impl Tool for MemoryTimeline {
 
                     // Add to context
                     {
-                        let mut context = self.context.lock().unwrap();
+                        let mut context = self.context.lock().await;
                         context.add_memory_context(
                             format!(
                                 "Retrieved {} memories from {} to {}",
@@ -319,3 +320,186 @@ impl Tool for MemoryTimeline {
         }
     }
 }
+
+// ============================================================================
+// MemoryPin - Pin a memory to keep it at top of context
+// ============================================================================
+
+#[derive(Deserialize)]
+pub struct MemoryPinArgs {
+    /// ID of the memory to pin
+    pub memory_id: i64,
+    /// Why this memory should be pinned
+    pub reason: String,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Memory pin error: {0}")]
+pub struct MemoryPinError(String);
+
+pub struct MemoryPin {
+    loom_client: Arc<LoomClient>,
+    context: Arc<Mutex<EphemeraContext>>,
+}
+
+impl MemoryPin {
+    pub fn new(loom_client: Arc<LoomClient>, context: Arc<Mutex<EphemeraContext>>) -> Self {
+        Self { loom_client, context }
+    }
+}
+
+impl Tool for MemoryPin {
+    const NAME: &'static str = "memory_pin";
+
+    type Error = MemoryPinError;
+    type Args = MemoryPinArgs;
+    type Output = String;
+
+    async fn definition(&self, _prompt: String) -> ToolDefinition {
+        serde_json::from_value(json!({
+            "name": "memory_pin",
+            "description": "Pin an existing memory to keep it always at the top of your context. Pinned memories persist across restarts and will not be removed by token limit management. Use this for critical information you need to remember.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "memory_id": {
+                        "type": "integer",
+                        "description": "ID of the memory to pin (must be an existing memory ID)"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Why this memory should be pinned (helps you remember the purpose)"
+                    }
+                },
+                "required": ["memory_id", "reason"]
+            }
+        }))
+        .expect("Tool Definition")
+    }
+
+    async fn call(&self, args: Self::Args) -> Result<Self::Output, MemoryPinError> {
+        // Pre-check: validate constraints before calling Loom API
+        let max_count = {
+            let context = self.context.lock().await;
+
+            let already_pinned = context.list_pinned().iter().any(|p| p.fragment.id == args.memory_id);
+            let max_count = context.max_pinned_count();
+            let current_count = context.list_pinned().len();
+
+            if already_pinned {
+                return Err(MemoryPinError(format!(
+                    "Memory {} is already pinned",
+                    args.memory_id
+                )));
+            }
+
+            if current_count >= max_count {
+                return Err(MemoryPinError(format!(
+                    "Maximum pinned count ({}) reached, please unpin some content first",
+                    max_count
+                )));
+            }
+
+            max_count
+        };
+
+        // Call Loom API to pin the memory
+        let pinned = self.loom_client.pin_memory(args.memory_id, Some(args.reason.clone()))
+            .await
+            .map_err(|e| MemoryPinError(format!("Failed to pin memory: {:?}", e)))?;
+
+        // Update local context and get new count in single lock
+        let current_count = {
+            let mut context = self.context.lock().await;
+            context.add_pinned_memory(pinned);
+            context.list_pinned().len()
+        };
+
+        Ok(format!(
+            "Memory {} pinned successfully. Current pinned count: {}/{}",
+            args.memory_id, current_count, max_count
+        ))
+    }
+}
+
+// ============================================================================
+// MemoryUnpin - Remove pinned memory
+// ============================================================================
+
+#[derive(Deserialize)]
+pub struct MemoryUnpinArgs {
+    /// ID of the memory to unpin
+    pub memory_id: i64,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Memory unpin error: {0}")]
+pub struct MemoryUnpinError(String);
+
+pub struct MemoryUnpin {
+    loom_client: Arc<LoomClient>,
+    context: Arc<Mutex<EphemeraContext>>,
+}
+
+impl MemoryUnpin {
+    pub fn new(loom_client: Arc<LoomClient>, context: Arc<Mutex<EphemeraContext>>) -> Self {
+        Self { loom_client, context }
+    }
+}
+
+impl Tool for MemoryUnpin {
+    const NAME: &'static str = "memory_unpin";
+
+    type Error = MemoryUnpinError;
+    type Args = MemoryUnpinArgs;
+    type Output = String;
+
+    async fn definition(&self, _prompt: String) -> ToolDefinition {
+        serde_json::from_value(json!({
+            "name": "memory_unpin",
+            "description": "Remove a pinned memory by its ID. The memory will still exist but will no longer be guaranteed to stay at the top of context.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "memory_id": {
+                        "type": "integer",
+                        "description": "ID of the pinned memory to remove"
+                    }
+                },
+                "required": ["memory_id"]
+            }
+        }))
+        .expect("Tool Definition")
+    }
+
+    async fn call(&self, args: Self::Args) -> Result<Self::Output, MemoryUnpinError> {
+        // Call Loom API to unpin the memory
+        self.loom_client.unpin_memory(args.memory_id)
+            .await
+            .map_err(|e| MemoryUnpinError(format!("Failed to unpin memory: {:?}", e)))?;
+
+        // Update local context synchronously
+        let removed = {
+            let mut context = self.context.lock().await;
+            context.remove_pinned_memory(args.memory_id)
+        };
+
+        if removed {
+            Ok(format!("Memory {} unpinned successfully", args.memory_id))
+        } else {
+            Ok(format!("Memory {} was not pinned locally (but unpinning succeeded on server)", args.memory_id))
+        }
+    }
+}
+
+// ============================================================================
+// Design Note: Why no MemoryListPinned tool?
+// ============================================================================
+//
+// Pinned memories are already included in the AI's context via EphemeraContext's
+// serialize() method. The AI can see all pinned memories at any time without
+// needing to explicitly list them. This is by design - pinned memories are
+// meant to be "always visible" context that persists across sessions.
+//
+// If detailed pinned info (reason, pinned_at) is needed, it can be exposed
+// through the context serialization rather than a separate tool.
