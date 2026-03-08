@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-/// Life state for EphemeraAI
+/// Existence state for EphemeraAI
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum State {

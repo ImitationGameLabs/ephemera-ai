@@ -23,10 +23,9 @@ Welcome to the Ephemera AI documentation. Start here to understand what makes th
 ### For Technical Implementation
 
 - **[Architecture](architecture/index.md)** — System design overview
-  - [Current Implementation](architecture/current.md) — Hybrid storage (MySQL + Qdrant)
-  - [Evolving Direction](architecture/evolving.md) — Nix-managed declarative state
-  - [Personality System](architecture/personality.md) — Multi-dimensional personality model
-  - [Agent Orchestration](architecture/agent-orchestration.md) — Configuration-driven agent system
+  - [Existence State](architecture/existence-state.md) — Active, Dormant, Suspended modes
+  - [Memory Kinds](architecture/memory-kinds.md) — Thought, Action, Event classification
+  - [Event System](architecture/event-system.md) — Herald-Agora architecture
 
 ### For Developers
 

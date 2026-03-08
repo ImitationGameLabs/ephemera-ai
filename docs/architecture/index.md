@@ -2,50 +2,21 @@
 
 Technical documentation for Ephemera AI's system design.
 
-> **Note**: Our architecture is actively evolving. This section documents both our current implementation and the direction we're heading.
+## Core Concepts
 
-## Current vs Evolving
+### [Existence State](existence-state.md)
 
-- **[Current Implementation](current.md)**: The hybrid storage system in production today
-- **[Evolving Architecture](evolving.md)**: The declarative state system we're building toward
+Three existence states: Active, Dormant, and Suspended. Not execution states, but **modes of being**.
 
-## Core Components
+### [Memory Kinds](memory-kinds.md)
 
-### [Personality System](personality.md)
+Classification of memory fragments by **agency** — who initiated the activity:
+- **Thought** — AI internal (reasoning, planning)
+- **Action** — AI external (tool calls, execution results)
+- **Event** — External world (dialogue, timer, system events)
 
-Multi-dimensional personality model that develops through experience, using multiple complementary frameworks as "different lenses."
+### [Event System](event-system.md)
 
-### [Agent Orchestration](agent-orchestration.md)
-
-Configuration-driven agent orchestration enabling runtime flexibility, performance monitoring, and self-optimization.
-
-## Design Principles
-
-1. **Memory as Life Experience**: The memory stream is the foundation of self-continuity
-2. **Retrieval as Tool**: Vector search is an external resource, not part of core identity
-3. **Integrity First**: Memory systems must protect authenticity, not just enable retrieval
-4. **Evolution Safe**: All changes must be reversible with automatic rollback
-
-## Component Overview
-
-```
-crates/
-├── epha-ai (main program)
-├── epha-agent (state machine framework)
-├── agora (event hub)
-├── agora-client
-├── chronikos/ (time management)
-│   └── kairos/
-├── psyche/
-│   ├── loom-client → loom (memory service: MySQL + Qdrant)
-└── dialogue/
-    ├── atrium-client → atrium (dialogue service: MySQL)
-    └── atrium-herald
-```
-
-### State Machine Loop
-
-1. **Perception** → Receive messages
-2. **Recall** → Retrieve memories
-3. **Reasoning** → State decision
-4. **Output** → Send response
+The Herald-Agora architecture for event delivery:
+- **Heralds** — Protocol adapters that convert external services to Ephemera AI events
+- **Agora** — Event hub with SQLite persistence and at-least-once delivery

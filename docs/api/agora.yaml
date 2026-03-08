@@ -136,7 +136,18 @@ paths:
   /events/fetch:
     post:
       summary: Fetch events for delivery
-      description: Returns pending events and retry-ready delivered events. Changes state (Pending → Delivered).
+      description: |
+        Returns pending events and retry-ready delivered events.
+
+        **Why POST instead of GET?**
+
+        This operation changes event state (Pending → Delivered) and is not idempotent:
+        - First call returns events A, B, C (now Delivered)
+        - Second call returns different events (A, B, C already Delivered)
+
+        Per HTTP semantics, GET should be safe and idempotent. Since this operation
+        has observable side effects and produces different results on repeated calls,
+        POST is the appropriate method.
       operationId: fetchEvents
       tags: [Events]
       requestBody:

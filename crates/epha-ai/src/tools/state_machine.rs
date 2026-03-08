@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 /// Arguments for state transition
 #[derive(Debug, Deserialize)]
 pub struct StateTransitionArgs {
-    /// The target life state to transition to
+    /// The target existence state to transition to
     pub mode: State,
     /// Reason for the transition
     pub reason: String,
@@ -25,7 +25,7 @@ impl fmt::Display for StateTransitionError {
 
 impl std::error::Error for StateTransitionError {}
 
-/// Tool for transitioning between life states
+/// Tool for transitioning between existence states
 pub struct StateTransition {
     state: Arc<Mutex<State>>,
 }
@@ -45,14 +45,14 @@ impl Tool for StateTransition {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         serde_json::from_value(serde_json::json!({
             "name": "state_transition",
-            "description": "Transition between life states: Active (normal mode), Dormant (slow mode), or Suspended (exit loop)",
+            "description": "Transition between existence states: Active (normal mode), Dormant (slow mode), or Suspended (exit loop)",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "mode": {
                         "type": "string",
                         "enum": ["Active", "Dormant", "Suspended"],
-                        "description": "The target life state"
+                        "description": "The target existence state"
                     },
                     "reason": {
                         "type": "string",
