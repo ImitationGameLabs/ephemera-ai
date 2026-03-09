@@ -1,7 +1,9 @@
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
 use kairos_client::{CreateScheduleRequest, KairosClient, Period, Priority, Schedule, ScheduleStatus, TriggerSpec};
+use reqwest::Client;
 use std::env;
+use std::time::Duration;
 use time::{format_description, OffsetDateTime};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -15,9 +17,18 @@ fn get_server_url() -> String {
         .unwrap_or_else(|| DEFAULT_URL.to_string())
 }
 
+fn build_http_client() -> Client {
+    Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to create HTTP client")
+}
+
 fn get_client() -> KairosClient {
     let url = get_server_url();
-    KairosClient::new(url)
+    let http_client = build_http_client();
+    KairosClient::new(&url, http_client)
 }
 
 #[derive(Parser)]

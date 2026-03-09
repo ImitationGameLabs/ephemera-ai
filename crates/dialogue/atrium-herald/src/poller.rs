@@ -25,10 +25,11 @@ impl Poller {
         poll_interval: Duration,
         agora_heartbeat_interval: Duration,
         atrium_heartbeat_interval: Duration,
+        http_client: Client,
     ) -> Self {
         Self {
             atrium_client,
-            http_client: Client::new(),
+            http_client,
             herald_id: herald_id.to_string(),
             agora_url: agora_url.to_string(),
             poll_interval,

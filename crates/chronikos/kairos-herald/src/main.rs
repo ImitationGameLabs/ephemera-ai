@@ -38,6 +38,14 @@ struct Args {
     heartbeat_interval: u64,
 }
 
+fn build_http_client() -> Client {
+    Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to create HTTP client")
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize tracing
@@ -57,8 +65,8 @@ async fn main() -> Result<()> {
     info!("Heartbeat interval: {}s", args.heartbeat_interval);
 
     // Create clients
-    let kairos_client = KairosClient::new(&args.kairos_url);
-    let http_client = Client::new();
+    let http_client = build_http_client();
+    let kairos_client = KairosClient::new(&args.kairos_url, http_client.clone());
 
     // Register with Agora
     register_herald(&http_client, &args.agora_url).await?;

@@ -1,9 +1,11 @@
 use crate::agent::EphemeraAI;
 use clap::Parser;
 use loom_client::LoomClient;
+use reqwest::Client;
 use rig::providers::deepseek;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::info;
 
 mod agent;
@@ -30,17 +32,26 @@ async fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::fmt::init();
 
-    let loom_client = init_loom_client(&config.services.loom_url)
+    let http_client = build_http_client();
+    let loom_client = init_loom_client(&config.services.loom_url, http_client.clone())
         .await
         .expect("Failed to init loom client");
 
     let llm_client = init_llm_client(&config.llm);
     let loom_client = Arc::new(loom_client);
 
-    let mut ai = EphemeraAI::new(config, loom_client.clone(), llm_client.clone()).await?;
+    let mut ai = EphemeraAI::new(config, loom_client.clone(), llm_client.clone(), http_client).await?;
     ai.live().await?;
 
     Ok(())
+}
+
+fn build_http_client() -> Client {
+    Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to create HTTP client")
 }
 
 fn init_llm_client(llm_config: &crate::config::LlmConfig) -> deepseek::Client {
@@ -49,11 +60,11 @@ fn init_llm_client(llm_config: &crate::config::LlmConfig) -> deepseek::Client {
         .build()
 }
 
-async fn init_loom_client(loom_url: &str) -> anyhow::Result<LoomClient> {
+async fn init_loom_client(loom_url: &str, http_client: Client) -> anyhow::Result<LoomClient> {
     info!("Connecting to loom service at: {}", loom_url);
 
     // Test connection with health check
-    let client = LoomClient::new(loom_url);
+    let client = LoomClient::new(loom_url, http_client);
     client
         .health_check()
         .await

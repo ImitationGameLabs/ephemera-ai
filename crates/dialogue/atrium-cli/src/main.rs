@@ -4,6 +4,8 @@ use anyhow::{anyhow, Result};
 use atrium_client::{AuthenticatedClient, GetMessagesQuery};
 use clap::{Parser, Subcommand};
 use config::{resolve_config, MissingConfig};
+use reqwest::Client;
+use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Parser)]
@@ -81,6 +83,14 @@ enum OutputFormat {
     Json,
 }
 
+fn build_http_client() -> Client {
+    Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to create HTTP client")
+}
+
 fn require_config() -> Result<config::ResolvedConfig> {
     resolve_config().map_err(|missing: MissingConfig| {
         anyhow!("{}", missing.to_error_message())
@@ -92,11 +102,13 @@ async fn create_client() -> Result<AuthenticatedClient> {
     let bio = resolved.auth.bio.unwrap_or_default();
     let username = resolved.auth.username.clone();
     let server_url = resolved.server_url.clone();
+    let http_client = build_http_client();
     let client = AuthenticatedClient::connect_and_login_or_register(
         &resolved.server_url,
         resolved.auth.username,
         resolved.auth.password,
         bio,
+        http_client,
     )
     .await
     .map_err(|e| {
@@ -156,13 +168,13 @@ fn handle_config(action: ConfigCommands) -> Result<()> {
 
 async fn handle_ping() -> Result<()> {
     let resolved = require_config()?;
-    
-    let client = reqwest::Client::new();
+
+    let client = build_http_client();
     let response = client
         .get(format!("{}/health", resolved.server_url))
         .send()
         .await;
-    
+
     match response {
         Ok(resp) if resp.status().is_success() => {
             println!("pong! server-url: {}", resolved.server_url);
@@ -174,7 +186,7 @@ async fn handle_ping() -> Result<()> {
             return Err(anyhow!("Failed to connect to {}: {}", resolved.server_url, e));
         }
     }
-    
+
     Ok(())
 }
 

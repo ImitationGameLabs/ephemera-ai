@@ -49,10 +49,10 @@ pub struct RawClient {
 }
 
 impl RawClient {
-    pub fn new(base_url: impl Into<String>) -> Self {
+    pub fn new(base_url: &str, client: Client) -> Self {
         Self {
-            client: Client::new(),
-            base_url: base_url.into(),
+            client,
+            base_url: base_url.to_string(),
         }
     }
 

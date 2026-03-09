@@ -37,6 +37,7 @@ impl EphemeraAI {
         config: crate::config::Config,
         loom_client: Arc<LoomClient>,
         completion_client: Client,
+        http_client: reqwest::Client,
     ) -> anyhow::Result<Self> {
         // 1. Create shared state
         let state = Arc::new(Mutex::new(State::default()));
@@ -75,7 +76,7 @@ impl EphemeraAI {
             .map_err(|e| anyhow::anyhow!("Failed to create tmux backend '{}': {}", session_name, e))?;
 
         // 5. Initialize Agora client with health check
-        let agora_client = Arc::new(AgoraClient::new(&config.agora.url));
+        let agora_client = Arc::new(AgoraClient::new(&config.agora.url, http_client));
         info!("Initializing Agora client: {}", config.agora.url);
         agora_client.health_check().await
             .map_err(|e| anyhow::anyhow!("Agora service unavailable at '{}': {}", config.agora.url, e))?;

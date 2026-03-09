@@ -2,6 +2,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use atrium::models::*;
 use super::raw_client::{RawClient, ClientError};
+use reqwest::Client;
 
 #[derive(Clone)]
 pub struct AuthenticatedClient {
@@ -24,17 +25,17 @@ impl AuthenticatedClient {
     }
 
     // Login with existing user
-    pub async fn connect_and_login(server_url: impl Into<String>, username: String, password: String) -> Result<Self, ClientError> {
+    pub async fn connect_and_login(server_url: &str, username: String, password: String, http_client: Client) -> Result<Self, ClientError> {
         let credentials = UserCredentials { username, password };
-        let client = Self::new_with_url(server_url, credentials);
+        let client = Self::new_with_url(server_url, credentials, http_client);
         client.login().await?;
         Ok(client)
     }
 
     // Login or register with bio
-    pub async fn connect_and_login_or_register(server_url: impl Into<String>, username: String, password: String, bio: String) -> Result<Self, ClientError> {
+    pub async fn connect_and_login_or_register(server_url: &str, username: String, password: String, bio: String, http_client: Client) -> Result<Self, ClientError> {
         let credentials = UserCredentials { username, password };
-        let client = Self::new_with_url(server_url, credentials);
+        let client = Self::new_with_url(server_url, credentials, http_client);
         client.login_or_register(bio).await?;
         Ok(client)
     }
@@ -70,8 +71,8 @@ impl AuthenticatedClient {
     }
 
     // New constructor that takes URL directly
-    pub fn new_with_url(server_url: impl Into<String>, credentials: UserCredentials) -> Self {
-        let raw_client = RawClient::new(server_url);
+    pub fn new_with_url(server_url: &str, credentials: UserCredentials, http_client: Client) -> Self {
+        let raw_client = RawClient::new(server_url, http_client);
         Self {
             raw_client,
             credentials,

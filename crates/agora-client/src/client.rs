@@ -48,19 +48,11 @@ pub struct AgoraClient {
 }
 
 impl AgoraClient {
-    /// Creates a new Agora client with the given base URL.
-    pub fn new(base_url: impl Into<String>) -> Self {
-        Self {
-            client: Client::new(),
-            base_url: base_url.into(),
-        }
-    }
-
-    /// Creates a new Agora client with custom HTTP client configuration.
-    pub fn with_client(base_url: impl Into<String>, client: Client) -> Self {
+    /// Creates a new Agora client with the given base URL and HTTP client.
+    pub fn new(base_url: &str, client: Client) -> Self {
         Self {
             client,
-            base_url: base_url.into(),
+            base_url: base_url.to_string(),
         }
     }
 
@@ -184,14 +176,8 @@ mod tests {
 
     #[test]
     fn test_client_creation() {
-        let client = AgoraClient::new("http://localhost:8080");
-        assert_eq!(client.base_url(), "http://localhost:8080");
-    }
-
-    #[test]
-    fn test_client_with_custom_http_client() {
         let http_client = Client::new();
-        let client = AgoraClient::with_client("http://localhost:8080", http_client);
+        let client = AgoraClient::new("http://localhost:8080", http_client);
         assert_eq!(client.base_url(), "http://localhost:8080");
     }
 }

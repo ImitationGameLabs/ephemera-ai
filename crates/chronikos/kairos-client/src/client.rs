@@ -50,19 +50,11 @@ pub struct KairosClient {
 }
 
 impl KairosClient {
-    /// Creates a new Kairos client with the given base URL.
-    pub fn new(base_url: impl Into<String>) -> Self {
-        Self {
-            client: Client::new(),
-            base_url: base_url.into(),
-        }
-    }
-
-    /// Creates a new Kairos client with custom HTTP client configuration.
-    pub fn with_client(base_url: impl Into<String>, client: Client) -> Self {
+    /// Creates a new Kairos client with the given base URL and HTTP client.
+    pub fn new(base_url: &str, client: Client) -> Self {
         Self {
             client,
-            base_url: base_url.into(),
+            base_url: base_url.to_string(),
         }
     }
 
@@ -250,14 +242,8 @@ mod tests {
 
     #[test]
     fn test_client_creation() {
-        let client = KairosClient::new("http://localhost:8081");
-        assert_eq!(client.base_url(), "http://localhost:8081");
-    }
-
-    #[test]
-    fn test_client_with_custom_http_client() {
         let http_client = Client::new();
-        let client = KairosClient::with_client("http://localhost:8081", http_client);
+        let client = KairosClient::new("http://localhost:8081", http_client);
         assert_eq!(client.base_url(), "http://localhost:8081");
     }
 }
