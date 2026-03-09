@@ -2,6 +2,8 @@ use crate::agent::EphemeraAI;
 use clap::Parser;
 use loom_client::LoomClient;
 use reqwest::Client;
+use rig::client::CompletionClient;
+use rig::completion::Completion;
 use rig::providers::deepseek;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -37,10 +39,12 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Failed to init loom client");
 
-    let llm_client = init_llm_client(&config.llm);
+    let llm_client = init_llm_client(&config.llm)
+        .await
+        .expect("Failed to init LLM client");
     let loom_client = Arc::new(loom_client);
 
-    let mut ai = EphemeraAI::new(config, loom_client.clone(), llm_client.clone(), http_client).await?;
+    let mut ai = EphemeraAI::new(config, loom_client.clone(), llm_client, http_client).await?;
     ai.live().await?;
 
     Ok(())
@@ -54,10 +58,30 @@ fn build_http_client() -> Client {
         .expect("Failed to create HTTP client")
 }
 
-fn init_llm_client(llm_config: &crate::config::LlmConfig) -> deepseek::Client {
-    deepseek::Client::builder(&llm_config.api_key)
+async fn init_llm_client(llm_config: &crate::config::LlmConfig) -> anyhow::Result<deepseek::Client> {
+    info!("Validating LLM credentials at: {}", llm_config.base_url);
+
+    let client = deepseek::Client::builder(&llm_config.api_key)
         .base_url(&llm_config.base_url)
-        .build()
+        .build();
+
+    // Create a minimal agent to test the connection
+    let agent = client
+        .agent(&llm_config.model)
+        .preamble("Reply ok.")
+        .build();
+
+    // Send a test message
+    agent
+        .completion("hi", vec![])
+        .await?
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("LLM API validation failed: {}", e))?;
+
+    info!("LLM credentials validated successfully");
+
+    Ok(client)
 }
 
 async fn init_loom_client(loom_url: &str, http_client: Client) -> anyhow::Result<LoomClient> {
