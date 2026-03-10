@@ -16,7 +16,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-log = "0.4"
+log = { workspace = true }
 
 epha-agent = { path = "../epha-agent" }
 loom-client = { path = "../psyche/loom-client" }

@@ -1,28 +1,32 @@
 [workspace]
 members = [
-    "crates/epha-ai",
-    "crates/epha-agent",
-    "crates/epha-boot",
+  "crates/epha-ai",
+  "crates/epha-agent",
 
-    "crates/agora",
-    "crates/agora-client",
+  "crates/agora",
+  "crates/agora-client",
 
-    "crates/chronikos/kairos",
-    "crates/chronikos/kairos-client",
-    "crates/chronikos/kairos-cli",
-    "crates/chronikos/kairos-herald",
+  "crates/chronikos/kairos",
+  "crates/chronikos/kairos-client",
+  "crates/chronikos/kairos-cli",
+  "crates/chronikos/kairos-herald",
 
-    "crates/psyche/loom",
-    "crates/psyche/loom-client",
-    # "crates/psyche/loom-vector",
+  "crates/psyche/loom",
+  "crates/psyche/loom-client",
 
-    "crates/dialogue/atrium",
-    "crates/dialogue/atrium-client",
-    "crates/dialogue/atrium-cli",
-    "crates/dialogue/atrium-herald",
+  "crates/dialogue/atrium",
+  "crates/dialogue/atrium-client",
+  "crates/dialogue/atrium-cli",
+  "crates/dialogue/atrium-herald",
 ]
 
 resolver = "3"
+
+[workspace.package]
+version = "0.0.0"
+
+[workspace.metadata.crane]
+name = "ephemera-ai-workspace"
 
 [workspace.dependencies]
 # Common dependencies
@@ -32,8 +36,18 @@ serde_json = "1.0"
 anyhow = "1.0"
 thiserror = "2.0"
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "std", "fmt"] }
-time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros", "serde-well-known"] }
+tracing-subscriber = { version = "0.3", features = [
+  "env-filter",
+  "std",
+  "fmt",
+] }
+time = { version = "0.3", features = [
+  "serde",
+  "formatting",
+  "parsing",
+  "macros",
+  "serde-well-known",
+] }
 clap = { version = "4", features = ["derive"] }
 async-trait = "0.1"
 uuid = { version = "1", features = ["v4", "serde"] }
@@ -42,15 +56,35 @@ uuid = { version = "1", features = ["v4", "serde"] }
 axum = "0.8"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["full"] }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 
 # Database
-sea-orm = { version = "1.1", features = ["runtime-tokio", "sqlx-mysql", "macros", "with-json", "with-time", "with-uuid"] }
+sea-orm = { version = "1.1", features = [
+  "runtime-tokio",
+  "sqlx-mysql",
+  "macros",
+  "with-json",
+  "with-time",
+  "with-uuid",
+] }
 sea-orm-migration = "1.1"
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "time"] }
+sqlx = { version = "0.8", features = [
+  "runtime-tokio",
+  "sqlite",
+  "time",
+  "tls-rustls",
+] }
 
 # Other common
 url = "2.5"
+dirs = "6.0"
+log = "0.4"
+serde_yaml = "0.9"
+regex = "1"
+glob = "0.3"
+tmux_interface = "0.3"
+rpassword = "7.3"
+urlencoding = "2.1"
 
 # AI/ML
 rig-core = "0.22"

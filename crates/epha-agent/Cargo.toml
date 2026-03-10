@@ -14,15 +14,15 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 time = { workspace = true }
 async-trait = { workspace = true }
-serde_yaml = "0.9"
+serde_yaml = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 # File system tools dependencies
-regex = "1"
-glob = "0.3"
+regex = { workspace = true }
+glob = { workspace = true }
 
 # Shell tools dependencies
-tmux_interface = "0.3"
+tmux_interface = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
