@@ -18,7 +18,7 @@
   };
 
   outputs =
-    inputs@{ flake-parts, ... }:
+    inputs@{ self, flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = [
         "x86_64-linux"
@@ -27,292 +27,54 @@
         "aarch64-darwin"
       ];
 
-      # Flake-level outputs (lib, templates)
+      # Flake-level outputs (templates)
       flake = {
-        # Export nix library for configuration and service building
-        lib = import ./nix/lib { inherit inputs; };
+        # Export home-manager modules
+        homeManagerModules.default = import ./nix/home-manager-modules { flake = self; };
 
         # Export templates for user initialization
-        templates.default = {
-          path = ./templates/default;
-          description = "Ephemera AI deployment configuration";
+        templates = {
+          default = {
+            path = ./templates/default;
+            description = "Ephemera AI deployment configuration (home-manager)";
+          };
         };
       };
 
       perSystem =
-        {
-          self',
-          pkgs,
-          lib,
-          ...
-        }:
+        { system, lib, ... }:
         let
-          pkgs' = pkgs.extend (import inputs.rust-overlay);
-
-          craneLib = inputs.crane.mkLib pkgs';
-          src = craneLib.cleanCargoSource ./.;
-
-          # Common arguments can be set here to avoid repeating them later
-          commonArgs = {
-            inherit src;
-            strictDeps = true;
-
-            nativeBuildInputs = with pkgs'; [
-              pkg-config
-            ];
-
-            buildInputs =
-              with pkgs';
-              [
-                openssl
-              ]
-
-              ++ lib.optionals pkgs'.stdenv.isDarwin [
-                # Additional darwin specific inputs can be set here
-                pkgs'.libiconv
-              ];
-
-            # Additional environment variables can be set directly
-            # MY_CUSTOM_VAR = "some value";
+          pkgs = import inputs.nixpkgs {
+            inherit system;
+            overlays = [ (import inputs.rust-overlay) ];
           };
 
-          # Build *just* the cargo dependencies (of the entire workspace),
-          # so we can reuse all of that work (e.g. via cachix) when running in CI
-          # It is *highly* recommended to use something like cargo-hakari to avoid
-          # cache misses when building individual top-level-crates
-          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+          root = ./.;
 
-          individualCrateArgs = commonArgs // {
-            inherit cargoArtifacts;
-            inherit (craneLib.crateNameFromCargoToml { inherit src; }) version;
-            # NB: we disable tests since we'll run them all via cargo-nextest
-            doCheck = false;
+          common = import ./nix/common.nix {
+            inherit
+              pkgs
+              lib
+              inputs
+              root
+              ;
           };
 
-          fileSetForCrate =
-            crate:
-            lib.fileset.toSource {
-              root = ./.;
-              fileset = lib.fileset.unions [
-                ./Cargo.toml
-                ./Cargo.lock
-                (craneLib.fileset.commonCargoSources ./crates/agora)
-                (craneLib.fileset.commonCargoSources ./crates/agora-client)
-                (craneLib.fileset.commonCargoSources ./crates/chronikos/kairos)
-                (craneLib.fileset.commonCargoSources ./crates/chronikos/kairos-client)
-                (craneLib.fileset.commonCargoSources ./crates/chronikos/kairos-cli)
-                (craneLib.fileset.commonCargoSources ./crates/chronikos/kairos-herald)
-                (craneLib.fileset.commonCargoSources ./crates/dialogue/atrium)
-                (craneLib.fileset.commonCargoSources ./crates/dialogue/atrium-cli)
-                (craneLib.fileset.commonCargoSources ./crates/dialogue/atrium-client)
-                (craneLib.fileset.commonCargoSources ./crates/dialogue/atrium-herald)
-                (craneLib.fileset.commonCargoSources ./crates/psyche/loom)
-                (craneLib.fileset.commonCargoSources ./crates/psyche/loom-client)
-                (craneLib.fileset.commonCargoSources ./crates/epha-agent)
-                (craneLib.fileset.commonCargoSources ./crates/epha-ai)
-                (craneLib.fileset.commonCargoSources ./crates/epha-boot)
-                (craneLib.fileset.commonCargoSources crate)
-              ];
-            };
+          packages = import ./nix/packages.nix {
+            inherit pkgs lib common;
+          };
 
-          # Build the top-level crates of the workspace as individual derivations.
-          # This allows consumers to only depend on (and build) only what they need.
-          # Though it is possible to build the entire workspace as a single derivation,
-          # so this is left up to you on how to organize things
-          #
-          # Note that the cargo workspace must define `workspace.members` using wildcards,
-          # otherwise, omitting a crate (like we do below) will result in errors since
-          # cargo won't be able to find the sources for all members.
-          epha-ai = craneLib.buildPackage (
-            individualCrateArgs
-            // {
-              pname = "epha-ai";
-              cargoExtraArgs = "-p epha-ai";
-              src = fileSetForCrate ./crates/epha-ai;
-            }
-          );
-          loom = craneLib.buildPackage (
-            individualCrateArgs
-            // {
-              pname = "loom";
-              cargoExtraArgs = "-p loom";
-              src = fileSetForCrate ./crates/psyche/loom;
-            }
-          );
-
-          epha-boot = craneLib.buildPackage (
-            individualCrateArgs
-            // {
-              pname = "epha-boot";
-              cargoExtraArgs = "-p epha-boot";
-              src = fileSetForCrate ./crates/epha-boot;
-            }
-          );
-
-          atrium = craneLib.buildPackage (
-            individualCrateArgs
-            // {
-              pname = "atrium";
-              cargoExtraArgs = "-p atrium";
-              src = fileSetForCrate ./crates/dialogue/atrium;
-            }
-          );
-
-          atrium-cli = craneLib.buildPackage (
-            individualCrateArgs
-            // {
-              pname = "atrium-cli";
-              cargoExtraArgs = "-p atrium-cli";
-              src = fileSetForCrate ./crates/dialogue/atrium-cli;
-            }
-          );
-
-          # Meta package combining core services (epha-ai, loom, atrium, atrium-cli)
-          ephemera-ai = pkgs'.symlinkJoin {
-            name = "ephemera-ai";
-            paths = [
-              epha-ai
-              loom
-              atrium
-              atrium-cli
-            ];
+          checks = import ./nix/dev/checks.nix {
+            inherit pkgs common;
+            inherit (inputs) advisory-db;
+            ephaPkgs = packages;
           };
         in
         {
-          packages = {
-            default = ephemera-ai;
-            inherit
-              epha-ai
-              loom
-              atrium
-              atrium-cli
-              epha-boot
-              ephemera-ai
-              ;
-          };
+          inherit packages checks;
 
-          apps = {
-            epha-ai = {
-              type = "app";
-              program = "${epha-ai}/bin/epha-ai";
-            };
-            loom = {
-              type = "app";
-              program = "${loom}/bin/loom";
-            };
-            epha-boot = {
-              type = "app";
-              program = "${epha-boot}/bin/epha-boot";
-            };
-            atrium = {
-              type = "app";
-              program = "${atrium}/bin/atrium";
-            };
-            atrium-cli = {
-              type = "app";
-              program = "${atrium-cli}/bin/atrium-cli";
-            };
-          };
-
-          devShells.default = craneLib.devShell {
-            # Inherit inputs from checks.
-            checks = self'.checks;
-
-            # Additional dev-shell environment variables can be set directly
-            # MY_CUSTOM_DEVELOPMENT_VAR = "something else";
-
-            # Extra inputs can be added here; cargo and rustc are provided by default.
-            packages = [
-              pkgs'.cargo-hakari
-            ];
-          };
-
-          checks = {
-            # Build the crates as part of `nix flake check` for convenience
-            inherit
-              epha-ai
-              loom
-              epha-boot
-              atrium
-              atrium-cli
-              ;
-
-            # Run clippy (and deny all warnings) on the workspace source,
-            # again, reusing the dependency artifacts from above.
-            #
-            # Note that this is done as a separate derivation so that
-            # we can block the CI if there are issues here, but not
-            # prevent downstream consumers from building our crate by itself.
-            my-workspace-clippy = craneLib.cargoClippy (
-              commonArgs
-              // {
-                inherit cargoArtifacts;
-                cargoClippyExtraArgs = "--all-targets -- --deny warnings";
-              }
-            );
-
-            my-workspace-doc = craneLib.cargoDoc (
-              commonArgs
-              // {
-                inherit cargoArtifacts;
-                # This can be commented out or tweaked as necessary, e.g. set to
-                # `--deny rustdoc::broken-intra-doc-links` to only enforce that lint
-                env.RUSTDOCFLAGS = "--deny warnings";
-              }
-            );
-
-            # Check formatting
-            my-workspace-fmt = craneLib.cargoFmt {
-              inherit src;
-            };
-
-            my-workspace-toml-fmt = craneLib.taploFmt {
-              src = pkgs'.lib.sources.sourceFilesBySuffices src [ ".toml" ];
-              # taplo arguments can be further customized below as needed
-              # taploExtraArgs = "--config ./taplo.toml";
-            };
-
-            # Audit dependencies
-            my-workspace-audit = craneLib.cargoAudit {
-              inherit src;
-              advisory-db = inputs.advisory-db;
-            };
-
-            # Audit licenses
-            my-workspace-deny = craneLib.cargoDeny {
-              inherit src;
-            };
-
-            # Run tests with cargo-nextest
-            # Consider setting `doCheck = false` on other crate derivations
-            # if you do not want the tests to run twice
-            my-workspace-nextest = craneLib.cargoNextest (
-              commonArgs
-              // {
-                inherit cargoArtifacts;
-                partitions = 1;
-                partitionType = "count";
-                cargoNextestPartitionsExtraArgs = "--no-tests=pass";
-              }
-            );
-
-            # Ensure that cargo-hakari is up to date
-            my-workspace-hakari = craneLib.mkCargoDerivation {
-              inherit src;
-              pname = "my-workspace-hakari";
-              cargoArtifacts = null;
-              doInstallCargoArtifacts = false;
-
-              buildPhaseCargoCommand = ''
-                cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
-                cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
-                cargo hakari verify
-              '';
-
-              nativeBuildInputs = [
-                pkgs'.cargo-hakari
-              ];
-            };
+          devShells.default = import ./nix/dev/shell.nix {
+            inherit pkgs common checks;
           };
         };
     };

@@ -1,68 +1,63 @@
-# Ephemera AI Deployment Template
-# Initialize with: nix flake init -t github:ImitationGameLabs/ephemera-ai
-
 {
-  description = "Ephemera AI deployment configuration";
+  description = "Home Manager Configuration for Ephemera AI";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    flake-parts.url = "github:hercules-ci/flake-parts";
-    ephemera-ai.url = "github:ImitationGameLabs/ephemera-ai";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    home-manager = {
+      url = "github:nix-community/home-manager/release-25.11";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    ephemera-ai = {
+      url = "github:ImitationGameLabs/ephemera-ai";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
-    inputs@{ flake-parts, ephemera-ai, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-        "x86_64-darwin"
-        "aarch64-darwin"
-      ];
+    {
+      nixpkgs,
+      nixpkgs-unstable,
+      home-manager,
+      ephemera-ai,
+      ...
+    }@inputs:
+    let
+      system = "x86_64-linux";
+      pkgs = nixpkgs.legacyPackages.${system};
+    in
+    {
+      inherit inputs;
 
-      perSystem =
-        {
-          pkgs,
-          system,
-          lib,
-          ...
-        }:
-        let
-          userConfig = import ./config.nix;
+      homeConfigurations.simplex = home-manager.lib.homeManagerConfiguration {
+        inherit pkgs;
 
-          ephaLib = ephemera-ai.lib;
-
-          configErrors = ephaLib.validateConfig userConfig;
-          validatedConfig =
-            if configErrors != null then
-              throw "Configuration validation failed:\n${lib.concatStringsSep "\n" configErrors}"
-            else
-              userConfig;
-
-          configFiles = ephaLib.generateAllConfigs validatedConfig;
-
-          basePackages = ephemera-ai.packages.${system};
-
-          mkServiceWrapper' =
-            name:
-            ephaLib.mkServiceWrapper system {
-              name = name;
-              package = basePackages.${name};
-              configJson = configFiles.${name};
-            };
-        in
-        {
-          packages = rec {
-            epha-ai-wrapped = mkServiceWrapper' "epha-ai";
-            loom-wrapped = mkServiceWrapper' "loom";
-            atrium-wrapped = mkServiceWrapper' "atrium";
-            default = epha-ai-wrapped;
-          };
-
-          checks.config-validation = pkgs.runCommand "config-validation" { } ''
-            echo "Configuration validated successfully"
-            touch $out
-          '';
+        extraSpecialArgs = {
+          inherit inputs;
         };
+
+        modules = [
+          {
+            nixpkgs.overlays = [
+              # NixOS unstable channel overlay
+              (final: prev: {
+                unstable = import nixpkgs-unstable {
+                  inherit (final) config;
+                  inherit (final.stdenv.hostPlatform) system;
+                };
+              })
+            ];
+          }
+
+          # Import ephemera-ai home-manager modules
+          ephemera-ai.homeManagerModules.default
+
+          ./home.nix
+          ./env.nix
+          ./ephemera-ai.nix
+        ];
+      };
     };
 }
