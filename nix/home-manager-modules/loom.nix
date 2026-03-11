@@ -14,25 +14,6 @@ let
   mysqlUrl = "mysql://${mysqlCfg.${cfg.mysql}.user}:${mysqlCfg.${cfg.mysql}.password}@localhost:${
     toString mysqlCfg.${cfg.mysql}.port
   }/${mysqlCfg.${cfg.mysql}.database}";
-
-  # Generate JSON config file for loom
-  loomConfig = pkgs.writeText "loom.json" (
-    builtins.toJSON {
-      port = cfg.port;
-      mysql = {
-        url = mysqlUrl;
-      }
-      // lib.optionalAttrs (cfg.mysqlMaxConnections != null) {
-        max_connections = cfg.mysqlMaxConnections;
-      };
-    }
-  );
-
-  # Create config directory with the JSON file
-  configDir = pkgs.runCommand "loom-config" { } ''
-    mkdir -p $out
-    ln -s ${loomConfig} $out/loom.json
-  '';
 in
 {
   options.services.ephemera.loom = {
@@ -63,10 +44,28 @@ in
       type = lib.types.str;
       description = "Agora service URL";
     };
+
+    # Internal option for unified config derivation
+    _configJson = lib.mkOption {
+      type = lib.types.path;
+      internal = true;
+    };
   };
 
-  config = lib.mkIf cfg.enable {
-    systemd.user.services.loom = {
+  config = {
+    services.ephemera.loom._configJson = pkgs.writeText "loom.json" (
+      builtins.toJSON {
+        port = cfg.port;
+        mysql = {
+          url = mysqlUrl;
+        }
+        // lib.optionalAttrs (cfg.mysqlMaxConnections != null) {
+          max_connections = cfg.mysqlMaxConnections;
+        };
+      }
+    );
+
+    systemd.user.services.loom = lib.mkIf cfg.enable {
       Unit = {
         Description = "Loom Memory Service";
         After = [
@@ -78,7 +77,7 @@ in
       };
 
       Service = {
-        ExecStart = "${cfg.package}/bin/loom --config-dir ${configDir}";
+        ExecStart = "${cfg.package}/bin/loom --config-dir ${config.services.ephemera._configDir}/loom";
         Restart = "on-failure";
         RestartSec = "5";
       };

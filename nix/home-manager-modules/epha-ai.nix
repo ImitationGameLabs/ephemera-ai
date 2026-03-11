@@ -8,34 +8,6 @@
 
 let
   cfg = config.services.ephemera.epha-ai;
-
-  # Generate JSON config file for epha-ai
-  ephaAiConfig = pkgs.writeText "epha-ai.json" (
-    builtins.toJSON {
-      llm = {
-        base_url = cfg.llm.baseUrl;
-        model = cfg.llm.model;
-        api_key = cfg.llm.apiKey;
-        max_turns = cfg.llm.maxTurns;
-      };
-      services = {
-        loom_url = cfg.services.loomUrl;
-      };
-      dormant_tick_interval_ms = cfg.dormantTickIntervalMs;
-      agora = {
-        url = cfg.services.agoraUrl;
-      };
-      context = {
-        max_pinned_count = cfg.context.maxPinnedCount;
-      };
-    }
-  );
-
-  # Create config directory with the JSON file
-  configDir = pkgs.runCommand "epha-ai-config" { } ''
-    mkdir -p $out
-    ln -s ${ephaAiConfig} $out/epha-ai.json
-  '';
 in
 {
   options.services.ephemera.epha-ai = {
@@ -97,10 +69,37 @@ in
         description = "Maximum number of pinned content items in context";
       };
     };
+
+    # Internal option for unified config derivation
+    _configJson = lib.mkOption {
+      type = lib.types.path;
+      internal = true;
+    };
   };
 
-  config = lib.mkIf cfg.enable {
-    systemd.user.services.epha-ai = {
+  config = {
+    services.ephemera.epha-ai._configJson = pkgs.writeText "epha-ai.json" (
+      builtins.toJSON {
+        llm = {
+          base_url = cfg.llm.baseUrl;
+          model = cfg.llm.model;
+          api_key = cfg.llm.apiKey;
+          max_turns = cfg.llm.maxTurns;
+        };
+        services = {
+          loom_url = cfg.services.loomUrl;
+        };
+        dormant_tick_interval_ms = cfg.dormantTickIntervalMs;
+        agora = {
+          url = cfg.services.agoraUrl;
+        };
+        context = {
+          max_pinned_count = cfg.context.maxPinnedCount;
+        };
+      }
+    );
+
+    systemd.user.services.epha-ai = lib.mkIf cfg.enable {
       Unit = {
         Description = "Ephemera AI Agent";
         After = [
@@ -112,7 +111,7 @@ in
       };
 
       Service = {
-        ExecStart = "${cfg.package}/bin/epha-ai --config-dir ${configDir}";
+        ExecStart = "${cfg.package}/bin/epha-ai --config-dir ${config.services.ephemera._configDir}/epha-ai";
         Restart = "on-failure";
         RestartSec = "5";
       };

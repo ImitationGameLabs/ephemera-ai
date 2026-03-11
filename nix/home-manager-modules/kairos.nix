@@ -8,37 +8,6 @@
 
 let
   cfg = config.services.ephemera.kairos;
-
-  # Generate JSON config file for kairos
-  kairosConfig = pkgs.writeText "kairos.json" (
-    builtins.toJSON {
-      port = cfg.port;
-      database_path = cfg.databasePath;
-      tick_interval_ms = cfg.tickIntervalMs;
-    }
-  );
-
-  # Create config directory with the JSON file
-  configDir = pkgs.runCommand "kairos-config" { } ''
-    mkdir -p $out
-    ln -s ${kairosConfig} $out/kairos.json
-  '';
-
-  # Generate JSON config file for kairos-herald
-  heraldConfig = pkgs.writeText "config.json" (
-    builtins.toJSON {
-      kairos_url = "http://localhost:${toString cfg.port}";
-      agora_url = cfg.agoraUrl;
-      poll_interval_ms = cfg.heraldPollIntervalMs;
-      heartbeat_interval_sec = cfg.heraldHeartbeatIntervalSec;
-    }
-  );
-
-  # Create config directory for kairos-herald
-  heraldConfigDir = pkgs.runCommand "kairos-herald-config" { } ''
-    mkdir -p $out
-    ln -s ${heraldConfig} $out/config.json
-  '';
 in
 {
   options.services.ephemera.kairos = {
@@ -97,14 +66,42 @@ in
       type = lib.types.ints.positive;
       description = "Heartbeat interval in seconds";
     };
+
+    # Internal options for unified config derivation
+    _configJson = lib.mkOption {
+      type = lib.types.path;
+      internal = true;
+    };
+
+    _heraldConfigJson = lib.mkOption {
+      type = lib.types.path;
+      internal = true;
+    };
   };
 
-  config = lib.mkIf cfg.enable {
+  config = {
+    services.ephemera.kairos._configJson = pkgs.writeText "kairos.json" (
+      builtins.toJSON {
+        port = cfg.port;
+        database_path = cfg.databasePath;
+        tick_interval_ms = cfg.tickIntervalMs;
+      }
+    );
+
+    services.ephemera.kairos._heraldConfigJson = pkgs.writeText "config.json" (
+      builtins.toJSON {
+        kairos_url = "http://localhost:${toString cfg.port}";
+        agora_url = cfg.agoraUrl;
+        poll_interval_ms = cfg.heraldPollIntervalMs;
+        heartbeat_interval_sec = cfg.heraldHeartbeatIntervalSec;
+      }
+    );
+
     # Auto-include kairos-cli
-    home.packages = [ cfg.cliPackage ];
+    home.packages = lib.mkIf cfg.enable [ cfg.cliPackage ];
 
     # Kairos service
-    systemd.user.services.kairos = {
+    systemd.user.services.kairos = lib.mkIf cfg.enable {
       Unit = {
         Description = "Kairos Time Service";
         After = [ "network.target" ];
@@ -113,7 +110,7 @@ in
       Service = {
         # Ensure parent directory exists before starting the service
         ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p ${builtins.dirOf cfg.databasePath}";
-        ExecStart = "${cfg.package}/bin/kairos --config-dir ${configDir}";
+        ExecStart = "${cfg.package}/bin/kairos --config-dir ${config.services.ephemera._configDir}/kairos";
         Restart = "on-failure";
         RestartSec = "5";
       };
@@ -124,7 +121,7 @@ in
     };
 
     # Kairos Herald service
-    systemd.user.services.kairos-herald = {
+    systemd.user.services.kairos-herald = lib.mkIf cfg.enable {
       Unit = {
         Description = "Kairos Herald";
         After = [
@@ -135,7 +132,7 @@ in
       };
 
       Service = {
-        ExecStart = "${cfg.heraldPackage}/bin/kairos-herald --config-dir ${heraldConfigDir}";
+        ExecStart = "${cfg.heraldPackage}/bin/kairos-herald --config-dir ${config.services.ephemera._configDir}/kairos-herald";
         Restart = "on-failure";
         RestartSec = "5";
       };

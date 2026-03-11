@@ -8,27 +8,6 @@
 
 let
   cfg = config.services.ephemera.agora;
-
-  # Generate JSON config file for agora
-  agoraConfig = pkgs.writeText "agora.json" (
-    builtins.toJSON {
-      port = cfg.port;
-      database_path = cfg.databasePath;
-      heartbeat_check_interval_ms = cfg.heartbeatCheckIntervalMs;
-      timeout_ms = cfg.timeoutMs;
-      retry = {
-        base_interval_ms = cfg.retry.baseIntervalMs;
-        multiplier = cfg.retry.multiplier;
-        max_interval_ms = cfg.retry.maxIntervalMs;
-      };
-    }
-  );
-
-  # Create config directory with the JSON file
-  configDir = pkgs.runCommand "agora-config" { } ''
-    mkdir -p $out
-    ln -s ${agoraConfig} $out/agora.json
-  '';
 in
 {
   options.services.ephemera.agora = {
@@ -82,10 +61,30 @@ in
         description = "Max retry interval (ms)";
       };
     };
+
+    # Internal option for unified config derivation
+    _configJson = lib.mkOption {
+      type = lib.types.path;
+      internal = true;
+    };
   };
 
-  config = lib.mkIf cfg.enable {
-    systemd.user.services.agora = {
+  config = {
+    services.ephemera.agora._configJson = pkgs.writeText "agora.json" (
+      builtins.toJSON {
+        port = cfg.port;
+        database_path = cfg.databasePath;
+        heartbeat_check_interval_ms = cfg.heartbeatCheckIntervalMs;
+        timeout_ms = cfg.timeoutMs;
+        retry = {
+          base_interval_ms = cfg.retry.baseIntervalMs;
+          multiplier = cfg.retry.multiplier;
+          max_interval_ms = cfg.retry.maxIntervalMs;
+        };
+      }
+    );
+
+    systemd.user.services.agora = lib.mkIf cfg.enable {
       Unit = {
         Description = "Agora Event Hub";
         After = [ "network.target" ];
@@ -94,7 +93,7 @@ in
       Service = {
         # Ensure parent directory exists before starting the service
         ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p ${builtins.dirOf cfg.databasePath}";
-        ExecStart = "${cfg.package}/bin/agora --config-dir ${configDir}";
+        ExecStart = "${cfg.package}/bin/agora --config-dir ${config.services.ephemera._configDir}/agora";
         Restart = "on-failure";
         RestartSec = "5";
       };

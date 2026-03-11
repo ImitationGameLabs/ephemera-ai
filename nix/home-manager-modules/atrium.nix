@@ -14,44 +14,6 @@ let
   mysqlUrl = "mysql://${mysqlCfg.${cfg.mysql}.user}:${mysqlCfg.${cfg.mysql}.password}@localhost:${
     toString mysqlCfg.${cfg.mysql}.port
   }/${mysqlCfg.${cfg.mysql}.database}";
-
-  # Generate JSON config file for atrium
-  atriumConfig = pkgs.writeText "atrium.json" (
-    builtins.toJSON {
-      port = cfg.port;
-      mysql_url = mysqlUrl;
-    }
-  );
-
-  # Create config directory for atrium
-  atriumConfigDir = pkgs.runCommand "atrium-config" { } ''
-    mkdir -p $out
-    ln -s ${atriumConfig} $out/atrium.json
-  '';
-
-  # Generate JSON config file for atrium-herald
-  heraldConfig = pkgs.writeText "config.json" (
-    builtins.toJSON (
-      {
-        atrium_url = "http://localhost:${toString cfg.port}";
-        agora_url = cfg.agoraUrl;
-        username = cfg.heraldAuth.username;
-        password = cfg.heraldAuth.password;
-        poll_interval_ms = cfg.heraldPollIntervalMs;
-        heartbeat_interval_ms = cfg.heraldHeartbeatIntervalMs;
-        atrium_heartbeat_interval_ms = cfg.heraldAtriumHeartbeatIntervalMs;
-      }
-      // lib.optionalAttrs (cfg.heraldAuth.bio != null) {
-        bio = cfg.heraldAuth.bio;
-      }
-    )
-  );
-
-  # Create config directory for atrium-herald
-  heraldConfigDir = pkgs.runCommand "atrium-herald-config" { } ''
-    mkdir -p $out
-    ln -s ${heraldConfig} $out/config.json
-  '';
 in
 {
   options.services.ephemera.atrium = {
@@ -121,14 +83,49 @@ in
       type = lib.types.ints.positive;
       description = "Atrium heartbeat interval for user online status (ms)";
     };
+
+    # Internal options for unified config derivation
+    _configJson = lib.mkOption {
+      type = lib.types.path;
+      internal = true;
+    };
+
+    _heraldConfigJson = lib.mkOption {
+      type = lib.types.path;
+      internal = true;
+    };
   };
 
-  config = lib.mkIf cfg.enable {
+  config = {
+    services.ephemera.atrium._configJson = pkgs.writeText "atrium.json" (
+      builtins.toJSON {
+        port = cfg.port;
+        mysql_url = mysqlUrl;
+      }
+    );
+
+    services.ephemera.atrium._heraldConfigJson = pkgs.writeText "config.json" (
+      builtins.toJSON (
+        {
+          atrium_url = "http://localhost:${toString cfg.port}";
+          agora_url = cfg.agoraUrl;
+          username = cfg.heraldAuth.username;
+          password = cfg.heraldAuth.password;
+          poll_interval_ms = cfg.heraldPollIntervalMs;
+          heartbeat_interval_ms = cfg.heraldHeartbeatIntervalMs;
+          atrium_heartbeat_interval_ms = cfg.heraldAtriumHeartbeatIntervalMs;
+        }
+        // lib.optionalAttrs (cfg.heraldAuth.bio != null) {
+          bio = cfg.heraldAuth.bio;
+        }
+      )
+    );
+
     # Auto-include atrium-cli
-    home.packages = [ cfg.cliPackage ];
+    home.packages = lib.mkIf cfg.enable [ cfg.cliPackage ];
 
     # Atrium service
-    systemd.user.services.atrium = {
+    systemd.user.services.atrium = lib.mkIf cfg.enable {
       Unit = {
         Description = "Atrium Chat Service";
         After = [
@@ -139,7 +136,7 @@ in
       };
 
       Service = {
-        ExecStart = "${cfg.package}/bin/atrium --config-dir ${atriumConfigDir}";
+        ExecStart = "${cfg.package}/bin/atrium --config-dir ${config.services.ephemera._configDir}/atrium";
         Restart = "on-failure";
         RestartSec = "5";
       };
@@ -150,7 +147,7 @@ in
     };
 
     # Atrium Herald service
-    systemd.user.services.atrium-herald = {
+    systemd.user.services.atrium-herald = lib.mkIf cfg.enable {
       Unit = {
         Description = "Atrium Herald";
         After = [
@@ -161,7 +158,7 @@ in
       };
 
       Service = {
-        ExecStart = "${cfg.heraldPackage}/bin/atrium-herald --config-dir ${heraldConfigDir}";
+        ExecStart = "${cfg.heraldPackage}/bin/atrium-herald --config-dir ${config.services.ephemera._configDir}/atrium-herald";
         Restart = "on-failure";
         RestartSec = "5";
       };
