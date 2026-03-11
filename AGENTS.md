@@ -20,7 +20,6 @@ For deeper understanding, explore `docs/philosophy/` and `README.md`.
 - **crates/**: All Rust crates.
   - **epha-ai/**: Main application binary.
   - **epha-agent/**: Agent system with state machine and context management capabilities.
-  - **epha-boot/**: Deployment CLI for Ephemera AI services.
   - **agora/**: Event hub service.
   - **agora-client/**: Client library for Agora.
   - **chronikos/**: Time management components (kairos).
