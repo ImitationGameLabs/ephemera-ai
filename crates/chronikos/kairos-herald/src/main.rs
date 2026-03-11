@@ -6,36 +6,30 @@
 //! 3. Pushes events to Agora
 //! 4. Acknowledges the triggered schedules
 
+mod config;
+
 use anyhow::Result;
 use clap::Parser;
 use kairos_client::KairosClient;
 use reqwest::Client;
 use serde_json::json;
+use std::path::PathBuf;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::prelude::*;
+
+use crate::config::Config;
 
 const HERALD_ID: &str = "kairos-herald";
 
 /// Kairos Herald configuration.
 #[derive(Parser)]
 #[command(name = "kairos-herald")]
+#[command(about = "Kairos herald for Agora event hub")]
 struct Args {
-    /// Kairos server URL.
-    #[arg(long, default_value = "http://localhost:8081")]
-    kairos_url: String,
-
-    /// Agora server URL.
-    #[arg(long, default_value = "http://localhost:8080")]
-    agora_url: String,
-
-    /// Poll interval for triggered schedules (milliseconds).
-    #[arg(long, default_value = "1000")]
-    poll_interval_ms: u64,
-
-    /// Heartbeat interval in seconds.
-    #[arg(long, default_value = "30")]
-    heartbeat_interval: u64,
+    /// Config directory path
+    #[arg(long, default_value = ".")]
+    config_dir: PathBuf,
 }
 
 fn build_http_client() -> Client {
@@ -58,34 +52,37 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
+    let config_path = args.config_dir.join("config.json");
+    let config = Config::load(&config_path);
+
     info!("Starting Kairos Herald (bridge service)");
-    info!("Kairos URL: {}", args.kairos_url);
-    info!("Agora URL: {}", args.agora_url);
-    info!("Poll interval: {}ms", args.poll_interval_ms);
-    info!("Heartbeat interval: {}s", args.heartbeat_interval);
+    info!("Kairos URL: {}", config.kairos_url);
+    info!("Agora URL: {}", config.agora_url);
+    info!("Poll interval: {}ms", config.poll_interval_ms);
+    info!("Heartbeat interval: {}s", config.heartbeat_interval_sec);
 
     // Create clients
     let http_client = build_http_client();
-    let kairos_client = KairosClient::new(&args.kairos_url, http_client.clone());
+    let kairos_client = KairosClient::new(&config.kairos_url, http_client.clone());
 
     // Register with Agora
-    register_herald(&http_client, &args.agora_url).await?;
+    register_herald(&http_client, &config.agora_url).await?;
 
     // Run main loop
-    let poll_interval = Duration::from_millis(args.poll_interval_ms);
-    let heartbeat_interval = Duration::from_secs(args.heartbeat_interval);
+    let poll_interval = Duration::from_millis(config.poll_interval_ms);
+    let heartbeat_interval = Duration::from_secs(config.heartbeat_interval_sec);
     let mut poll_ticker = tokio::time::interval(poll_interval);
     let mut heartbeat_ticker = tokio::time::interval(heartbeat_interval);
 
     loop {
         tokio::select! {
             _ = poll_ticker.tick() => {
-                if let Err(e) = process_triggered_schedules(&kairos_client, &http_client, &args.agora_url).await {
+                if let Err(e) = process_triggered_schedules(&kairos_client, &http_client, &config.agora_url).await {
                     error!("Error processing triggered schedules: {}", e);
                 }
             }
             _ = heartbeat_ticker.tick() => {
-                if let Err(e) = send_heartbeat(&http_client, &args.agora_url).await {
+                if let Err(e) = send_heartbeat(&http_client, &config.agora_url).await {
                     warn!("Failed to send heartbeat: {}", e);
                 }
             }
