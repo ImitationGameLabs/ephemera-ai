@@ -31,7 +31,7 @@ pub fn create_routes(user_manager: UserManager, message_manager: MessageManager)
         )
         .nest("/api/v1", Router::new()
             // Heartbeat route
-            .route("/heartbeat", put(update_heartbeat))
+            .route("/heartbeat", post(update_heartbeat))
             .with_state((user_manager.clone(), message_manager.clone()))
         )
         .nest("/api/v1", Router::new()
