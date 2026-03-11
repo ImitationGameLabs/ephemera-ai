@@ -32,7 +32,6 @@ pub struct LlmConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ServicesConfig {
     pub loom_url: String,
-    pub loom_vector_url: String,
 }
 
 /// Agora event hub configuration
@@ -65,10 +64,6 @@ impl Config {
         assert!(
             !config.services.loom_url.trim().is_empty(),
             "services.loom_url cannot be empty"
-        );
-        assert!(
-            !config.services.loom_vector_url.trim().is_empty(),
-            "services.loom_vector_url cannot be empty"
         );
         assert!(
             config.dormant_tick_interval_ms > 0,
