@@ -9,8 +9,9 @@
 let
   cfg = config.services.ephemera.atrium;
   mysqlCfg = config.services.ephemera.mysql;
+  settingsFormat = pkgs.formats.json { };
 
-  # Build the MySQL URL
+  # Build the MySQL URL from the referenced mysql instance
   mysqlUrl = "mysql://${mysqlCfg.${cfg.mysql}.user}:${mysqlCfg.${cfg.mysql}.password}@localhost:${
     toString mysqlCfg.${cfg.mysql}.port
   }/${mysqlCfg.${cfg.mysql}.database}";
@@ -37,22 +38,29 @@ in
       description = "The atrium-herald package to use";
     };
 
-    port = lib.mkOption {
-      type = lib.types.port;
-      description = "Port for atrium service";
-    };
-
     mysql = lib.mkOption {
       type = lib.types.str;
       description = "Name of the MySQL instance to use (must be defined in services.ephemera.mysql)";
     };
 
-    agoraUrl = lib.mkOption {
-      type = lib.types.str;
-      description = "Agora service URL";
+    settings = {
+      port = lib.mkOption {
+        type = lib.types.port;
+        description = "Port for atrium service";
+      };
     };
 
-    heraldAuth = {
+    heraldSettings = {
+      atrium_url = lib.mkOption {
+        type = lib.types.str;
+        description = "Atrium service URL";
+      };
+
+      agora_url = lib.mkOption {
+        type = lib.types.str;
+        description = "Agora service URL";
+      };
+
       username = lib.mkOption {
         type = lib.types.str;
         description = "Atrium herald login username";
@@ -63,25 +71,25 @@ in
         description = "Atrium herald login password";
       };
 
-      bio = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        description = "Bio for user registration (optional)";
+      poll_interval_ms = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = "Message poll interval (ms)";
       };
-    };
 
-    heraldPollIntervalMs = lib.mkOption {
-      type = lib.types.ints.positive;
-      description = "Message poll interval (ms)";
-    };
+      heartbeat_interval_ms = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = "Agora heartbeat interval (ms)";
+      };
 
-    heraldHeartbeatIntervalMs = lib.mkOption {
-      type = lib.types.ints.positive;
-      description = "Agora heartbeat interval (ms)";
-    };
+      atrium_heartbeat_interval_ms = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = "Atrium heartbeat interval for user online status (ms)";
+      };
 
-    heraldAtriumHeartbeatIntervalMs = lib.mkOption {
-      type = lib.types.ints.positive;
-      description = "Atrium heartbeat interval for user online status (ms)";
+      bio = lib.mkOption {
+        type = lib.types.str;
+        description = "Bio for user registration (use empty string if not needed)";
+      };
     };
 
     # Internal options for unified config derivation
@@ -97,29 +105,11 @@ in
   };
 
   config = {
-    services.ephemera.atrium._configJson = pkgs.writeText "atrium.json" (
-      builtins.toJSON {
-        port = cfg.port;
-        mysql_url = mysqlUrl;
-      }
+    services.ephemera.atrium._configJson = settingsFormat.generate "atrium.json" (
+      cfg.settings // { mysql_url = mysqlUrl; }
     );
 
-    services.ephemera.atrium._heraldConfigJson = pkgs.writeText "config.json" (
-      builtins.toJSON (
-        {
-          atrium_url = "http://localhost:${toString cfg.port}";
-          agora_url = cfg.agoraUrl;
-          username = cfg.heraldAuth.username;
-          password = cfg.heraldAuth.password;
-          poll_interval_ms = cfg.heraldPollIntervalMs;
-          heartbeat_interval_ms = cfg.heraldHeartbeatIntervalMs;
-          atrium_heartbeat_interval_ms = cfg.heraldAtriumHeartbeatIntervalMs;
-        }
-        // lib.optionalAttrs (cfg.heraldAuth.bio != null) {
-          bio = cfg.heraldAuth.bio;
-        }
-      )
-    );
+    services.ephemera.atrium._heraldConfigJson = settingsFormat.generate "config.json" cfg.heraldSettings;
 
     # Auto-include atrium-cli
     home.packages = lib.mkIf cfg.enable [ cfg.cliPackage ];

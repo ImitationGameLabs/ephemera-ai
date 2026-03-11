@@ -9,8 +9,9 @@
 let
   cfg = config.services.ephemera.loom;
   mysqlCfg = config.services.ephemera.mysql;
+  settingsFormat = pkgs.formats.json { };
 
-  # Build the MySQL URL
+  # Build the MySQL URL from the referenced mysql instance
   mysqlUrl = "mysql://${mysqlCfg.${cfg.mysql}.user}:${mysqlCfg.${cfg.mysql}.password}@localhost:${
     toString mysqlCfg.${cfg.mysql}.port
   }/${mysqlCfg.${cfg.mysql}.database}";
@@ -25,24 +26,23 @@ in
       description = "The loom package to use";
     };
 
-    port = lib.mkOption {
-      type = lib.types.port;
-      description = "Port for loom service";
-    };
-
     mysql = lib.mkOption {
       type = lib.types.str;
       description = "Name of the MySQL instance to use (must be defined in services.ephemera.mysql)";
     };
 
-    mysqlMaxConnections = lib.mkOption {
-      type = lib.types.nullOr lib.types.ints.positive;
-      description = "Maximum number of MySQL connections (optional)";
-    };
+    settings = {
+      port = lib.mkOption {
+        type = lib.types.port;
+        description = "Port for loom service";
+      };
 
-    agoraUrl = lib.mkOption {
-      type = lib.types.str;
-      description = "Agora service URL";
+      mysql = {
+        max_connections = lib.mkOption {
+          type = lib.types.ints.positive;
+          description = "Maximum number of MySQL connections";
+        };
+      };
     };
 
     # Internal option for unified config derivation
@@ -53,14 +53,11 @@ in
   };
 
   config = {
-    services.ephemera.loom._configJson = pkgs.writeText "loom.json" (
-      builtins.toJSON {
-        port = cfg.port;
-        mysql = {
+    services.ephemera.loom._configJson = settingsFormat.generate "loom.json" (
+      cfg.settings
+      // {
+        mysql = cfg.settings.mysql // {
           url = mysqlUrl;
-        }
-        // lib.optionalAttrs (cfg.mysqlMaxConnections != null) {
-          max_connections = cfg.mysqlMaxConnections;
         };
       }
     );

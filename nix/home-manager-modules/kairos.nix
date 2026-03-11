@@ -8,6 +8,7 @@
 
 let
   cfg = config.services.ephemera.kairos;
+  settingsFormat = pkgs.formats.json { };
 in
 {
   options.services.ephemera.kairos = {
@@ -31,40 +32,49 @@ in
       description = "The kairos-herald package to use";
     };
 
-    port = lib.mkOption {
-      type = lib.types.port;
-      description = "Port for kairos service";
+    settings = {
+      port = lib.mkOption {
+        type = lib.types.port;
+        description = "Port for kairos service";
+      };
+
+      database_path = lib.mkOption {
+        type = lib.types.str;
+        description = ''
+          Path to SQLite database file.
+
+          For user services, prefer XDG data directory:
+            `${"\${config.xdg.dataHome}"}/ephemera/kairos.db`
+          which resolves to `~/.local/share/ephemera/kairos.db` by default.
+        '';
+      };
+
+      tick_interval_ms = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = "Interval for checking scheduled events (ms)";
+      };
     };
 
-    databasePath = lib.mkOption {
-      type = lib.types.str;
-      description = ''
-        Path to SQLite database file.
+    heraldSettings = {
+      kairos_url = lib.mkOption {
+        type = lib.types.str;
+        description = "Kairos service URL";
+      };
 
-        For user services, prefer XDG data directory:
-          `${"\${config.xdg.dataHome}"}/ephemera/kairos.db`
-        which resolves to `~/.local/share/ephemera/kairos.db` by default.
-      '';
-    };
+      agora_url = lib.mkOption {
+        type = lib.types.str;
+        description = "Agora service URL";
+      };
 
-    tickIntervalMs = lib.mkOption {
-      type = lib.types.ints.positive;
-      description = "Interval for checking scheduled events (ms)";
-    };
+      poll_interval_ms = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = "Poll interval for triggered schedules (ms)";
+      };
 
-    agoraUrl = lib.mkOption {
-      type = lib.types.str;
-      description = "Agora service URL";
-    };
-
-    heraldPollIntervalMs = lib.mkOption {
-      type = lib.types.ints.positive;
-      description = "Poll interval for triggered schedules (ms)";
-    };
-
-    heraldHeartbeatIntervalSec = lib.mkOption {
-      type = lib.types.ints.positive;
-      description = "Heartbeat interval in seconds";
+      heartbeat_interval_sec = lib.mkOption {
+        type = lib.types.ints.positive;
+        description = "Heartbeat interval in seconds";
+      };
     };
 
     # Internal options for unified config derivation
@@ -80,22 +90,9 @@ in
   };
 
   config = {
-    services.ephemera.kairos._configJson = pkgs.writeText "kairos.json" (
-      builtins.toJSON {
-        port = cfg.port;
-        database_path = cfg.databasePath;
-        tick_interval_ms = cfg.tickIntervalMs;
-      }
-    );
+    services.ephemera.kairos._configJson = settingsFormat.generate "kairos.json" cfg.settings;
 
-    services.ephemera.kairos._heraldConfigJson = pkgs.writeText "config.json" (
-      builtins.toJSON {
-        kairos_url = "http://localhost:${toString cfg.port}";
-        agora_url = cfg.agoraUrl;
-        poll_interval_ms = cfg.heraldPollIntervalMs;
-        heartbeat_interval_sec = cfg.heraldHeartbeatIntervalSec;
-      }
-    );
+    services.ephemera.kairos._heraldConfigJson = settingsFormat.generate "config.json" cfg.heraldSettings;
 
     # Auto-include kairos-cli
     home.packages = lib.mkIf cfg.enable [ cfg.cliPackage ];
@@ -109,7 +106,7 @@ in
 
       Service = {
         # Ensure parent directory exists before starting the service
-        ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p ${builtins.dirOf cfg.databasePath}";
+        ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p ${dirOf cfg.settings.database_path}";
         ExecStart = "${cfg.package}/bin/kairos --config-dir ${config.services.ephemera._configDir}/kairos";
         Restart = "on-failure";
         RestartSec = "5";
