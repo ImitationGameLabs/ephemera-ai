@@ -20,9 +20,9 @@ use crate::poller::Poller;
 #[command(name = "atrium-herald")]
 #[command(about = "Atrium herald for Agora event hub")]
 struct Args {
-    /// Config file path
-    #[arg(short, long, default_value = "config.json")]
-    config: PathBuf,
+    /// Config directory path
+    #[arg(long)]
+    config_dir: PathBuf,
 }
 
 fn build_http_client() -> Client {
@@ -45,7 +45,8 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
-    let config = Config::load(&args.config);
+    let config_path = args.config_dir.join("config.json");
+    let config = Config::load(&config_path);
 
     info!("Starting atrium herald");
     info!("Atrium URL: {}", config.atrium_url);
