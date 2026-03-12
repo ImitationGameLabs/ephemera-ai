@@ -9,7 +9,18 @@
   root,
 }:
 let
-  craneLib = inputs.crane.mkLib pkgs;
+  # NB: we don't need to overlay our custom toolchain for the *entire*
+  # pkgs (which would require rebuidling anything else which uses rust).
+  # Instead, we just want to update the scope that crane will use by appending
+  # our specific toolchain there.
+  craneLib = (inputs.crane.mkLib pkgs).overrideToolchain (
+    p:
+    p.rust-bin.stable.latest.default.override {
+      extensions = [ "rust-src" ];
+      # targets = [ "wasm32-wasip1" ];
+    }
+  );
+
   src = craneLib.cleanCargoSource root;
 
   # Use git shortRev as version, fallback to "dirty" if working tree is dirty
