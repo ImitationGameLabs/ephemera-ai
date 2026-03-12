@@ -140,19 +140,18 @@ impl ScheduleStore {
     }
 
     /// Gets the next schedule to fire.
+    ///
+    /// Returns the schedule with the earliest `next_fire` time among active schedules.
+    /// This is the "next" schedule in absolute terms, regardless of whether it's due.
     pub async fn get_next(&self) -> Result<Option<Schedule>> {
-        let now = OffsetDateTime::now_utc();
-        let now_str = now.format(&time::format_description::well_known::Rfc3339)?;
-
         let row = sqlx::query(
             r#"
             SELECT * FROM schedules
-            WHERE status = 'active' AND next_fire IS NOT NULL AND next_fire <= ?
+            WHERE status = 'active' AND next_fire IS NOT NULL
             ORDER BY next_fire ASC
             LIMIT 1
             "#,
         )
-        .bind(&now_str)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -229,8 +228,14 @@ impl ScheduleStore {
         Ok(result.rows_affected() > 0)
     }
 
-    /// Acknowledges triggered schedules (marks them as completed or reschedules).
-    pub async fn ack_triggered(&self, ids: &[ScheduleId]) -> Result<usize> {
+    /// Acknowledges triggered schedules at a specific point in time.
+    ///
+    /// For recurring schedules, reactivates them with the next fire time.
+    /// For one-time schedules, marks them as completed.
+    ///
+    /// Note: After Bug 1 fix, `next_fire` is already updated at trigger time.
+    /// The calculation here serves as a compatibility layer for old data.
+    pub async fn ack_triggered_at(&self, ids: &[ScheduleId], now: OffsetDateTime) -> Result<usize> {
         let mut count = 0;
         for id in ids {
             if let Some(schedule) = self.get(id).await? {
@@ -238,9 +243,15 @@ impl ScheduleStore {
                     continue;
                 }
 
-                // For recurring schedules, calculate next fire time and reactivate
+                // For recurring schedules, reactivate with next fire time
                 if let TriggerSpec::Every { period, at_time } = &schedule.trigger {
-                    let next = calculate_next_fire(period, at_time, OffsetDateTime::now_utc())?;
+                    // Use existing next_fire if already calculated (Bug 1 fix),
+                    // otherwise calculate from now (compatibility for old data)
+                    let next = if schedule.next_fire.map(|nf| nf > now).unwrap_or(false) {
+                        schedule.next_fire.unwrap()
+                    } else {
+                        calculate_next_fire(period, at_time, now)?
+                    };
                     self.update_fire_times(id, Some(next), schedule.next_fire, ScheduleStatus::Active)
                         .await?;
                 } else {
@@ -251,6 +262,11 @@ impl ScheduleStore {
             }
         }
         Ok(count)
+    }
+
+    /// Acknowledges triggered schedules (convenience method using current time).
+    pub async fn ack_triggered(&self, ids: &[ScheduleId]) -> Result<usize> {
+        self.ack_triggered_at(ids, OffsetDateTime::now_utc()).await
     }
 
     /// Gets service statistics.
@@ -403,6 +419,7 @@ fn parse_status(s: &str) -> Result<ScheduleStatus> {
 #[cfg(test)]
 mod store_tests {
     use super::*;
+    use time::macros::datetime;
 
     #[test]
     fn test_parse_priority_valid() {
@@ -434,6 +451,79 @@ mod store_tests {
         assert!(parse_status("Active").is_err());     // Case-sensitive
         assert!(parse_status("invalid").is_err());
         assert!(parse_status("").is_err());
+    }
+
+    // === Bug 2 Test: get_next semantics ===
+
+    #[tokio::test]
+    async fn test_get_next_returns_next_regardless_of_due_status() {
+        let store = ScheduleStore::new(":memory:").await.unwrap();
+
+        // Create two schedules: one overdue, one future
+        let past = Schedule {
+            id: "past".into(),
+            name: "Past schedule".into(),
+            trigger: TriggerSpec::Once { at: datetime!(2025-03-12 08:55 UTC) },
+            payload: serde_json::json!({}),
+            tags: vec![],
+            priority: Priority::Normal,
+            status: ScheduleStatus::Active,
+            created_at: datetime!(2025-03-12 08:00 UTC),
+            next_fire: Some(datetime!(2025-03-12 08:55 UTC)),
+            last_fire: None,
+        };
+        let future = Schedule {
+            id: "future".into(),
+            name: "Future schedule".into(),
+            trigger: TriggerSpec::Once { at: datetime!(2025-03-12 09:30 UTC) },
+            payload: serde_json::json!({}),
+            tags: vec![],
+            priority: Priority::Normal,
+            status: ScheduleStatus::Active,
+            created_at: datetime!(2025-03-12 08:00 UTC),
+            next_fire: Some(datetime!(2025-03-12 09:30 UTC)),
+            last_fire: None,
+        };
+
+        store.create(&past).await.unwrap();
+        store.create(&future).await.unwrap();
+
+        let result = store.get_next().await.unwrap();
+        assert!(result.is_some());
+        // Bug 2 fix: Return the schedule with earliest next_fire (08:55),
+        // regardless of whether it's already due. This is "next" in absolute terms.
+        assert_eq!(result.unwrap().id, "past");
+    }
+
+    // === Parameterization Tests ===
+
+    #[tokio::test]
+    async fn test_ack_triggered_at_uses_provided_time() {
+        let store = ScheduleStore::new(":memory:").await.unwrap();
+
+        // Create a triggered schedule (next_fire already updated to 10:00 during trigger)
+        let schedule = Schedule {
+            id: "hourly".into(),
+            name: "Hourly test".into(),
+            trigger: TriggerSpec::Every { period: Period::Hourly, at_time: None },
+            payload: serde_json::json!({}),
+            tags: vec![],
+            priority: Priority::Normal,
+            status: ScheduleStatus::Triggered,
+            next_fire: Some(datetime!(2025-03-12 10:00 UTC)), // Already updated
+            last_fire: Some(datetime!(2025-03-12 09:00 UTC)),
+            created_at: datetime!(2025-03-12 08:00 UTC),
+        };
+        store.create(&schedule).await.unwrap();
+
+        // Ack at 09:05:30
+        let ack_time = datetime!(2025-03-12 09:05:30 UTC);
+        store.ack_triggered_at(&["hourly".into()], ack_time).await.unwrap();
+
+        let updated = store.get("hourly").await.unwrap().unwrap();
+        assert_eq!(updated.status, ScheduleStatus::Active);
+        // next_fire should remain unchanged (already calculated at trigger time)
+        assert_eq!(updated.next_fire, Some(datetime!(2025-03-12 10:00 UTC)));
     }
 }
 
