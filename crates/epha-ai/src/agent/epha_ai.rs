@@ -2,11 +2,11 @@ use crate::agent::{CommonPrompt, State};
 use crate::context::EphemeraContext;
 use crate::sync::{start_sync_task, SyncSender};
 use crate::tools::{MemoryGet, MemoryPin, MemoryRecent, MemoryTimeline, MemoryUnpin, StateTransition};
-use agora_client::AgoraClient;
+use agora_client::{AgoraClient, AgoraClientTrait};
 use epha_agent::context::Context;
 use epha_agent::tools::{file_system_tool_set, shell_tool_set, shell::TmuxBackend};
 use loom_client::memory::{MemoryFragment, MemoryKind};
-use loom_client::LoomClient;
+use loom_client::LoomClientTrait;
 use rig::{
     agent::Agent,
     client::CompletionClient,
@@ -27,7 +27,7 @@ pub struct EphemeraAI {
     state: Arc<Mutex<State>>,
     agent: Agent<CompletionModel>,
     context: Context<EphemeraContext>,
-    agora_client: Arc<AgoraClient>,
+    agora_client: Arc<dyn AgoraClientTrait>,
     config: crate::config::Config,
     sync_sender: SyncSender,
 }
@@ -35,7 +35,7 @@ pub struct EphemeraAI {
 impl EphemeraAI {
     pub async fn new(
         config: crate::config::Config,
-        loom_client: Arc<LoomClient>,
+        loom_client: Arc<dyn LoomClientTrait>,
         completion_client: Client,
         http_client: reqwest::Client,
     ) -> anyhow::Result<Self> {

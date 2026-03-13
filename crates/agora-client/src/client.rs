@@ -1,5 +1,6 @@
 //! HTTP client for Agora event hub.
 
+use async_trait::async_trait;
 use reqwest::{Client, Error as ReqwestError, Response};
 use serde::de::DeserializeOwned;
 use std::fmt;
@@ -7,6 +8,8 @@ use tracing::{debug, instrument};
 
 use agora::event::{Event, EventsListResponse};
 use agora::herald::{HeraldInfo, HeraldsListResponse};
+
+use crate::AgoraClientTrait;
 
 /// Client error types.
 #[derive(Debug)]
@@ -166,6 +169,37 @@ impl AgoraClient {
 
     /// Gets the base URL this client is configured to use.
     pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+}
+
+#[async_trait]
+impl AgoraClientTrait for AgoraClient {
+    async fn health_check(&self) -> Result<String, AgoraClientError> {
+        AgoraClient::health_check(self).await
+    }
+
+    async fn fetch_events(&self, limit: Option<u32>) -> Result<Vec<Event>, AgoraClientError> {
+        AgoraClient::fetch_events(self, limit).await
+    }
+
+    async fn ack_event(&self, event_id: u64) -> Result<Event, AgoraClientError> {
+        AgoraClient::ack_event(self, event_id).await
+    }
+
+    async fn ack_events(&self, event_ids: Vec<u64>) -> Result<usize, AgoraClientError> {
+        AgoraClient::ack_events(self, event_ids).await
+    }
+
+    async fn list_heralds(&self) -> Result<Vec<HeraldInfo>, AgoraClientError> {
+        AgoraClient::list_heralds(self).await
+    }
+
+    async fn get_herald(&self, id: &str) -> Result<HeraldInfo, AgoraClientError> {
+        AgoraClient::get_herald(self, id).await
+    }
+
+    fn base_url(&self) -> &str {
         &self.base_url
     }
 }

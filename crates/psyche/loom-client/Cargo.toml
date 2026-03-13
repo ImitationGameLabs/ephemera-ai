@@ -8,6 +8,7 @@ description = "Client library for Loom memory service"
 # Loom server dependency for shared types
 loom = { path = "../loom" }
 
+async-trait = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

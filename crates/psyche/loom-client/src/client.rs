@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use reqwest::{Client, Error as ReqwestError, Response};
 use serde::de::DeserializeOwned;
 use std::fmt;
@@ -5,6 +6,8 @@ use tracing::{debug, instrument};
 
 use loom::memory::models::*;
 use loom::memory::types::MemoryFragment;
+
+use crate::LoomClientTrait;
 
 /// Client error types
 #[derive(Debug)]
@@ -265,6 +268,60 @@ impl LoomClient {
 
     /// Get the base URL this client is configured to use
     pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+}
+
+#[async_trait]
+impl LoomClientTrait for LoomClient {
+    async fn health_check(&self) -> Result<serde_json::Value, LoomClientError> {
+        // Call the inherent method
+        LoomClient::health_check(self).await
+    }
+
+    async fn create_memory(&self, request: CreateMemoryRequest) -> Result<MemoryResponse, LoomClientError> {
+        LoomClient::create_memory(self, request).await
+    }
+
+    async fn create_single_memory(&self, fragment: MemoryFragment) -> Result<MemoryResponse, LoomClientError> {
+        LoomClient::create_single_memory(self, fragment).await
+    }
+
+    async fn get_memory(&self, id: i64) -> Result<MemoryResponse, LoomClientError> {
+        LoomClient::get_memory(self, id).await
+    }
+
+    async fn delete_memory(&self, id: i64) -> Result<(), LoomClientError> {
+        LoomClient::delete_memory(self, id).await
+    }
+
+    async fn get_recent_memories(&self, limit: usize) -> Result<MemoryResponse, LoomClientError> {
+        LoomClient::get_recent_memories(self, limit).await
+    }
+
+    async fn get_timeline_memory(
+        &self,
+        from: &str,
+        to: &str,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> Result<MemoryResponse, LoomClientError> {
+        LoomClient::get_timeline_memory(self, from, to, limit, offset).await
+    }
+
+    async fn get_pinned_memories(&self) -> Result<PinnedMemoriesResponse, LoomClientError> {
+        LoomClient::get_pinned_memories(self).await
+    }
+
+    async fn pin_memory(&self, memory_id: i64, reason: Option<String>) -> Result<PinnedMemory, LoomClientError> {
+        LoomClient::pin_memory(self, memory_id, reason).await
+    }
+
+    async fn unpin_memory(&self, memory_id: i64) -> Result<(), LoomClientError> {
+        LoomClient::unpin_memory(self, memory_id).await
+    }
+
+    fn base_url(&self) -> &str {
         &self.base_url
     }
 }

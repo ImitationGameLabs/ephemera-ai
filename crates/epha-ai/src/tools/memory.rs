@@ -1,6 +1,6 @@
 use crate::context::{EphemeraContext, MemoryFragmentList};
 use epha_agent::context::ContextSerialize;
-use loom_client::LoomClient;
+use loom_client::LoomClientTrait;
 use rig::{completion::ToolDefinition, tool::Tool};
 use serde::Deserialize;
 use serde_json::json;
@@ -22,12 +22,12 @@ pub struct MemoryGetArgs {
 pub struct MemoryGetError(String);
 
 pub struct MemoryGet {
-    loom_client: Arc<LoomClient>,
+    loom_client: Arc<dyn LoomClientTrait>,
     context: Arc<Mutex<EphemeraContext>>,
 }
 
 impl MemoryGet {
-    pub fn new(loom_client: Arc<LoomClient>, context: Arc<Mutex<EphemeraContext>>) -> Self {
+    pub fn new(loom_client: Arc<dyn LoomClientTrait>, context: Arc<Mutex<EphemeraContext>>) -> Self {
         Self {
             loom_client,
             context,
@@ -129,12 +129,12 @@ fn default_limit() -> usize {
 pub struct MemoryRecentError(String);
 
 pub struct MemoryRecent {
-    loom_client: Arc<LoomClient>,
+    loom_client: Arc<dyn LoomClientTrait>,
     context: Arc<Mutex<EphemeraContext>>,
 }
 
 impl MemoryRecent {
-    pub fn new(loom_client: Arc<LoomClient>, context: Arc<Mutex<EphemeraContext>>) -> Self {
+    pub fn new(loom_client: Arc<dyn LoomClientTrait>, context: Arc<Mutex<EphemeraContext>>) -> Self {
         Self {
             loom_client,
             context,
@@ -222,12 +222,12 @@ pub struct MemoryTimelineArgs {
 pub struct MemoryTimelineError(String);
 
 pub struct MemoryTimeline {
-    loom_client: Arc<LoomClient>,
+    loom_client: Arc<dyn LoomClientTrait>,
     context: Arc<Mutex<EphemeraContext>>,
 }
 
 impl MemoryTimeline {
-    pub fn new(loom_client: Arc<LoomClient>, context: Arc<Mutex<EphemeraContext>>) -> Self {
+    pub fn new(loom_client: Arc<dyn LoomClientTrait>, context: Arc<Mutex<EphemeraContext>>) -> Self {
         Self {
             loom_client,
             context,
@@ -338,12 +338,12 @@ pub struct MemoryPinArgs {
 pub struct MemoryPinError(String);
 
 pub struct MemoryPin {
-    loom_client: Arc<LoomClient>,
+    loom_client: Arc<dyn LoomClientTrait>,
     context: Arc<Mutex<EphemeraContext>>,
 }
 
 impl MemoryPin {
-    pub fn new(loom_client: Arc<LoomClient>, context: Arc<Mutex<EphemeraContext>>) -> Self {
+    pub fn new(loom_client: Arc<dyn LoomClientTrait>, context: Arc<Mutex<EphemeraContext>>) -> Self {
         Self { loom_client, context }
     }
 }
@@ -437,12 +437,12 @@ pub struct MemoryUnpinArgs {
 pub struct MemoryUnpinError(String);
 
 pub struct MemoryUnpin {
-    loom_client: Arc<LoomClient>,
+    loom_client: Arc<dyn LoomClientTrait>,
     context: Arc<Mutex<EphemeraContext>>,
 }
 
 impl MemoryUnpin {
-    pub fn new(loom_client: Arc<LoomClient>, context: Arc<Mutex<EphemeraContext>>) -> Self {
+    pub fn new(loom_client: Arc<dyn LoomClientTrait>, context: Arc<Mutex<EphemeraContext>>) -> Self {
         Self { loom_client, context }
     }
 }

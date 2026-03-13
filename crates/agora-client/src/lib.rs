@@ -4,8 +4,11 @@
 //! the Agora event hub.
 
 mod client;
+mod trait_def;
+pub mod mock;
 
 pub use client::{AgoraClient, AgoraClientError};
+pub use trait_def::AgoraClientTrait;
 
 // Re-export commonly used types from agora
 pub use agora::event::{Event, EventId, EventPriority, EventStatus};

@@ -32,6 +32,7 @@ name = "agora-client"
 version = "0.1.0"
 dependencies = [
  "agora",
+ "async-trait",
  "reqwest",
  "serde",
  "serde_json",
@@ -2031,6 +2032,7 @@ dependencies = [
 name = "loom-client"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "loom",
  "reqwest",
  "serde",

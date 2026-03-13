@@ -1,5 +1,5 @@
 use loom_client::memory::MemoryFragment;
-use loom_client::{CreateMemoryRequest, LoomClient};
+use loom_client::{CreateMemoryRequest, LoomClientTrait};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
@@ -50,7 +50,7 @@ impl SyncSender {
 /// Consumes the receiver and runs until the channel is closed
 pub fn start_sync_task(
     mut receiver: mpsc::Receiver<MemoryFragment>,
-    loom_client: Arc<LoomClient>,
+    loom_client: Arc<dyn LoomClientTrait>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         info!("Loom sync task started");
@@ -75,14 +75,14 @@ pub fn start_sync_task(
                     }
 
                     // Sync the batch
-                    sync_batch(&loom_client, &batch).await;
+                    sync_batch(loom_client.as_ref(), &batch).await;
                     batch.clear();
                 }
                 None => {
                     // Channel closed
                     info!("Sync channel closed, flushing remaining items");
                     if !batch.is_empty() {
-                        sync_batch(&loom_client, &batch).await;
+                        sync_batch(loom_client.as_ref(), &batch).await;
                     }
                     break;
                 }
@@ -94,7 +94,7 @@ pub fn start_sync_task(
 }
 
 /// Sync a batch of memory fragments to Loom
-async fn sync_batch(loom_client: &LoomClient, fragments: &[MemoryFragment]) {
+async fn sync_batch(loom_client: &dyn LoomClientTrait, fragments: &[MemoryFragment]) {
     if fragments.is_empty() {
         return;
     }
