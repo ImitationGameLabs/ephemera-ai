@@ -1,25 +1,27 @@
 use crate::agent::{CommonPrompt, State};
 use crate::context::EphemeraContext;
-use crate::sync::{start_sync_task, SyncSender};
-use crate::tools::{MemoryGet, MemoryPin, MemoryRecent, MemoryTimeline, MemoryUnpin, StateTransition};
+use crate::sync::{SyncSender, start_sync_task};
+use crate::tools::{
+    MemoryGet, MemoryPin, MemoryRecent, MemoryTimeline, MemoryUnpin, StateTransition,
+};
 use agora_client::{AgoraClient, AgoraClientTrait};
 use epha_agent::context::Context;
-use epha_agent::tools::{file_system_tool_set, shell_tool_set, shell::TmuxBackend};
-use loom_client::memory::{MemoryFragment, MemoryKind};
+use epha_agent::tools::{file_system_tool_set, shell::TmuxBackend, shell_tool_set};
 use loom_client::LoomClientTrait;
+use loom_client::memory::{MemoryFragment, MemoryKind};
 use rig::{
+    OneOrMany,
     agent::Agent,
     client::CompletionClient,
     completion::{AssistantContent, Completion, Message},
     message::{ToolResult, ToolResultContent, UserContent},
     providers::deepseek::{Client, CompletionModel},
     tool::{ToolSet, server::ToolServer},
-    OneOrMany,
 };
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use std::time::Duration;
 use time::OffsetDateTime;
+use tokio::sync::Mutex;
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -51,7 +53,7 @@ impl EphemeraAI {
         let context_data = Arc::new(Mutex::new(EphemeraContext::new(
             loom_client.clone(),
             sync_sender.clone(),
-            config.context.max_pinned_count,
+            config.context.clone(),
         )));
 
         // 3.5 Start background sync task
@@ -72,14 +74,16 @@ impl EphemeraAI {
         // 4. Initialize shell backend
         let session_name = format!("ephemera-ai-{}", Uuid::new_v4().simple());
         info!("Creating tmux session: {}", session_name);
-        let backend = TmuxBackend::new(&session_name).await
-            .map_err(|e| anyhow::anyhow!("Failed to create tmux backend '{}': {}", session_name, e))?;
+        let backend = TmuxBackend::new(&session_name).await.map_err(|e| {
+            anyhow::anyhow!("Failed to create tmux backend '{}': {}", session_name, e)
+        })?;
 
         // 5. Initialize Agora client with health check
         let agora_client = Arc::new(AgoraClient::new(&config.agora.url, http_client));
         info!("Initializing Agora client: {}", config.agora.url);
-        agora_client.health_check().await
-            .map_err(|e| anyhow::anyhow!("Agora service unavailable at '{}': {}", config.agora.url, e))?;
+        agora_client.health_check().await.map_err(|e| {
+            anyhow::anyhow!("Agora service unavailable at '{}': {}", config.agora.url, e)
+        })?;
         info!("Agora service is available");
 
         // 6. Create tool server with static tools
@@ -135,7 +139,8 @@ impl EphemeraAI {
                     self.cognitive_cycle().await?;
                 }
                 State::Dormant => {
-                    tokio::time::sleep(Duration::from_millis(self.config.dormant_tick_interval_ms)).await;
+                    tokio::time::sleep(Duration::from_millis(self.config.dormant_tick_interval_ms))
+                        .await;
                     self.cognitive_cycle().await?;
                 }
                 State::Suspended => {
@@ -148,19 +153,14 @@ impl EphemeraAI {
 
     async fn cognitive_cycle(&mut self) -> anyhow::Result<()> {
         // 1. Fetch events from Agora (POST /events/fetch)
-        let events = self.agora_client
-            .fetch_events(None)
-            .await?;
+        let events = self.agora_client.fetch_events(None).await?;
 
         if !events.is_empty() {
             // Collect event IDs for acknowledgment
             let event_ids: Vec<u64> = events.iter().map(|e| e.id).collect();
 
             // Add events to context
-            self.context.data()
-                .lock()
-                .await
-                .add_agora_events(events);
+            self.context.data().lock().await.add_agora_events(events);
 
             // Acknowledge processed events
             self.agora_client.ack_events(event_ids).await?;
@@ -177,14 +177,13 @@ impl EphemeraAI {
 
         loop {
             // 3.1 Get completion
-            let builder = self.agent
-                .completion(&current_prompt, chat_history.clone())
-                .await?;
+            let builder = self.agent.completion(&current_prompt, chat_history.clone()).await?;
 
             let response = builder.send().await?;
 
             // 3.2 Extract and save Thought (AI text response)
-            let texts: Vec<String> = response.choice
+            let texts: Vec<String> = response
+                .choice
                 .iter()
                 .filter_map(|c| match c {
                     AssistantContent::Text(t) => Some(t.text.clone()),
@@ -198,7 +197,8 @@ impl EphemeraAI {
             }
 
             // 3.3 Extract tool calls
-            let tool_calls: Vec<_> = response.choice
+            let tool_calls: Vec<_> = response
+                .choice
                 .iter()
                 .filter_map(|c| match c {
                     AssistantContent::ToolCall(tc) => Some(tc.clone()),
@@ -223,9 +223,8 @@ impl EphemeraAI {
 
             for tc in &tool_calls {
                 let args_str = tc.function.arguments.to_string();
-                let result = self.agent.tool_server_handle
-                    .call_tool(&tc.function.name, &args_str)
-                    .await?;
+                let result =
+                    self.agent.tool_server_handle.call_tool(&tc.function.name, &args_str).await?;
 
                 // Save Action memory
                 self.save_action(&tc.function.name, &args_str, &result);
@@ -239,14 +238,9 @@ impl EphemeraAI {
             }
 
             // 3.7 Update chat history for next iteration
-            chat_history.push(Message::Assistant {
-                id: None,
-                content: response.choice,
-            });
-            let user_contents: Vec<UserContent> = tool_results
-                .into_iter()
-                .map(UserContent::ToolResult)
-                .collect();
+            chat_history.push(Message::Assistant { id: None, content: response.choice });
+            let user_contents: Vec<UserContent> =
+                tool_results.into_iter().map(UserContent::ToolResult).collect();
             chat_history.push(Message::User {
                 content: OneOrMany::many(user_contents)
                     .expect("tool_results should have at least one item"),

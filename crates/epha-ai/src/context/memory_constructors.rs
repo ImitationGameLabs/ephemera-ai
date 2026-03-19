@@ -91,9 +91,7 @@ mod tests {
     #[test]
     fn test_convenience_constructors() {
         let thought = from_reasoning("I need to analyze this".to_string(), "reasoning").build();
-        assert!(thought
-            .content
-            .contains("\"thought\":\"I need to analyze this\""));
+        assert!(thought.content.contains("\"thought\":\"I need to analyze this\""));
         assert!(thought.content.contains("\"type\":\"reasoning\""));
         assert_eq!(thought.kind, MemoryKind::Thought);
 

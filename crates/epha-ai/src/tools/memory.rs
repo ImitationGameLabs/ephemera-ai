@@ -27,11 +27,11 @@ pub struct MemoryGet {
 }
 
 impl MemoryGet {
-    pub fn new(loom_client: Arc<dyn LoomClientTrait>, context: Arc<Mutex<EphemeraContext>>) -> Self {
-        Self {
-            loom_client,
-            context,
-        }
+    pub fn new(
+        loom_client: Arc<dyn LoomClientTrait>,
+        context: Arc<Mutex<EphemeraContext>>,
+    ) -> Self {
+        Self { loom_client, context }
     }
 }
 
@@ -77,10 +77,7 @@ impl Tool for MemoryGet {
                     }
                 }
                 Err(e) => {
-                    return Err(MemoryGetError(format!(
-                        "Failed to get memory {}: {}",
-                        id, e
-                    )));
+                    return Err(MemoryGetError(format!("Failed to get memory {}: {}", id, e)));
                 }
             }
         }
@@ -88,10 +85,7 @@ impl Tool for MemoryGet {
         if fragments.is_empty() {
             Ok(format!(
                 "No memories found with IDs: {}",
-                args.ids.iter()
-                    .map(|id| id.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                args.ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(", ")
             ))
         } else {
             // Add to context
@@ -134,11 +128,11 @@ pub struct MemoryRecent {
 }
 
 impl MemoryRecent {
-    pub fn new(loom_client: Arc<dyn LoomClientTrait>, context: Arc<Mutex<EphemeraContext>>) -> Self {
-        Self {
-            loom_client,
-            context,
-        }
+    pub fn new(
+        loom_client: Arc<dyn LoomClientTrait>,
+        context: Arc<Mutex<EphemeraContext>>,
+    ) -> Self {
+        Self { loom_client, context }
     }
 }
 
@@ -170,7 +164,7 @@ impl Tool for MemoryRecent {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, MemoryRecentError> {
-        let limit = args.limit.max(1).min(100);
+        let limit = args.limit.clamp(1, 100);
 
         match self.loom_client.get_recent_memories(limit).await {
             Ok(response) => {
@@ -227,11 +221,11 @@ pub struct MemoryTimeline {
 }
 
 impl MemoryTimeline {
-    pub fn new(loom_client: Arc<dyn LoomClientTrait>, context: Arc<Mutex<EphemeraContext>>) -> Self {
-        Self {
-            loom_client,
-            context,
-        }
+    pub fn new(
+        loom_client: Arc<dyn LoomClientTrait>,
+        context: Arc<Mutex<EphemeraContext>>,
+    ) -> Self {
+        Self { loom_client, context }
     }
 }
 
@@ -282,10 +276,7 @@ impl Tool for MemoryTimeline {
         {
             Ok(response) => {
                 if response.fragments.is_empty() {
-                    Ok(format!(
-                        "No memories found between {} and {}.",
-                        args.from, args.to
-                    ))
+                    Ok(format!("No memories found between {} and {}.", args.from, args.to))
                 } else {
                     let fragments = response.fragments.clone();
 
@@ -313,10 +304,9 @@ impl Tool for MemoryTimeline {
                     ))
                 }
             }
-            Err(e) => Err(MemoryTimelineError(format!(
-                "Failed to get memories in timeline: {}",
-                e
-            ))),
+            Err(e) => {
+                Err(MemoryTimelineError(format!("Failed to get memories in timeline: {}", e)))
+            }
         }
     }
 }
@@ -343,7 +333,10 @@ pub struct MemoryPin {
 }
 
 impl MemoryPin {
-    pub fn new(loom_client: Arc<dyn LoomClientTrait>, context: Arc<Mutex<EphemeraContext>>) -> Self {
+    pub fn new(
+        loom_client: Arc<dyn LoomClientTrait>,
+        context: Arc<Mutex<EphemeraContext>>,
+    ) -> Self {
         Self { loom_client, context }
     }
 }
@@ -382,15 +375,13 @@ impl Tool for MemoryPin {
         let max_count = {
             let context = self.context.lock().await;
 
-            let already_pinned = context.list_pinned().iter().any(|p| p.fragment.id == args.memory_id);
-            let max_count = context.max_pinned_count();
+            let already_pinned =
+                context.list_pinned().iter().any(|p| p.fragment.id == args.memory_id);
+            let max_count = context.max_pinned_tokens();
             let current_count = context.list_pinned().len();
 
             if already_pinned {
-                return Err(MemoryPinError(format!(
-                    "Memory {} is already pinned",
-                    args.memory_id
-                )));
+                return Err(MemoryPinError(format!("Memory {} is already pinned", args.memory_id)));
             }
 
             if current_count >= max_count {
@@ -404,7 +395,9 @@ impl Tool for MemoryPin {
         };
 
         // Call Loom API to pin the memory
-        let pinned = self.loom_client.pin_memory(args.memory_id, Some(args.reason.clone()))
+        let pinned = self
+            .loom_client
+            .pin_memory(args.memory_id, Some(args.reason.clone()))
             .await
             .map_err(|e| MemoryPinError(format!("Failed to pin memory: {:?}", e)))?;
 
@@ -442,7 +435,10 @@ pub struct MemoryUnpin {
 }
 
 impl MemoryUnpin {
-    pub fn new(loom_client: Arc<dyn LoomClientTrait>, context: Arc<Mutex<EphemeraContext>>) -> Self {
+    pub fn new(
+        loom_client: Arc<dyn LoomClientTrait>,
+        context: Arc<Mutex<EphemeraContext>>,
+    ) -> Self {
         Self { loom_client, context }
     }
 }
@@ -474,7 +470,8 @@ impl Tool for MemoryUnpin {
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, MemoryUnpinError> {
         // Call Loom API to unpin the memory
-        self.loom_client.unpin_memory(args.memory_id)
+        self.loom_client
+            .unpin_memory(args.memory_id)
             .await
             .map_err(|e| MemoryUnpinError(format!("Failed to unpin memory: {:?}", e)))?;
 
@@ -487,7 +484,10 @@ impl Tool for MemoryUnpin {
         if removed {
             Ok(format!("Memory {} unpinned successfully", args.memory_id))
         } else {
-            Ok(format!("Memory {} was not pinned locally (but unpinning succeeded on server)", args.memory_id))
+            Ok(format!(
+                "Memory {} was not pinned locally (but unpinning succeeded on server)",
+                args.memory_id
+            ))
         }
     }
 }

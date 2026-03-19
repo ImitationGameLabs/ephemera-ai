@@ -13,9 +13,7 @@ impl MemoryFragmentList {
             "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:3]Z",
         )
         .unwrap();
-        datetime
-            .format(&format)
-            .unwrap_or_else(|_| "unknown".to_string())
+        datetime.format(&format).unwrap_or_else(|_| "unknown".to_string())
     }
 
     /// Serialize a single memory fragment with simplified information
@@ -48,17 +46,10 @@ impl ContextSerialize for MemoryFragmentList {
             return "No memories found.".to_string();
         }
 
-        let memories_text: Vec<String> = self
-            .0
-            .iter()
-            .map(|memory| self.serialize_memory(memory))
-            .collect();
+        let memories_text: Vec<String> =
+            self.0.iter().map(|memory| self.serialize_memory(memory)).collect();
 
-        format!(
-            "Found {} memories:\n\n{}",
-            self.0.len(),
-            memories_text.join("\n---\n")
-        )
+        format!("Found {} memories:\n\n{}", self.0.len(), memories_text.join("\n---\n"))
     }
 }
 
