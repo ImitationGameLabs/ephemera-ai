@@ -4,7 +4,7 @@ use crate::config::ContextConfig;
 use crate::sync::SyncSender;
 use agora::event::Event;
 use epha_agent::context::ContextSerialize;
-use loom_client::memory::MemoryFragment;
+use loom_client::memory::{MemoryFragment, MemoryKind};
 use loom_client::{CreateMemoryRequest, LoomClientTrait};
 use std::collections::VecDeque;
 use std::fmt;
@@ -40,7 +40,7 @@ pub struct EphemeraContext {
     loom_client: Arc<dyn LoomClientTrait>,
     sync_sender: SyncSender,
     pinned_memories: Vec<PinnedMemory>,
-    memory_context: Vec<MemoryFragment>,
+    recalled_memories: Vec<MemoryFragment>,
     recent_activities: VecDeque<MemoryFragment>,
     current_token_usage: usize,
     max_pinned_tokens: usize,
@@ -57,7 +57,7 @@ impl EphemeraContext {
     ) -> Self {
         Self {
             pinned_memories: Vec::new(),
-            memory_context: Vec::new(),
+            recalled_memories: Vec::new(),
             recent_activities: VecDeque::new(),
             current_token_usage: 0,
             max_pinned_tokens: config.max_pinned_tokens,
@@ -117,22 +117,73 @@ impl EphemeraContext {
         &self.pinned_memories
     }
 
-    /// Serialize only pinned memories as a text reference block.
+    /// Serialize pinned memories as XML for assistant role message.
     pub fn serialize_pinned(&self) -> Option<String> {
         if self.pinned_memories.is_empty() {
             return None;
         }
 
-        let mut output = String::from("Pinned Content:\n---\n");
+        let mut xml = String::from("<pinned_memories>\n");
         for item in &self.pinned_memories {
-            let reason_str = item.reason.as_deref().unwrap_or("N/A");
-            output.push_str(&format!(
-                "[id:{}] {} (Reason: {})\n",
-                item.fragment.id, item.fragment.content, reason_str
+            let reason_str = item.reason.as_deref().unwrap_or("unspecified");
+            let pinned_at = format_rfc3339(&item.pinned_at);
+            let fragment = &item.fragment;
+
+            xml.push_str(&format!(
+                "  <memory id=\"{}\" pinned-at=\"{}\" reason=\"{}\">\n",
+                fragment.id, pinned_at, reason_str
             ));
+
+            // Render inner content based on MemoryKind
+            match fragment.kind {
+                MemoryKind::Thought => {
+                    if let Ok(thought) =
+                        serde_json::from_str::<crate::context::ThoughtContent>(&fragment.content)
+                    {
+                        xml.push_str(&format!(
+                            "    <thought>{}</thought>\n",
+                            xml_escape(&thought.text)
+                        ));
+                    } else {
+                        xml.push_str(&format!(
+                            "    <thought>{}</thought>\n",
+                            xml_escape(&fragment.content)
+                        ));
+                    }
+                }
+                MemoryKind::Event => {
+                    if let Ok(event_content) =
+                        serde_json::from_str::<crate::context::EventContent>(&fragment.content)
+                    {
+                        xml.push_str(&format!(
+                            "    <event>{}</event>\n",
+                            xml_escape(&event_content.text)
+                        ));
+                    } else {
+                        xml.push_str(&format!(
+                            "    <event>{}</event>\n",
+                            xml_escape(&fragment.content)
+                        ));
+                    }
+                }
+                MemoryKind::Action => {
+                    xml.push_str(&format!(
+                        "    <action>{}</action>\n",
+                        xml_escape(&fragment.content)
+                    ));
+                }
+                MemoryKind::Unknown => {
+                    xml.push_str(&format!(
+                        "    <content>{}</content>\n",
+                        xml_escape(&fragment.content)
+                    ));
+                }
+            }
+
+            xml.push_str("  </memory>\n");
         }
-        output.push_str("---\n");
-        Some(output)
+        xml.push_str("</pinned_memories>");
+        Some(xml)
     }
 
     /// Get a reference to the recent activities deque.
@@ -196,11 +247,6 @@ impl EphemeraContext {
             total += self.estimate_tokens(&item.fragment.content);
         }
 
-        // Memory context tokens
-        for memory in &self.memory_context {
-            total += self.calculate_fragment_tokens(memory);
-        }
-
         // Recent activities tokens
         for activity in &self.recent_activities {
             total += self.calculate_fragment_tokens(activity);
@@ -237,23 +283,33 @@ impl EphemeraContext {
         self.maintain_token_limit();
     }
 
-    /// Add specific memory fragments to context (for intra-cycle recall).
+    /// Store recalled memory fragments for temporary context injection.
     ///
-    /// These are stored in memory_context but not in recent_activities.
-    /// The tool call result is already captured as an Action memory by save_action().
-    pub fn add_memory_context(&mut self, memories: Vec<MemoryFragment>) {
-        for memory in memories {
-            if !self.memory_context.iter().any(|m| m.id == memory.id) {
-                self.memory_context.push(memory);
+    /// These fragments are injected as a temporary user message at the end of
+    /// chat_history during the cognitive cycle. They are cleared after each cycle.
+    pub fn add_recalled_memories(&mut self, fragments: Vec<MemoryFragment>) {
+        for memory in fragments {
+            if !self.recalled_memories.iter().any(|m| m.id == memory.id) {
+                self.recalled_memories.push(memory);
             }
         }
     }
 
+    /// Get the recalled memories buffer.
+    pub fn recalled_memories(&self) -> &[MemoryFragment] {
+        &self.recalled_memories
+    }
+
+    /// Clear the recall buffer at the end of a cognitive cycle.
+    pub fn clear_recalled_memories(&mut self) {
+        self.recalled_memories.clear();
+    }
+
     #[cfg(test)]
-    pub fn add_memories_for_testing(&mut self, memories: Vec<MemoryFragment>) {
+    pub fn add_recalled_for_testing(&mut self, memories: Vec<MemoryFragment>) {
         for memory in memories {
-            if !self.memory_context.iter().any(|m| m.id == memory.id) {
-                self.memory_context.push(memory);
+            if !self.recalled_memories.iter().any(|m| m.id == memory.id) {
+                self.recalled_memories.push(memory);
             }
         }
     }
@@ -350,7 +406,7 @@ impl ContextSerialize for EphemeraContext {
 
         // 1. Pinned content (highest priority)
         if !self.pinned_memories.is_empty() {
-            output.push_str("📌 Pinned Content:\n");
+            output.push_str("Pinned Content:\n");
             output.push_str("---\n");
             for item in &self.pinned_memories {
                 let reason_str = item.reason.as_deref().unwrap_or("N/A");
@@ -362,17 +418,7 @@ impl ContextSerialize for EphemeraContext {
             output.push_str("---\n");
         }
 
-        // 2. Active memory context
-        if !self.memory_context.is_empty() {
-            output.push_str("Active Memory Context:\n");
-            output.push_str("---\n");
-            let serialized_memories =
-                MemoryFragmentList::from(self.memory_context.clone()).serialize();
-            output.push_str(&serialized_memories);
-            output.push_str("---\n");
-        }
-
-        // 3. Recent activities
+        // 2. Recent activities
         if !self.recent_activities.is_empty() {
             let status = self.get_queue_status();
             output.push_str(&format!("Recent Activities ({}):\n", status));
@@ -385,6 +431,22 @@ impl ContextSerialize for EphemeraContext {
 
         output
     }
+}
+
+/// Format an OffsetDateTime as RFC 3339 string
+fn format_rfc3339(dt: &OffsetDateTime) -> String {
+    let format =
+        time::format_description::parse("[year]-[month]-[day]T[hour]:[minute]:[second]Z").unwrap();
+    dt.format(&format).unwrap_or_else(|_| "unknown".to_string())
+}
+
+/// Escape special XML characters
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
 }
 
 // ============================================================================
@@ -555,26 +617,25 @@ mod restoration_tests {
     }
 
     // =========================================================================
-    // memory_context Not Persisted Tests
+    // recalled_memories Not Persisted Tests
     // =========================================================================
 
-    /// Test: memory_context is lost after restart (by design)
+    /// Test: recalled_memories are lost after restart (by design)
     #[tokio::test]
-    async fn test_memory_context_not_persisted() {
-        // Phase 1: Create context with memory_context
+    async fn test_recalled_memories_not_persisted() {
+        // Phase 1: Create context with recalled_memories
         let mut mock = MockLoomClient::new();
         mock.set_default_memory(MemoryResponse { fragments: vec![], total: 0 });
         mock.set_default_pinned(PinnedMemoriesResponse { items: vec![] });
 
         let mut ctx = create_test_context(mock);
-        ctx.add_memories_for_testing(vec![
+        ctx.add_recalled_for_testing(vec![
             create_fragment(100, "Recalled memory 1"),
             create_fragment(101, "Recalled memory 2"),
         ]);
 
-        // Verify memory_context has content
-        let serialized_with_context = ctx.serialize();
-        assert!(serialized_with_context.contains("Recalled memory"));
+        // Verify recalled_memories has content
+        assert_eq!(ctx.recalled_memories().len(), 2);
 
         // Phase 2: Simulate restart with fresh context
         let mut mock_after_restart = MockLoomClient::new();
@@ -585,10 +646,8 @@ mod restoration_tests {
         ctx_after_restart.restore_from_loom(50).await.unwrap();
         ctx_after_restart.restore_pinned_from_loom().await.unwrap();
 
-        // Verify memory_context is empty (not persisted)
-        let serialized_after_restart = ctx_after_restart.serialize();
-        assert!(!serialized_after_restart.contains("Recalled memory"));
-        assert!(!serialized_after_restart.contains("Active Memory Context"));
+        // Verify recalled_memories is empty (not persisted)
+        assert!(ctx_after_restart.recalled_memories().is_empty());
     }
 
     // =========================================================================
@@ -1379,12 +1438,12 @@ mod restoration_tests {
         ctx.add_activity(create_fragment(2, "Runtime activity"));
 
         // 2.2 Recall memories (not persisted)
-        ctx.add_memories_for_testing(vec![create_fragment(100, "Recalled during runtime")]);
+        ctx.add_recalled_for_testing(vec![create_fragment(100, "Recalled during runtime")]);
 
         // Verify runtime state
         assert_eq!(ctx.get_queue_status().activity_count, 2);
-        let runtime_serialized = ctx.serialize();
-        assert!(runtime_serialized.contains("Recalled during runtime"));
+        // Recalled memories are stored in recalled_memories buffer, not in serialize()
+        assert_eq!(ctx.recalled_memories().len(), 1);
 
         // === Phase 3: Simulate crash and restart ===
         // Loom only has partial data (simulating async sync loss)
@@ -1414,9 +1473,8 @@ mod restoration_tests {
         // - Recent only contains synced data
         assert_eq!(ctx_restarted.get_queue_status().activity_count, 1);
 
-        // - memory_context lost
-        let restarted_serialized = ctx_restarted.serialize();
-        assert!(!restarted_serialized.contains("Recalled during runtime"));
+        // - Recalled memories lost (not persisted)
+        assert!(ctx_restarted.recalled_memories().is_empty());
     }
 
     /// Test: Pin operation persistence across immediate restart

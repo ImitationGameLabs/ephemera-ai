@@ -21,6 +21,39 @@ use tokio::sync::Mutex;
 use tracing::{info, warn};
 use uuid::Uuid;
 
+/// Serialize recalled memories as XML for temporary injection into chat_history.
+fn serialize_recalled_xml(fragments: &[loom_client::memory::MemoryFragment]) -> String {
+    let mut xml = format!("<recalled_memories count=\"{}\">\n", fragments.len());
+    for fragment in fragments {
+        let ts = format_rfc3339(&fragment.timestamp);
+        xml.push_str(&format!(
+            "  <memory id=\"{}\" timestamp=\"{}\" kind=\"{}\">\n",
+            fragment.id, ts, fragment.kind
+        ));
+        xml.push_str(&format!("    <content>{}</content>\n", xml_escape(&fragment.content)));
+        xml.push_str("  </memory>\n");
+    }
+    xml.push_str("  <instruction>Please reflect on these recalled memories and extract what is relevant. Use memory_pin to permanently retain any memories you wish to keep.</instruction>\n");
+    xml.push_str("</recalled_memories>");
+    xml
+}
+
+/// Format an OffsetDateTime as RFC 3339 string
+fn format_rfc3339(dt: &time::OffsetDateTime) -> String {
+    let format =
+        time::format_description::parse("[year]-[month]-[day]T[hour]:[minute]:[second]Z").unwrap();
+    dt.format(&format).unwrap_or_else(|_| "unknown".to_string())
+}
+
+/// Escape special XML characters
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
 pub struct EphemeraAI {
     state: Arc<Mutex<State>>,
     llm: Box<dyn LLMProvider>,
@@ -169,15 +202,22 @@ impl EphemeraAI {
         let ctx = data.lock().await;
         let mut chat_history: Vec<ChatMessage> = vec![];
 
-        // 2a. Pinned memories → single user text message (reference material)
+        // 2a. Pinned memories → single assistant text message (reference material)
         let pinned_text = ctx.serialize_pinned();
         if let Some(ref text) = pinned_text {
-            chat_history.push(ChatMessage::user().content(text.as_str()).build());
+            chat_history.push(ChatMessage::assistant().content(text.as_str()).build());
         }
 
         // 2b. Recent activities → ChatMessages (role-aware, ordered)
         let recent: Vec<MemoryFragment> = ctx.recent_activities().iter().cloned().collect();
         chat_history.extend(recent.iter().flat_map(|m| m.to_chat_messages()));
+
+        // 2c. Recalled memories → temporary user message (injected this cycle only)
+        if !ctx.recalled_memories().is_empty() {
+            let recall_text = serialize_recalled_xml(ctx.recalled_memories());
+            chat_history.push(ChatMessage::user().content(&recall_text).build());
+        }
+
         drop(ctx);
         drop(pinned_text);
 
@@ -284,9 +324,22 @@ impl EphemeraAI {
             chat_history
                 .push(ChatMessage::user().tool_result(result_tool_calls).content("").build());
 
+            // 3.7.1 Inject recalled memories if any tool populated them
+            {
+                let context_handle = self.context.data();
+                let context_guard = context_handle.lock().await;
+                if !context_guard.recalled_memories().is_empty() {
+                    let recall_text = serialize_recalled_xml(context_guard.recalled_memories());
+                    chat_history.push(ChatMessage::user().content(&recall_text).build());
+                }
+            }
+
             // 3.8 Clear prompt for subsequent iterations
             current_prompt = String::new();
         }
+
+        // 4. Clear recall buffer for next cycle
+        self.context.data().lock().await.clear_recalled_memories();
 
         Ok(())
     }

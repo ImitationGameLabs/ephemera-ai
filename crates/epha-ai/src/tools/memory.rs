@@ -5,8 +5,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::context::{EphemeraContext, MemoryFragmentList};
-use epha_agent::context::ContextSerialize;
+use crate::context::EphemeraContext;
 use loom_client::LoomClientTrait;
 
 // ============================================================================
@@ -89,14 +88,17 @@ impl AgentTool for MemoryGet {
                 args.ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(", ")
             ))
         } else {
-            // Add to context
+            let ids: Vec<String> = fragments.iter().map(|f| f.id.to_string()).collect();
+            let count = fragments.len();
             {
                 let mut context = self.context.lock().await;
-                context.add_memory_context(fragments.clone());
+                context.add_recalled_memories(fragments);
             }
-
-            let serialized = MemoryFragmentList::from(fragments).serialize();
-            Ok(format!("Retrieved {} memories:\n\n{}", args.ids.len(), serialized))
+            Ok(format!(
+                "Recalled {} memory fragments (IDs: {}). Reflect on these memories and pin any you wish to retain.",
+                count,
+                ids.join(", ")
+            ))
         }
     }
 }
@@ -167,19 +169,18 @@ impl AgentTool for MemoryRecent {
                 if response.fragments.is_empty() {
                     Ok("No recent memories found.".to_string())
                 } else {
+                    let count = response.fragments.len();
+                    let ids: Vec<String> =
+                        response.fragments.iter().map(|f| f.id.to_string()).collect();
                     let fragments = response.fragments.clone();
-
-                    // Add to context
                     {
                         let mut context = self.context.lock().await;
-                        context.add_memory_context(fragments.clone());
+                        context.add_recalled_memories(fragments);
                     }
-
-                    let serialized = MemoryFragmentList::from(fragments).serialize();
                     Ok(format!(
-                        "Retrieved {} most recent memories:\n\n{}",
-                        response.fragments.len(),
-                        serialized
+                        "Recalled {} most recent memory fragments (IDs: {}). Reflect on these memories and pin any you wish to retain.",
+                        count,
+                        ids.join(", ")
                     ))
                 }
             }
@@ -270,21 +271,20 @@ impl AgentTool for MemoryTimeline {
                 if response.fragments.is_empty() {
                     Ok(format!("No memories found between {} and {}.", args.from, args.to))
                 } else {
+                    let count = response.fragments.len();
+                    let ids: Vec<String> =
+                        response.fragments.iter().map(|f| f.id.to_string()).collect();
                     let fragments = response.fragments.clone();
-
-                    // Add to context
                     {
                         let mut context = self.context.lock().await;
-                        context.add_memory_context(fragments.clone());
+                        context.add_recalled_memories(fragments);
                     }
-
-                    let serialized = MemoryFragmentList::from(fragments).serialize();
                     Ok(format!(
-                        "Retrieved {} memories from {} to {}:\n\n{}",
-                        response.fragments.len(),
+                        "Recalled {} memory fragments from {} to {} (IDs: {}). Reflect on these memories and pin any you wish to retain.",
+                        count,
                         args.from,
                         args.to,
-                        serialized
+                        ids.join(", ")
                     ))
                 }
             }

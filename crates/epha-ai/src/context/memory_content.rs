@@ -3,6 +3,7 @@
 //! All memory constructors produce content in one of these structured formats,
 //! enabling reliable conversion to role-aware ChatMessages.
 
+use agora::event::Event;
 use llm::chat::ChatMessage;
 use llm::{FunctionCall, ToolCall};
 use loom_client::memory::{MemoryFragment, MemoryKind};
@@ -16,6 +17,36 @@ use time::OffsetDateTime;
 /// For fragments restored from the database, construct the struct directly with the real id and timestamp.
 pub fn pending_memory(content: String, kind: MemoryKind) -> MemoryFragment {
     MemoryFragment { id: 0, content, timestamp: OffsetDateTime::now_utc(), kind }
+}
+
+/// Render an Event as XML for clean LLM consumption.
+fn render_event_xml(event: &Event) -> String {
+    let ts = format_rfc3339(&event.timestamp);
+    let priority = format!("{:?}", event.priority).to_lowercase();
+    format!(
+        "<event type=\"{}\" from=\"{}\" timestamp=\"{}\" priority=\"{}\">\n  <payload>{}</payload>\n</event>",
+        xml_escape(&event.event_type),
+        xml_escape(&event.herald_id),
+        ts,
+        priority,
+        xml_escape(&event.payload.to_string()),
+    )
+}
+
+/// Format an OffsetDateTime as RFC 3339 string
+fn format_rfc3339(dt: &OffsetDateTime) -> String {
+    let format =
+        time::format_description::parse("[year]-[month]-[day]T[hour]:[minute]:[second]Z").unwrap();
+    dt.format(&format).unwrap_or_else(|_| "unknown".to_string())
+}
+
+/// Escape special XML characters
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
 }
 
 /// Thought memory content — AI's text thinking or response.
@@ -57,7 +88,14 @@ impl ThoughtContent {
 
 impl EventContent {
     pub fn to_chat_message(&self) -> ChatMessage {
-        ChatMessage::user().content(&self.text).build()
+        // Try to parse the inner text as an Event JSON for XML rendering
+        let xml_content = if let Ok(event) = serde_json::from_str::<Event>(&self.text) {
+            render_event_xml(&event)
+        } else {
+            // Fallback for old-format events: wrap raw content in <event>
+            format!("<event>{}</event>", xml_escape(&self.text))
+        };
+        ChatMessage::user().content(&xml_content).build()
     }
 }
 
@@ -125,8 +163,9 @@ impl ToChatMessages for MemoryFragment {
                 let msg = serde_json::from_str::<EventContent>(&self.content)
                     .map(|c| c.to_chat_message())
                     .unwrap_or_else(|_| {
-                        // Fallback: old-format event JSON or plain text
-                        ChatMessage::user().content(&self.content).build()
+                        // Fallback: old-format event JSON or plain text, wrap in <event>
+                        let xml_content = format!("<event>{}</event>", xml_escape(&self.content));
+                        ChatMessage::user().content(&xml_content).build()
                     });
                 vec![msg]
             }
@@ -215,9 +254,21 @@ mod tests {
 
     #[test]
     fn event_converts_to_user_message() {
-        let content = EventContent { text: "user said hi".to_string() };
+        let event = agora::event::Event {
+            id: 1,
+            event_type: "message".to_string(),
+            herald_id: "herald_1".to_string(),
+            payload: serde_json::json!("user said hi"),
+            timestamp: time::OffsetDateTime::now_utc(),
+            priority: agora::event::EventPriority::Normal,
+            status: agora::event::EventStatus::Pending,
+        };
+        let text = serde_json::to_string(&event).unwrap();
+        let content = EventContent { text };
         let msg = content.to_chat_message();
-        assert!(msg.content.contains("user said hi"));
+        // Should contain XML-formatted event
+        assert!(msg.content.contains("<event"));
+        assert!(msg.content.contains("message"));
     }
 
     // -- Action conversion --
@@ -333,8 +384,8 @@ mod tests {
         let msgs = fragment.to_chat_messages();
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].role, llm::chat::ChatRole::User);
-        // Fallback: raw JSON as content
-        assert!(msgs[0].content.contains("agora_event"));
+        // Fallback: wrapped in <event> tag
+        assert!(msgs[0].content.contains("<event>"));
     }
 
     #[test]
