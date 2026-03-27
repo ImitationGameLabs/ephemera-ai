@@ -1,5 +1,8 @@
 use crate::agent::{CommonPrompt, State};
 use crate::context::EphemeraContext;
+use crate::context::{
+    ActionMemoryContent, ThoughtContent, ToChatMessages, ToolCallRecord, pending_memory,
+};
 use crate::sync::{SyncSender, start_sync_task};
 use crate::tools::{
     MemoryGet, MemoryPin, MemoryRecent, MemoryTimeline, MemoryUnpin, StateTransition, ToolDispatch,
@@ -14,7 +17,6 @@ use loom_client::LoomClientTrait;
 use loom_client::memory::{MemoryFragment, MemoryKind};
 use std::sync::Arc;
 use std::time::Duration;
-use time::OffsetDateTime;
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -162,13 +164,25 @@ impl EphemeraAI {
             self.agora_client.ack_events(event_ids).await?;
         }
 
-        // 2. Prepare context (including newly added events)
-        let context_str = self.context.serialize().await;
+        // 2. Build chat_history from memory (replaces context.serialize())
+        let data = self.context.data();
+        let ctx = data.lock().await;
+        let mut chat_history: Vec<ChatMessage> = vec![];
+
+        // 2a. Pinned memories → single user text message (reference material)
+        let pinned_text = ctx.serialize_pinned();
+        if let Some(ref text) = pinned_text {
+            chat_history.push(ChatMessage::user().content(text.as_str()).build());
+        }
+
+        // 2b. Recent activities → ChatMessages (role-aware, ordered)
+        let recent: Vec<MemoryFragment> = ctx.recent_activities().iter().cloned().collect();
+        chat_history.extend(recent.iter().flat_map(|m| m.to_chat_messages()));
+        drop(ctx);
+        drop(pinned_text);
 
         // 3. Explicit multi-turn loop
-        let initial_prompt = format!("Current Context:\n{}", context_str);
-        let mut chat_history: Vec<ChatMessage> = vec![];
-        let mut current_prompt = initial_prompt;
+        let mut current_prompt = String::new();
         let mut current_depth = 0;
 
         loop {
@@ -205,23 +219,49 @@ impl EphemeraAI {
             }
 
             // 3.6 Execute tools and build results
-            let mut tool_results: Vec<(String, String, String)> = vec![];
+            let mut tool_results: Vec<ToolCallRecord> = vec![];
+            let mut failed_tool_name: Option<String> = None;
 
             for tc in &tool_calls {
                 let tool_name = &tc.function.name;
                 let args_str = &tc.function.arguments;
 
-                let result = self
-                    .tool_dispatch
-                    .call_tool(tool_name, args_str)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("{}", e))?;
+                if let Some(ref failed) = failed_tool_name {
+                    tool_results.push(ToolCallRecord {
+                        id: tc.id.clone(),
+                        tool: tool_name.clone(),
+                        args: serde_json::from_str(args_str).unwrap_or(serde_json::json!(args_str)),
+                        result: format!("Skipped: tool '{}' failed earlier in this batch", failed),
+                    });
+                    continue;
+                }
 
-                // Save Action memory
-                self.save_action(tool_name, args_str, &result);
+                let result = match self.tool_dispatch.call_tool(tool_name, args_str).await {
+                    Ok(result) => result,
+                    Err(e) => {
+                        warn!("Tool '{}' failed: {}", tool_name, e);
+                        tool_results.push(ToolCallRecord {
+                            id: tc.id.clone(),
+                            tool: tool_name.clone(),
+                            args: serde_json::from_str(args_str)
+                                .unwrap_or(serde_json::json!(args_str)),
+                            result: format!("Error: {}", e),
+                        });
+                        failed_tool_name = Some(tool_name.clone());
+                        continue;
+                    }
+                };
 
-                tool_results.push((tc.id.clone(), tool_name.clone(), result));
+                tool_results.push(ToolCallRecord {
+                    id: tc.id.clone(),
+                    tool: tool_name.clone(),
+                    args: serde_json::from_str(args_str).unwrap_or(serde_json::json!(args_str)),
+                    result,
+                });
             }
+
+            // Save Action memory (one per LLM response, not per tool call)
+            self.save_action(&tool_results);
 
             // 3.7 Update chat history for next iteration
             // Add assistant message with tool calls
@@ -233,11 +273,11 @@ impl EphemeraAI {
             // separate "tool" role messages using ToolCall.id as tool_call_id
             // and ToolCall.function.arguments as the content.
             let result_tool_calls: Vec<ToolCall> = tool_results
-                .into_iter()
-                .map(|(id, tool_name, result)| ToolCall {
-                    id,
+                .iter()
+                .map(|r| ToolCall {
+                    id: r.id.clone(),
                     call_type: "function".to_string(),
-                    function: FunctionCall { name: tool_name, arguments: result },
+                    function: FunctionCall { name: r.tool.clone(), arguments: r.result.clone() },
                 })
                 .collect();
 
@@ -253,29 +293,56 @@ impl EphemeraAI {
 
     /// Save a Thought memory (AI's text response)
     fn save_thought(&self, text: &str) {
-        let fragment = MemoryFragment {
-            id: 0,
-            content: text.to_string(),
-            timestamp: OffsetDateTime::now_utc(),
-            kind: MemoryKind::Thought,
-        };
+        let content = serde_json::to_string(&ThoughtContent { text: text.to_string() }).unwrap();
+        let fragment = pending_memory(content, MemoryKind::Thought);
         self.sync_sender.send(fragment);
     }
 
-    /// Save an Action memory (tool call)
-    fn save_action(&self, tool: &str, args: &str, result: &str) {
-        let content = serde_json::json!({
-            "tool": tool,
-            "args": serde_json::from_str(args).unwrap_or(serde_json::json!(args)),
-            "result": result,
-            "status": "success"
-        });
-        let fragment = MemoryFragment {
-            id: 0,
-            content: content.to_string(),
-            timestamp: OffsetDateTime::now_utc(),
-            kind: MemoryKind::Action,
-        };
+    /// Save an Action memory (all tool calls and results from one LLM response)
+    fn save_action(&self, tool_results: &[ToolCallRecord]) {
+        let content = ActionMemoryContent { tool_calls: tool_results.to_vec() };
+        let content = serde_json::to_string(&content).unwrap();
+        let fragment = pending_memory(content, MemoryKind::Action);
         self.sync_sender.send(fragment);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn observe_action_memory_serialization() {
+        let records = vec![
+            ToolCallRecord {
+                id: "call_abc123".to_string(),
+                tool: "memory_get".to_string(),
+                args: serde_json::json!({"key": "recent"}),
+                result: "Found 3 memories".to_string(),
+            },
+            ToolCallRecord {
+                id: "call_def456".to_string(),
+                tool: "shell_exec".to_string(),
+                args: serde_json::json!({"command": "ls"}),
+                result: "file1.txt\nfile2.txt".to_string(),
+            },
+            ToolCallRecord {
+                id: "call_skip789".to_string(),
+                tool: "file_read".to_string(),
+                args: serde_json::json!({"path": "/tmp/x"}),
+                result: "Skipped: tool 'shell_exec' failed earlier in this batch".to_string(),
+            },
+        ];
+
+        let content = ActionMemoryContent { tool_calls: records };
+        let json = serde_json::to_string_pretty(&content).unwrap();
+        println!("{}", json);
+
+        // Verify round-trip
+        let deserialized: ActionMemoryContent = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.tool_calls.len(), 3);
+        assert_eq!(deserialized.tool_calls[0].id, "call_abc123");
+        assert_eq!(deserialized.tool_calls[1].args["command"], "ls");
+        assert!(deserialized.tool_calls[2].result.contains("Skipped"));
     }
 }

@@ -35,10 +35,7 @@ impl LoomServer {
         // Initialize memory manager with MySQL
         let memory_manager = Arc::new(init_memory_service(&config).await?);
 
-        Ok(Self {
-            config,
-            memory_manager,
-        })
+        Ok(Self { config, memory_manager })
     }
 
     /// Start the server
@@ -50,9 +47,7 @@ impl LoomServer {
         };
 
         // Create app state
-        let memory_app_state = MemoryAppState {
-            memory_manager: self.memory_manager.clone(),
-        };
+        let memory_app_state = MemoryAppState { memory_manager: self.memory_manager.clone() };
 
         let app = Router::new()
             .route("/health", get(crate::services::memory::health_check))
@@ -74,12 +69,7 @@ impl LoomServer {
                     .route("/{memory_id}", delete(PinnedMemoryHandler::unpin_memory))
                     .with_state(memory_app_state),
             )
-            .layer(
-                CorsLayer::new()
-                    .allow_origin(Any)
-                    .allow_methods(Any)
-                    .allow_headers(Any),
-            )
+            .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
             .layer(TraceLayer::new_for_http());
 
         let bind_address = self.config.bind_address();
@@ -93,9 +83,7 @@ impl LoomServer {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to bind to address: {}", e))?;
 
-        axum::serve(listener, app)
-            .await
-            .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
+        axum::serve(listener, app).await.map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
 
         Ok(())
     }

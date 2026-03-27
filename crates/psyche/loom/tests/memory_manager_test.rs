@@ -6,26 +6,17 @@ use sea_orm_migration::MigratorTrait;
 use testcontainers_modules::{mysql::Mysql, testcontainers::runners::AsyncRunner};
 use time::OffsetDateTime;
 
-async fn setup_test_db() -> (
-    testcontainers::ContainerAsync<Mysql>,
-    sea_orm::DatabaseConnection,
-) {
-    let container = Mysql::default()
-        .start()
-        .await
-        .expect("Failed to start MySQL container");
+async fn setup_test_db() -> (testcontainers::ContainerAsync<Mysql>, sea_orm::DatabaseConnection) {
+    let container = Mysql::default().start().await.expect("Failed to start MySQL container");
 
     let host_port = container.get_host_port_ipv4(3306).await.unwrap();
     let connection_string = format!("mysql://root@127.0.0.1:{}/test", host_port);
 
-    let db = Database::connect(&connection_string)
-        .await
-        .expect("Failed to connect to test database");
+    let db =
+        Database::connect(&connection_string).await.expect("Failed to connect to test database");
 
     // Run migrations
-    Migrator::up(&db, None)
-        .await
-        .expect("Failed to run migrations");
+    Migrator::up(&db, None).await.expect("Failed to run migrations");
 
     (container, db)
 }
@@ -147,9 +138,8 @@ async fn test_get_range_with_pagination() {
     let end = now + time::Duration::hours(1);
 
     // Create 5 memories
-    let mut fragments: Vec<MemoryFragment> = (0..5)
-        .map(|i| create_test_fragment(&format!("Memory {}", i), MemoryKind::Event))
-        .collect();
+    let mut fragments: Vec<MemoryFragment> =
+        (0..5).map(|i| create_test_fragment(&format!("Memory {}", i), MemoryKind::Event)).collect();
 
     manager.append(&mut fragments).await.unwrap();
 

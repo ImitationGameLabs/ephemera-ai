@@ -18,11 +18,7 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(MemoryFragments::Content).text().not_null())
-                    .col(
-                        ColumnDef::new(MemoryFragments::Timestamp)
-                            .date_time()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(MemoryFragments::Timestamp).date_time().not_null())
                     .col(ColumnDef::new(MemoryFragments::Kind).text().not_null())
                     .to_owned(),
             )
@@ -40,9 +36,7 @@ impl MigrationTrait for Migration {
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .drop_table(Table::drop().table(MemoryFragments::Table).to_owned())
-            .await
+        manager.drop_table(Table::drop().table(MemoryFragments::Table).to_owned()).await
     }
 }
 

@@ -92,10 +92,7 @@ impl AgentTool for MemoryGet {
             // Add to context
             {
                 let mut context = self.context.lock().await;
-                context.add_memory_context(
-                    format!("Retrieved {} memories by ID", fragments.len()),
-                    fragments.clone(),
-                );
+                context.add_memory_context(fragments.clone());
             }
 
             let serialized = MemoryFragmentList::from(fragments).serialize();
@@ -175,10 +172,7 @@ impl AgentTool for MemoryRecent {
                     // Add to context
                     {
                         let mut context = self.context.lock().await;
-                        context.add_memory_context(
-                            format!("Retrieved {} most recent memories", fragments.len()),
-                            fragments.clone(),
-                        );
+                        context.add_memory_context(fragments.clone());
                     }
 
                     let serialized = MemoryFragmentList::from(fragments).serialize();
@@ -281,15 +275,7 @@ impl AgentTool for MemoryTimeline {
                     // Add to context
                     {
                         let mut context = self.context.lock().await;
-                        context.add_memory_context(
-                            format!(
-                                "Retrieved {} memories from {} to {}",
-                                fragments.len(),
-                                args.from,
-                                args.to
-                            ),
-                            fragments.clone(),
-                        );
+                        context.add_memory_context(fragments.clone());
                     }
 
                     let serialized = MemoryFragmentList::from(fragments).serialize();

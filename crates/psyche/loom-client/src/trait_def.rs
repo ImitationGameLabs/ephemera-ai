@@ -15,10 +15,16 @@ pub trait LoomClientTrait: Send + Sync {
     async fn health_check(&self) -> Result<serde_json::Value, LoomClientError>;
 
     /// Create a new memory fragment
-    async fn create_memory(&self, request: CreateMemoryRequest) -> Result<MemoryResponse, LoomClientError>;
+    async fn create_memory(
+        &self,
+        request: CreateMemoryRequest,
+    ) -> Result<MemoryResponse, LoomClientError>;
 
     /// Create a single memory fragment (backward compatibility convenience method)
-    async fn create_single_memory(&self, fragment: MemoryFragment) -> Result<MemoryResponse, LoomClientError>;
+    async fn create_single_memory(
+        &self,
+        fragment: MemoryFragment,
+    ) -> Result<MemoryResponse, LoomClientError>;
 
     /// Get a specific memory fragment by ID
     async fn get_memory(&self, id: i64) -> Result<MemoryResponse, LoomClientError>;
@@ -42,7 +48,11 @@ pub trait LoomClientTrait: Send + Sync {
     async fn get_pinned_memories(&self) -> Result<PinnedMemoriesResponse, LoomClientError>;
 
     /// Pin a memory by ID
-    async fn pin_memory(&self, memory_id: i64, reason: Option<String>) -> Result<PinnedMemory, LoomClientError>;
+    async fn pin_memory(
+        &self,
+        memory_id: i64,
+        reason: Option<String>,
+    ) -> Result<PinnedMemory, LoomClientError>;
 
     /// Unpin a memory by ID
     async fn unpin_memory(&self, memory_id: i64) -> Result<(), LoomClientError>;

@@ -51,10 +51,7 @@ pub struct LoomClient {
 impl LoomClient {
     /// Create a new Loom client with the given base URL and HTTP client
     pub fn new(base_url: &str, client: Client) -> Self {
-        Self {
-            client,
-            base_url: base_url.to_string(),
-        }
+        Self { client, base_url: base_url.to_string() }
     }
 
     /// Handle HTTP response and convert to expected type
@@ -71,10 +68,7 @@ impl LoomClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "Failed to read error response".to_string());
-            return Err(LoomClientError::ApiError(format!(
-                "HTTP {}: {}",
-                status, error_text
-            )));
+            return Err(LoomClientError::ApiError(format!("HTTP {}: {}", status, error_text)));
         }
 
         let text = response.text().await?;
@@ -99,11 +93,7 @@ impl LoomClient {
         request: CreateMemoryRequest,
     ) -> Result<MemoryResponse, LoomClientError> {
         let url = format!("{}/api/v1/memories", self.base_url);
-        debug!(
-            "Creating {} memory fragments at: {}",
-            request.fragments.len(),
-            url
-        );
+        debug!("Creating {} memory fragments at: {}", request.fragments.len(), url);
 
         let response = self.client.post(&url).json(&request).send().await?;
         let api_response: ApiResponse<MemoryResponse> = Self::handle_response(response).await?;
@@ -158,12 +148,7 @@ impl LoomClient {
         let url = format!("{}/api/v1/memories/views/recent", self.base_url);
         debug!("Getting {} recent memory fragments from: {}", limit, url);
 
-        let response = self
-            .client
-            .get(&url)
-            .query(&[("limit", limit)])
-            .send()
-            .await?;
+        let response = self.client.get(&url).query(&[("limit", limit)]).send().await?;
         let api_response: ApiResponse<MemoryResponse> = Self::handle_response(response).await?;
 
         api_response
@@ -183,15 +168,10 @@ impl LoomClient {
         offset: Option<usize>,
     ) -> Result<MemoryResponse, LoomClientError> {
         let url = format!("{}/api/v1/memories/views/timeline", self.base_url);
-        debug!(
-            "Getting memory fragments in range {} to {} from: {}",
-            from, to, url
-        );
+        debug!("Getting memory fragments in range {} to {} from: {}", from, to, url);
 
-        let mut query: Vec<(&str, String)> = vec![
-            ("from", from.to_string()),
-            ("to", to.to_string()),
-        ];
+        let mut query: Vec<(&str, String)> =
+            vec![("from", from.to_string()), ("to", to.to_string())];
 
         if let Some(limit) = limit {
             query.push(("limit", limit.to_string()));
@@ -220,7 +200,8 @@ impl LoomClient {
         debug!("Getting pinned memories from: {}", url);
 
         let response = self.client.get(&url).send().await?;
-        let api_response: ApiResponse<PinnedMemoriesResponse> = Self::handle_response(response).await?;
+        let api_response: ApiResponse<PinnedMemoriesResponse> =
+            Self::handle_response(response).await?;
 
         api_response
             .data
@@ -258,11 +239,7 @@ impl LoomClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "Failed to read error response".to_string());
-            Err(LoomClientError::ApiError(format!(
-                "HTTP {}: {}",
-                status,
-                error_text
-            )))
+            Err(LoomClientError::ApiError(format!("HTTP {}: {}", status, error_text)))
         }
     }
 
@@ -279,11 +256,17 @@ impl LoomClientTrait for LoomClient {
         LoomClient::health_check(self).await
     }
 
-    async fn create_memory(&self, request: CreateMemoryRequest) -> Result<MemoryResponse, LoomClientError> {
+    async fn create_memory(
+        &self,
+        request: CreateMemoryRequest,
+    ) -> Result<MemoryResponse, LoomClientError> {
         LoomClient::create_memory(self, request).await
     }
 
-    async fn create_single_memory(&self, fragment: MemoryFragment) -> Result<MemoryResponse, LoomClientError> {
+    async fn create_single_memory(
+        &self,
+        fragment: MemoryFragment,
+    ) -> Result<MemoryResponse, LoomClientError> {
         LoomClient::create_single_memory(self, fragment).await
     }
 
@@ -313,7 +296,11 @@ impl LoomClientTrait for LoomClient {
         LoomClient::get_pinned_memories(self).await
     }
 
-    async fn pin_memory(&self, memory_id: i64, reason: Option<String>) -> Result<PinnedMemory, LoomClientError> {
+    async fn pin_memory(
+        &self,
+        memory_id: i64,
+        reason: Option<String>,
+    ) -> Result<PinnedMemory, LoomClientError> {
         LoomClient::pin_memory(self, memory_id, reason).await
     }
 

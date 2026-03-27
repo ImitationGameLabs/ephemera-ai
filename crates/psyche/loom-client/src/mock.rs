@@ -48,10 +48,7 @@ struct MockState {
 
 impl Default for MockState {
     fn default() -> Self {
-        Self {
-            responses: VecDeque::new(),
-            calls: Vec::new(),
-        }
+        Self { responses: VecDeque::new(), calls: Vec::new() }
     }
 }
 
@@ -182,10 +179,11 @@ impl LoomClientTrait for MockLoomClient {
         }
     }
 
-    async fn create_memory(&self, request: CreateMemoryRequest) -> Result<MemoryResponse, LoomClientError> {
-        self.record_call(MockCall::CreateMemory {
-            fragments_count: request.fragments.len(),
-        });
+    async fn create_memory(
+        &self,
+        request: CreateMemoryRequest,
+    ) -> Result<MemoryResponse, LoomClientError> {
+        self.record_call(MockCall::CreateMemory { fragments_count: request.fragments.len() });
         match self.pop_response() {
             Some(Ok(MockResponse::Memory(m))) => Ok(m),
             Some(Ok(MockResponse::Empty)) => Ok(MemoryResponse { fragments: vec![], total: 0 }),
@@ -194,7 +192,10 @@ impl LoomClientTrait for MockLoomClient {
         }
     }
 
-    async fn create_single_memory(&self, fragment: MemoryFragment) -> Result<MemoryResponse, LoomClientError> {
+    async fn create_single_memory(
+        &self,
+        fragment: MemoryFragment,
+    ) -> Result<MemoryResponse, LoomClientError> {
         self.record_call(MockCall::CreateSingleMemory { fragment_id: fragment.id });
         match self.pop_response() {
             Some(Ok(MockResponse::Memory(m))) => Ok(m),
@@ -268,7 +269,11 @@ impl LoomClientTrait for MockLoomClient {
     // this method constructs a synthetic PinnedMemory from the request parameters.
     // This is intentional to simplify common test scenarios where the exact response
     // content is less important than verifying the call was made.
-    async fn pin_memory(&self, memory_id: i64, reason: Option<String>) -> Result<PinnedMemory, LoomClientError> {
+    async fn pin_memory(
+        &self,
+        memory_id: i64,
+        reason: Option<String>,
+    ) -> Result<PinnedMemory, LoomClientError> {
         self.record_call(MockCall::PinMemory { memory_id, reason: reason.clone() });
         match self.pop_response() {
             Some(Ok(MockResponse::PinnedMemory(p))) => Ok(p),
@@ -329,10 +334,7 @@ mod tests {
             timestamp: time::OffsetDateTime::now_utc(),
             kind: loom::memory::types::MemoryKind::Action,
         };
-        mock.push_memory(MemoryResponse {
-            fragments: vec![fragment.clone()],
-            total: 1,
-        });
+        mock.push_memory(MemoryResponse { fragments: vec![fragment.clone()], total: 1 });
 
         let request = CreateMemoryRequest::single(fragment);
         let result = mock.create_memory(request).await.unwrap();
@@ -351,10 +353,7 @@ mod tests {
             timestamp: time::OffsetDateTime::now_utc(),
             kind: loom::memory::types::MemoryKind::Action,
         };
-        mock.push_memory(MemoryResponse {
-            fragments: vec![fragment],
-            total: 1,
-        });
+        mock.push_memory(MemoryResponse { fragments: vec![fragment], total: 1 });
 
         let result = mock.get_memory(42).await.unwrap();
         assert_eq!(result.fragments.len(), 1);
@@ -446,10 +445,7 @@ mod tests {
             timestamp: time::OffsetDateTime::now_utc(),
             kind: loom::memory::types::MemoryKind::Action,
         };
-        mock.set_default_memory(MemoryResponse {
-            fragments: vec![fragment],
-            total: 1,
-        });
+        mock.set_default_memory(MemoryResponse { fragments: vec![fragment], total: 1 });
 
         // No response pushed, should use default
         let result = mock.get_recent_memories(10).await.unwrap();
@@ -528,12 +524,12 @@ mod tests {
             timestamp: time::OffsetDateTime::now_utc(),
             kind: loom::memory::types::MemoryKind::Action,
         };
-        mock.push_memory(MemoryResponse {
-            fragments: vec![fragment],
-            total: 1,
-        });
+        mock.push_memory(MemoryResponse { fragments: vec![fragment], total: 1 });
 
-        let result = mock.get_timeline_memory("2024-01-01T00:00:00Z", "2024-12-31T23:59:59Z", None, None).await.unwrap();
+        let result = mock
+            .get_timeline_memory("2024-01-01T00:00:00Z", "2024-12-31T23:59:59Z", None, None)
+            .await
+            .unwrap();
         assert_eq!(result.fragments.len(), 1);
 
         // Verify call was recorded with correct parameters

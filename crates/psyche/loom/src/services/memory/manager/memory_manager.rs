@@ -44,7 +44,10 @@ impl MemoryManager {
     }
 
     /// Append memory fragments to the store
-    pub async fn append(&self, fragments: &mut Vec<MemoryFragment>) -> Result<Vec<i64>, MemoryError> {
+    pub async fn append(
+        &self,
+        fragments: &mut Vec<MemoryFragment>,
+    ) -> Result<Vec<i64>, MemoryError> {
         if fragments.is_empty() {
             return Ok(vec![]);
         }
@@ -74,10 +77,8 @@ impl MemoryManager {
 
     /// Get a single memory fragment by ID
     pub async fn get_one(&self, id: i64) -> Result<MemoryFragment, MemoryError> {
-        let model = MemoryEntity::find_by_id(id)
-            .one(&self.db)
-            .await?
-            .ok_or(MemoryError::NotFound(id))?;
+        let model =
+            MemoryEntity::find_by_id(id).one(&self.db).await?.ok_or(MemoryError::NotFound(id))?;
 
         Ok(model.into())
     }
@@ -87,18 +88,13 @@ impl MemoryManager {
     pub async fn delete(&self, ids: &[i64]) -> Result<(), MemoryError> {
         for id in ids {
             // Check if memory is pinned
-            let is_pinned = PinnedEntity::find_by_id(*id)
-                .one(&self.db)
-                .await?
-                .is_some();
+            let is_pinned = PinnedEntity::find_by_id(*id).one(&self.db).await?.is_some();
 
             if is_pinned {
                 return Err(MemoryError::MemoryPinned(*id));
             }
 
-            MemoryEntity::delete_by_id(*id)
-                .exec(&self.db)
-                .await?;
+            MemoryEntity::delete_by_id(*id).exec(&self.db).await?;
         }
 
         Ok(())
@@ -142,7 +138,11 @@ impl MemoryManager {
     }
 
     /// Pin a memory by ID
-    pub async fn pin(&self, memory_id: i64, reason: Option<String>) -> Result<PinnedMemory, MemoryError> {
+    pub async fn pin(
+        &self,
+        memory_id: i64,
+        reason: Option<String>,
+    ) -> Result<PinnedMemory, MemoryError> {
         // Get the memory fragment first (validates existence)
         let fragment = self.get_one(memory_id).await?;
 
@@ -157,11 +157,7 @@ impl MemoryManager {
         // Insert and handle race condition: if another request inserted first,
         // we'll get a unique constraint violation (MySQL error 1062)
         match active_model.insert(&self.db).await {
-            Ok(_) => Ok(PinnedMemory {
-                fragment,
-                reason,
-                pinned_at: now,
-            }),
+            Ok(_) => Ok(PinnedMemory { fragment, reason, pinned_at: now }),
             Err(ref e) if is_unique_constraint_violation(e) => {
                 Err(MemoryError::AlreadyPinned(memory_id))
             }
@@ -171,9 +167,7 @@ impl MemoryManager {
 
     /// Unpin a memory by ID
     pub async fn unpin(&self, memory_id: i64) -> Result<(), MemoryError> {
-        let result = PinnedEntity::delete_by_id(memory_id)
-            .exec(&self.db)
-            .await?;
+        let result = PinnedEntity::delete_by_id(memory_id).exec(&self.db).await?;
 
         if result.rows_affected == 0 {
             return Err(MemoryError::NotFound(memory_id));
@@ -207,10 +201,7 @@ impl MemoryManager {
 
     /// Check if a memory is pinned
     pub async fn is_pinned(&self, memory_id: i64) -> Result<bool, MemoryError> {
-        let is_pinned = PinnedEntity::find_by_id(memory_id)
-            .one(&self.db)
-            .await?
-            .is_some();
+        let is_pinned = PinnedEntity::find_by_id(memory_id).one(&self.db).await?.is_some();
 
         Ok(is_pinned)
     }

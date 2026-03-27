@@ -1,7 +1,10 @@
-use loom::memory::builder::MemoryFragmentBuilder;
 use loom::memory::types::{MemoryFragment, MemoryKind};
 use loom::services::memory::entity::memory;
 use time::OffsetDateTime;
+
+fn test_fragment(id: i64, content: &str, kind: MemoryKind) -> MemoryFragment {
+    MemoryFragment { id, content: content.to_string(), timestamp: OffsetDateTime::now_utc(), kind }
+}
 
 #[test]
 fn test_memory_fragment_to_model_conversion() {
@@ -43,10 +46,7 @@ fn test_model_to_memory_fragment_conversion() {
 
 #[test]
 fn test_memory_fragment_model_roundtrip() {
-    let original_fragment =
-        MemoryFragmentBuilder::new("roundtrip test".to_string(), MemoryKind::Action)
-            .id(789)
-            .build();
+    let original_fragment = test_fragment(789, "roundtrip test", MemoryKind::Action);
 
     // Fragment -> Model
     let model: memory::Model = original_fragment.clone().into();
@@ -62,83 +62,42 @@ fn test_memory_fragment_model_roundtrip() {
 
 #[test]
 fn test_memory_kind_serialization() {
-    // Test Thought
-    let fragment =
-        MemoryFragmentBuilder::new("thinking...".to_string(), MemoryKind::Thought).build();
-    let model: memory::Model = fragment.into();
-    assert_eq!(model.kind, "thought");
+    let kinds = [
+        (MemoryKind::Thought, "thought"),
+        (MemoryKind::Action, "action"),
+        (MemoryKind::Event, "event"),
+        (MemoryKind::Unknown, "unknown"),
+    ];
 
-    // Test Action
-    let fragment = MemoryFragmentBuilder::new("acting...".to_string(), MemoryKind::Action).build();
-    let model: memory::Model = fragment.into();
-    assert_eq!(model.kind, "action");
-
-    // Test Event
-    let fragment =
-        MemoryFragmentBuilder::new("event...".to_string(), MemoryKind::Event).build();
-    let model: memory::Model = fragment.into();
-    assert_eq!(model.kind, "event");
-
-    // Test Unknown
-    let fragment =
-        MemoryFragmentBuilder::new("unknown...".to_string(), MemoryKind::Unknown).build();
-    let model: memory::Model = fragment.into();
-    assert_eq!(model.kind, "unknown");
+    for (kind, expected_tag) in kinds {
+        let fragment = test_fragment(1, "content", kind);
+        let model: memory::Model = fragment.into();
+        assert_eq!(model.kind, expected_tag);
+    }
 }
 
 #[test]
 fn test_memory_kind_deserialization() {
     let timestamp = OffsetDateTime::now_utc();
 
-    // Test Thought
-    let model = memory::Model {
-        id: 1,
-        content: "content".to_string(),
-        timestamp,
-        kind: "thought".to_string(),
-    };
-    let fragment: MemoryFragment = model.into();
-    assert_eq!(fragment.kind, MemoryKind::Thought);
+    let cases = [
+        (1, "thought", MemoryKind::Thought),
+        (2, "action", MemoryKind::Action),
+        (3, "event", MemoryKind::Event),
+        (4, "unknown", MemoryKind::Unknown),
+        (5, "invalid_kind", MemoryKind::Unknown),
+    ];
 
-    // Test Action
-    let model = memory::Model {
-        id: 2,
-        content: "content".to_string(),
-        timestamp,
-        kind: "action".to_string(),
-    };
-    let fragment: MemoryFragment = model.into();
-    assert_eq!(fragment.kind, MemoryKind::Action);
-
-    // Test Event
-    let model = memory::Model {
-        id: 3,
-        content: "content".to_string(),
-        timestamp,
-        kind: "event".to_string(),
-    };
-    let fragment: MemoryFragment = model.into();
-    assert_eq!(fragment.kind, MemoryKind::Event);
-
-    // Test Unknown - "unknown" string maps to Unknown variant
-    let model = memory::Model {
-        id: 4,
-        content: "content".to_string(),
-        timestamp,
-        kind: "unknown".to_string(),
-    };
-    let fragment: MemoryFragment = model.into();
-    assert_eq!(fragment.kind, MemoryKind::Unknown);
-
-    // Test Unknown - unrecognized strings map to Unknown variant
-    let model = memory::Model {
-        id: 5,
-        content: "content".to_string(),
-        timestamp,
-        kind: "invalid_kind".to_string(),
-    };
-    let fragment: MemoryFragment = model.into();
-    assert_eq!(fragment.kind, MemoryKind::Unknown);
+    for (id, kind_str, expected_kind) in cases {
+        let model = memory::Model {
+            id,
+            content: "content".to_string(),
+            timestamp,
+            kind: kind_str.to_string(),
+        };
+        let fragment: MemoryFragment = model.into();
+        assert_eq!(fragment.kind, expected_kind);
+    }
 }
 
 #[test]
@@ -146,10 +105,7 @@ fn test_all_memory_kinds_roundtrip() {
     let kinds = [MemoryKind::Thought, MemoryKind::Action, MemoryKind::Event, MemoryKind::Unknown];
 
     for expected_kind in kinds {
-        let fragment =
-            MemoryFragmentBuilder::new("test content".to_string(), expected_kind.clone())
-                .id(100)
-                .build();
+        let fragment = test_fragment(100, "test content", expected_kind.clone());
 
         let model: memory::Model = fragment.into();
         let recovered: MemoryFragment = model.into();

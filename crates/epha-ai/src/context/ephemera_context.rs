@@ -1,5 +1,5 @@
 use super::MemoryFragmentList;
-use super::memory_constructors::{from_action, from_agora_event};
+use super::memory_constructors::from_agora_event;
 use crate::config::ContextConfig;
 use crate::sync::SyncSender;
 use agora::event::Event;
@@ -117,6 +117,29 @@ impl EphemeraContext {
         &self.pinned_memories
     }
 
+    /// Serialize only pinned memories as a text reference block.
+    pub fn serialize_pinned(&self) -> Option<String> {
+        if self.pinned_memories.is_empty() {
+            return None;
+        }
+
+        let mut output = String::from("Pinned Content:\n---\n");
+        for item in &self.pinned_memories {
+            let reason_str = item.reason.as_deref().unwrap_or("N/A");
+            output.push_str(&format!(
+                "[id:{}] {} (Reason: {})\n",
+                item.fragment.id, item.fragment.content, reason_str
+            ));
+        }
+        output.push_str("---\n");
+        Some(output)
+    }
+
+    /// Get a reference to the recent activities deque.
+    pub fn recent_activities(&self) -> &VecDeque<MemoryFragment> {
+        &self.recent_activities
+    }
+
     /// Get max pinned tokens
     pub fn max_pinned_tokens(&self) -> usize {
         self.max_pinned_tokens
@@ -214,23 +237,16 @@ impl EphemeraContext {
         self.maintain_token_limit();
     }
 
-    /// Add specific memory fragments to context with summary
-    pub fn add_memory_context(&mut self, summary: String, memories: Vec<MemoryFragment>) {
-        let memory_count = memories.len();
-
+    /// Add specific memory fragments to context (for intra-cycle recall).
+    ///
+    /// These are stored in memory_context but not in recent_activities.
+    /// The tool call result is already captured as an Action memory by save_action().
+    pub fn add_memory_context(&mut self, memories: Vec<MemoryFragment>) {
         for memory in memories {
             if !self.memory_context.iter().any(|m| m.id == memory.id) {
                 self.memory_context.push(memory);
             }
         }
-
-        let summary_fragment = from_action(
-            format!("Added {} memories to context. Summary: {}", memory_count, summary),
-            "context_update",
-        )
-        .build();
-
-        self.add_activity(summary_fragment);
     }
 
     #[cfg(test)]
@@ -244,7 +260,7 @@ impl EphemeraContext {
 
     pub fn add_agora_events(&mut self, events: Vec<Event>) {
         for event in events {
-            let fragment = from_agora_event(event).build();
+            let fragment = from_agora_event(event);
             self.add_activity(fragment);
         }
     }

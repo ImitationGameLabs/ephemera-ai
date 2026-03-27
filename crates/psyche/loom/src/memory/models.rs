@@ -77,10 +77,7 @@ pub struct MemoryResponse {
 impl MemoryResponse {
     /// Create a response with a single memory fragment
     pub fn single(fragment: MemoryFragment) -> Self {
-        Self {
-            fragments: vec![fragment],
-            total: 1,
-        }
+        Self { fragments: vec![fragment], total: 1 }
     }
 
     /// Create a response with multiple memory fragments
@@ -114,9 +111,7 @@ pub struct CreateMemoryRequest {
 impl CreateMemoryRequest {
     /// Create a request with a single memory fragment (backward compatibility)
     pub fn single(fragment: MemoryFragment) -> Self {
-        Self {
-            fragments: vec![fragment],
-        }
+        Self { fragments: vec![fragment] }
     }
 
     /// Create a request with multiple memory fragments
@@ -171,19 +166,11 @@ pub struct ApiResponse<T> {
 
 impl<T> ApiResponse<T> {
     pub fn success(data: T) -> Self {
-        Self {
-            success: true,
-            data: Some(data),
-            error: None,
-        }
+        Self { success: true, data: Some(data), error: None }
     }
 
     pub fn error(message: impl Into<String>) -> Self {
-        Self {
-            success: false,
-            data: None,
-            error: Some(message.into()),
-        }
+        Self { success: false, data: None, error: Some(message.into()) }
     }
 }
 
@@ -206,11 +193,7 @@ pub struct PinnedMemory {
 impl PinnedMemory {
     /// Create a new pinned memory
     pub fn new(fragment: MemoryFragment, reason: Option<String>) -> Self {
-        Self {
-            fragment,
-            reason,
-            pinned_at: OffsetDateTime::now_utc(),
-        }
+        Self { fragment, reason, pinned_at: OffsetDateTime::now_utc() }
     }
 }
 

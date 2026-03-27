@@ -56,34 +56,29 @@ impl ContextSerialize for MemoryFragmentList {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use loom_client::{MemoryFragmentBuilder, MemoryKind};
+    use loom_client::memory::{MemoryFragment, MemoryKind};
 
     #[test]
     fn test_memory_fragment_list_serialization() {
-        let mut fragment1 = MemoryFragmentBuilder::new(
-            r#"{"type":"input","text":"Test perception"}"#.to_string(),
-            MemoryKind::Event,
-        )
-        .build();
+        let fragment1 = MemoryFragment {
+            id: 1,
+            content: r#"{"type":"input","text":"Test perception"}"#.to_string(),
+            timestamp: time::OffsetDateTime::now_utc(),
+            kind: MemoryKind::Event,
+        };
 
-        // Override the ID for test purposes
-        fragment1.id = 1;
-
-        let mut fragment2 = MemoryFragmentBuilder::new(
-            r#"{"type":"execution","action":"test_action: test_details"}"#.to_string(),
-            MemoryKind::Action,
-        )
-        .build();
-
-        // Override the ID for test purposes
-        fragment2.id = 2;
+        let fragment2 = MemoryFragment {
+            id: 2,
+            content: r#"{"type":"execution","action":"test_action: test_details"}"#.to_string(),
+            timestamp: time::OffsetDateTime::now_utc(),
+            kind: MemoryKind::Action,
+        };
 
         let memories = vec![fragment1, fragment2];
         let memory_list = MemoryFragmentList::from(memories);
 
         let serialized = memory_list.serialize();
 
-        // Check that the serialization contains expected elements
         assert!(serialized.contains("Found 2 memories"));
         assert!(serialized.contains("Memory ID:"));
         assert!(serialized.contains("Timestamp:"));

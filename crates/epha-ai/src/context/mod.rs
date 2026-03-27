@@ -6,9 +6,11 @@
 #![allow(unused)]
 
 mod ephemera_context;
-pub mod memory_constructors;
+mod memory_constructors;
+mod memory_content;
 mod memory_fragment_list;
 
 // Re-export public types
 pub use ephemera_context::*;
+pub use memory_content::*;
 pub use memory_fragment_list::*;

@@ -33,13 +33,15 @@ impl MemoryKind {
         }
     }
 
-    /// Parse from string (case-insensitive)
+    /// Parse from string (lowercase only).
+    /// Unrecognized values return `Unknown` rather than an error,
+    /// because invalid data from the database should still be loadable.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
+        match s {
             "thought" => MemoryKind::Thought,
             "action" => MemoryKind::Action,
             "event" => MemoryKind::Event,
-            // Unknown indicates classification error
             _ => MemoryKind::Unknown,
         }
     }
@@ -70,4 +72,30 @@ pub struct MemoryFragment {
     pub timestamp: time::OffsetDateTime,
     /// The kind/category of this memory
     pub kind: MemoryKind,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_memory_kind_from_str() {
+        assert_eq!(MemoryKind::from_str("thought"), MemoryKind::Thought);
+        assert_eq!(MemoryKind::from_str("action"), MemoryKind::Action);
+        assert_eq!(MemoryKind::from_str("event"), MemoryKind::Event);
+        assert_eq!(MemoryKind::from_str("unknown"), MemoryKind::Unknown);
+        // Non-lowercase and unrecognized strings return Unknown
+        assert_eq!(MemoryKind::from_str("Thought"), MemoryKind::Unknown);
+        assert_eq!(MemoryKind::from_str("ACTION"), MemoryKind::Unknown);
+        assert_eq!(MemoryKind::from_str("invalid"), MemoryKind::Unknown);
+        assert_eq!(MemoryKind::from_str(""), MemoryKind::Unknown);
+    }
+
+    #[test]
+    fn test_memory_kind_as_tag() {
+        assert_eq!(MemoryKind::Thought.as_tag(), "thought");
+        assert_eq!(MemoryKind::Action.as_tag(), "action");
+        assert_eq!(MemoryKind::Event.as_tag(), "event");
+        assert_eq!(MemoryKind::Unknown.as_tag(), "unknown");
+    }
 }

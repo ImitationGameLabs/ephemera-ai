@@ -9,8 +9,8 @@ use crate::memory::models::{
     ApiResponse, CreateMemoryRequest, MemoryResponse, PinMemoryRequest, PinnedMemoriesResponse,
     RecentMemoryRequest, TimelineMemoryRequest,
 };
-use crate::services::memory::manager::MemoryError;
 use crate::services::memory::AppState;
+use crate::services::memory::manager::MemoryError;
 
 /// HTTP handler for memory operations
 pub struct MemoryHandler;
@@ -86,9 +86,7 @@ impl MemoryHandler {
         match state.memory_manager.delete(&[id]).await {
             Ok(()) => {
                 info!("Successfully deleted memory fragment with ID: {}", id);
-                Ok(Json(ApiResponse::success(
-                    serde_json::json!({"deleted": true}),
-                )))
+                Ok(Json(ApiResponse::success(serde_json::json!({"deleted": true}))))
             }
             Err(MemoryError::MemoryPinned(id)) => {
                 error!("Cannot delete pinned memory with ID {}", id);
@@ -111,10 +109,7 @@ impl MemoryHandler {
 
         match state.memory_manager.get_recent(request.limit).await {
             Ok(fragments) => {
-                info!(
-                    "Successfully retrieved {} recent memory fragments",
-                    fragments.len()
-                );
+                info!("Successfully retrieved {} recent memory fragments", fragments.len());
                 let response = MemoryResponse::multiple(fragments);
                 Ok(Json(ApiResponse::success(response)))
             }
@@ -131,10 +126,7 @@ impl MemoryHandler {
         State(state): State<AppState>,
         Query(request): Query<TimelineMemoryRequest>,
     ) -> Result<Json<ApiResponse<MemoryResponse>>, StatusCode> {
-        info!(
-            "Getting memory fragments from {} to {}",
-            request.from, request.to
-        );
+        info!("Getting memory fragments from {} to {}", request.from, request.to);
 
         // Parse ISO 8601 time strings
         let time_range = request.parse().map_err(|e| {
@@ -144,19 +136,11 @@ impl MemoryHandler {
 
         match state
             .memory_manager
-            .get_range(
-                time_range.start,
-                time_range.end,
-                request.limit,
-                request.offset,
-            )
+            .get_range(time_range.start, time_range.end, request.limit, request.offset)
             .await
         {
             Ok(fragments) => {
-                info!(
-                    "Successfully retrieved {} memory fragments in time range",
-                    fragments.len()
-                );
+                info!("Successfully retrieved {} memory fragments in time range", fragments.len());
                 let response = MemoryResponse::multiple(fragments);
                 Ok(Json(ApiResponse::success(response)))
             }
