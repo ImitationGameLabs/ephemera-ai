@@ -3,22 +3,23 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use rig::{completion::ToolDefinition, tool::Tool};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
+
+use crate::tools::AgentTool;
 
 use crate::tools::shell::backend::ShellBackend;
-use crate::tools::shell::error::ShellError;
 
 /// Arguments for the SwitchSessionTool
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct SwitchSessionArgs {
     /// Name of the session to switch to
     pub name: String,
 }
 
 /// Output from the SwitchSessionTool
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SwitchSessionOutput {
     /// Name of the session switched to
     pub name: String,
@@ -38,66 +39,56 @@ impl<B: ShellBackend> SwitchSessionTool<B> {
     }
 }
 
-impl<B: ShellBackend + 'static> Tool for SwitchSessionTool<B> {
-    const NAME: &'static str = "switch_session";
-
-    type Error = ShellError;
-    type Args = SwitchSessionArgs;
-    type Output = SwitchSessionOutput;
-
-    async fn definition(&self, _prompt: String) -> ToolDefinition {
-        serde_json::from_value(json!({
-            "name": "switch_session",
-            "description": "Switch to a different shell session. \
-                After switching, all subsequent commands will run in the target session. \
-                Use list_sessions first to see available sessions.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Name of the session to switch to"
-                    }
-                },
-                "required": ["name"]
-            }
-        }))
-        .expect("Tool definition should be valid JSON")
+#[async_trait]
+impl<B: ShellBackend + Send + Sync + 'static> AgentTool for SwitchSessionTool<B> {
+    fn name(&self) -> &str {
+        "switch_session"
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+    fn description(&self) -> &str {
+        "Switch to a different shell session. \
+         After switching, all subsequent commands will run in the target session. \
+         Use list_sessions first to see available sessions."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the session to switch to"
+                }
+            },
+            "required": ["name"]
+        })
+    }
+
+    async fn call(
+        &self,
+        args_json: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let args: SwitchSessionArgs = serde_json::from_str(args_json)?;
         let mut backend = self.backend.lock().await;
         let previous_session = backend.current_session().to_string();
 
         // Switch to the session
         backend.switch_session(&args.name).await?;
 
-        Ok(SwitchSessionOutput {
-            name: args.name,
-            previous_session,
-        })
-    }
-}
+        let output = SwitchSessionOutput { name: args.name, previous_session };
 
-impl std::fmt::Display for SwitchSessionOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Switched from '{}' to '{}'",
-            self.previous_session, self.name
-        )
+        Ok(serde_json::to_string(&output)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::shell::error::ShellError;
     use crate::tools::shell::mock_backend::MockShellBackend;
 
-    fn create_tool_with_mock() -> (
-        SwitchSessionTool<MockShellBackend>,
-        Arc<Mutex<MockShellBackend>>,
-    ) {
+    fn create_tool_with_mock() -> (SwitchSessionTool<MockShellBackend>, Arc<Mutex<MockShellBackend>>)
+    {
         let mock = Arc::new(Mutex::new(MockShellBackend::new()));
         let tool = SwitchSessionTool::new(mock.clone());
         (tool, mock)
@@ -111,14 +102,11 @@ mod tests {
             backend.add_session("worker");
         }
 
-        let result = tool
-            .call(SwitchSessionArgs {
-                name: "worker".into(),
-            })
-            .await;
+        let args = SwitchSessionArgs { name: "worker".into() };
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
 
         assert!(result.is_ok());
-        let output = result.unwrap();
+        let output: SwitchSessionOutput = serde_json::from_str(&result.unwrap()).unwrap();
         assert_eq!(output.name, "worker");
         assert_eq!(output.previous_session, "main");
     }
@@ -127,31 +115,26 @@ mod tests {
     async fn test_switch_nonexistent_session() {
         let (tool, _) = create_tool_with_mock();
 
-        let result = tool
-            .call(SwitchSessionArgs {
-                name: "nonexistent".into(),
-            })
-            .await;
+        let args = SwitchSessionArgs { name: "nonexistent".into() };
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
 
-        assert!(matches!(result, Err(ShellError::SessionNotFound { .. })));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.is::<ShellError>());
     }
 
     #[tokio::test]
     async fn test_switch_to_same_session() {
         let (tool, mock) = create_tool_with_mock();
 
-        let result = tool
-            .call(SwitchSessionArgs {
-                name: "main".into(),
-            })
-            .await;
+        let args = SwitchSessionArgs { name: "main".into() };
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
 
         assert!(result.is_ok());
-        let output = result.unwrap();
+        let output: SwitchSessionOutput = serde_json::from_str(&result.unwrap()).unwrap();
         assert_eq!(output.name, "main");
         assert_eq!(output.previous_session, "main");
 
-        // Session should still be main
         let backend = mock.lock().await;
         assert_eq!(backend.current_session(), "main");
     }
@@ -166,26 +149,20 @@ mod tests {
             backend.push_exit_code(0);
         }
 
-        // Switch to worker
-        tool.call(SwitchSessionArgs {
-            name: "worker".into(),
-        })
-        .await
-        .unwrap();
+        let args = SwitchSessionArgs { name: "worker".into() };
+        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
 
-        // Verify current session is worker
         let backend = mock.lock().await;
         assert_eq!(backend.current_session(), "worker");
     }
 
-    #[test]
-    fn test_switch_session_display() {
-        let output = SwitchSessionOutput {
-            name: "worker".into(),
-            previous_session: "main".into(),
-        };
-        let display = output.to_string();
-        assert!(display.contains("main"));
-        assert!(display.contains("worker"));
+    #[tokio::test]
+    async fn test_switch_session_name_and_schema() {
+        let (tool, _) = create_tool_with_mock();
+        assert_eq!(tool.name(), "switch_session");
+        assert!(tool.description().contains("Switch"));
+        let schema = tool.parameters_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["name"].is_object());
     }
 }

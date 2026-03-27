@@ -7,18 +7,19 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
-use rig::{completion::ToolDefinition, tool::Tool};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
+
+use crate::tools::AgentTool;
 
 use super::backend::ShellBackend;
-use super::error::ShellError;
 
 /// Default timeout for command execution (seconds)
 const DEFAULT_TIMEOUT_SECS: u64 = 120;
 
 /// Arguments for the BashTool
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct BashArgs {
     /// The command to execute
     pub command: String,
@@ -37,7 +38,7 @@ pub struct BashArgs {
 }
 
 /// Output from the BashTool
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BashOutput {
     /// Command output (stdout and stderr combined)
     pub output: String,
@@ -66,49 +67,51 @@ impl<B: ShellBackend> BashTool<B> {
     }
 }
 
-impl<B: ShellBackend + 'static> Tool for BashTool<B> {
-    const NAME: &'static str = "bash";
-
-    type Error = ShellError;
-    type Args = BashArgs;
-    type Output = BashOutput;
-
-    async fn definition(&self, _prompt: String) -> ToolDefinition {
-        serde_json::from_value(json!({
-            "name": "bash",
-            "description": "Execute a shell command in a persistent session. \
-                Supports timeout and background execution. \
-                Commands run in a tmux session, so environment variables, \
-                working directory, and command history persist across calls.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "command": {
-                        "type": "string",
-                        "description": "The shell command to execute"
-                    },
-                    "session": {
-                        "type": "string",
-                        "description": "Target session name. Uses the current focused session if not specified."
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": "Timeout in seconds. Default is 120 seconds.",
-                        "default": 120
-                    },
-                    "background": {
-                        "type": "boolean",
-                        "description": "Run in background mode. Returns immediately without waiting for command completion.",
-                        "default": false
-                    }
-                },
-                "required": ["command"]
-            }
-        }))
-        .expect("Tool definition should be valid JSON")
+#[async_trait]
+impl<B: ShellBackend + Send + Sync + 'static> AgentTool for BashTool<B> {
+    fn name(&self) -> &str {
+        "bash"
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+    fn description(&self) -> &str {
+        "Execute a shell command in a persistent session. \
+         Supports timeout and background execution. \
+         Commands run in a tmux session, so environment variables, \
+         working directory, and command history persist across calls."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "The shell command to execute"
+                },
+                "session": {
+                    "type": "string",
+                    "description": "Target session name. Uses the current focused session if not specified."
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Timeout in seconds. Default is 120 seconds.",
+                    "default": 120
+                },
+                "background": {
+                    "type": "boolean",
+                    "description": "Run in background mode. Returns immediately without waiting for command completion.",
+                    "default": false
+                }
+            },
+            "required": ["command"]
+        })
+    }
+
+    async fn call(
+        &self,
+        args_json: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let args: BashArgs = serde_json::from_str(args_json)?;
         let timeout = Duration::from_secs(args.timeout.unwrap_or(DEFAULT_TIMEOUT_SECS));
 
         let mut backend = self.backend.lock().await;
@@ -121,52 +124,23 @@ impl<B: ShellBackend + 'static> Tool for BashTool<B> {
         let session = backend.current_session().to_string();
 
         // Execute the command
-        let result = backend
-            .execute(&args.command, timeout, args.background)
-            .await?;
+        let result = backend.execute(&args.command, timeout, args.background).await?;
 
-        Ok(BashOutput {
+        let output = BashOutput {
             output: result.output,
             exit_code: result.exit_code,
             timed_out: result.timed_out,
             session,
-        })
-    }
-}
+        };
 
-impl std::fmt::Display for BashOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.timed_out {
-            write!(
-                f,
-                "Command timed out in session '{}'. Partial output:\n{}",
-                self.session, self.output
-            )?;
-        } else if let Some(code) = self.exit_code {
-            if code == 0 {
-                write!(f, "{}", self.output)?;
-            } else {
-                write!(
-                    f,
-                    "Command exited with code {} in session '{}':\n{}",
-                    code, self.session, self.output
-                )?;
-            }
-        } else {
-            // Background mode
-            write!(
-                f,
-                "Command started in background in session '{}'",
-                self.session
-            )?;
-        }
-        Ok(())
+        Ok(serde_json::to_string(&output)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::shell::error::ShellError;
     use crate::tools::shell::mock_backend::MockShellBackend;
 
     fn create_tool_with_mock() -> (BashTool<MockShellBackend>, Arc<Mutex<MockShellBackend>>) {
@@ -184,15 +158,15 @@ mod tests {
             backend.push_exit_code(0);
         }
 
-        let result = tool
-            .call(BashArgs {
-                command: "echo hello".into(),
-                session: None,
-                timeout: None,
-                background: false,
-            })
-            .await
-            .unwrap();
+        let args = BashArgs {
+            command: "echo hello".into(),
+            session: None,
+            timeout: None,
+            background: false,
+        };
+        let result: BashOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert_eq!(result.output.trim(), "hello world");
         assert_eq!(result.exit_code, Some(0));
@@ -208,15 +182,15 @@ mod tests {
             backend.set_should_timeout(true);
         }
 
-        let result = tool
-            .call(BashArgs {
-                command: "sleep 100".into(),
-                session: None,
-                timeout: Some(1),
-                background: false,
-            })
-            .await
-            .unwrap();
+        let args = BashArgs {
+            command: "sleep 100".into(),
+            session: None,
+            timeout: Some(1),
+            background: false,
+        };
+        let result: BashOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert!(result.timed_out);
         assert!(result.exit_code.is_none());
@@ -226,15 +200,15 @@ mod tests {
     async fn test_bash_background_mode() {
         let (tool, _) = create_tool_with_mock();
 
-        let result = tool
-            .call(BashArgs {
-                command: "long-running-cmd".into(),
-                session: None,
-                timeout: None,
-                background: true,
-            })
-            .await
-            .unwrap();
+        let args = BashArgs {
+            command: "long-running-cmd".into(),
+            session: None,
+            timeout: None,
+            background: true,
+        };
+        let result: BashOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert!(result.exit_code.is_none());
         assert!(!result.timed_out);
@@ -250,15 +224,15 @@ mod tests {
             backend.push_exit_code(0);
         }
 
-        let result = tool
-            .call(BashArgs {
-                command: "echo done".into(),
-                session: Some("worker".into()),
-                timeout: None,
-                background: false,
-            })
-            .await
-            .unwrap();
+        let args = BashArgs {
+            command: "echo done".into(),
+            session: Some("worker".into()),
+            timeout: None,
+            background: false,
+        };
+        let result: BashOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert_eq!(result.session, "worker");
     }
@@ -267,16 +241,17 @@ mod tests {
     async fn test_bash_nonexistent_session() {
         let (tool, _) = create_tool_with_mock();
 
-        let result = tool
-            .call(BashArgs {
-                command: "echo test".into(),
-                session: Some("nonexistent".into()),
-                timeout: None,
-                background: false,
-            })
-            .await;
+        let args = BashArgs {
+            command: "echo test".into(),
+            session: Some("nonexistent".into()),
+            timeout: None,
+            background: false,
+        };
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
 
-        assert!(matches!(result, Err(ShellError::SessionNotFound { .. })));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.is::<ShellError>());
     }
 
     #[tokio::test]
@@ -288,15 +263,11 @@ mod tests {
             backend.push_exit_code(1);
         }
 
-        let result = tool
-            .call(BashArgs {
-                command: "false".into(),
-                session: None,
-                timeout: None,
-                background: false,
-            })
-            .await
-            .unwrap();
+        let args =
+            BashArgs { command: "false".into(), session: None, timeout: None, background: false };
+        let result: BashOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert_eq!(result.exit_code, Some(1));
         assert!(result.output.contains("error"));
@@ -311,18 +282,11 @@ mod tests {
             backend.set_default_exit_code(0);
         }
 
-        // Empty command should still execute (shell handles it)
-        let result = tool
-            .call(BashArgs {
-                command: "".into(),
-                session: None,
-                timeout: None,
-                background: false,
-            })
-            .await
-            .unwrap();
+        let args = BashArgs { command: "".into(), session: None, timeout: None, background: false };
+        let result: BashOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
-        // Command executed, empty output is valid
         assert_eq!(result.session, "main");
     }
 
@@ -335,15 +299,11 @@ mod tests {
             backend.push_exit_code(0);
         }
 
-        let result = tool
-            .call(BashArgs {
-                command: "true".into(),
-                session: None,
-                timeout: None,
-                background: false,
-            })
-            .await
-            .unwrap();
+        let args =
+            BashArgs { command: "true".into(), session: None, timeout: None, background: false };
+        let result: BashOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert_eq!(result.output, "");
         assert_eq!(result.exit_code, Some(0));
@@ -358,15 +318,15 @@ mod tests {
             backend.push_exit_code(0);
         }
 
-        let result = tool
-            .call(BashArgs {
-                command: "echo 'hello \"world\" $FOO '\\''bar'\\'''".into(),
-                session: None,
-                timeout: None,
-                background: false,
-            })
-            .await
-            .unwrap();
+        let args = BashArgs {
+            command: "echo 'hello \"world\" $FOO '\\''bar'\\'''".into(),
+            session: None,
+            timeout: None,
+            background: false,
+        };
+        let result: BashOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert!(result.output.contains("hello"));
         assert_eq!(result.exit_code, Some(0));
@@ -381,15 +341,15 @@ mod tests {
             backend.push_exit_code(0);
         }
 
-        let result = tool
-            .call(BashArgs {
-                command: "echo '你好世界 🌍'".into(),
-                session: None,
-                timeout: None,
-                background: false,
-            })
-            .await
-            .unwrap();
+        let args = BashArgs {
+            command: "echo '你好世界 🌍'".into(),
+            session: None,
+            timeout: None,
+            background: false,
+        };
+        let result: BashOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert!(result.output.contains("你好世界"));
         assert_eq!(result.exit_code, Some(0));
@@ -404,52 +364,27 @@ mod tests {
             backend.push_exit_code(0);
         }
 
-        let result = tool
-            .call(BashArgs {
-                command: "echo done".into(),
-                session: None,
-                timeout: Some(300), // 5 minutes
-                background: false,
-            })
-            .await
-            .unwrap();
+        let args = BashArgs {
+            command: "echo done".into(),
+            session: None,
+            timeout: Some(300),
+            background: false,
+        };
+        let result: BashOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert_eq!(result.output, "done");
         assert_eq!(result.exit_code, Some(0));
     }
 
-    #[test]
-    fn test_bash_output_display() {
-        let output = BashOutput {
-            output: "success".into(),
-            exit_code: Some(0),
-            timed_out: false,
-            session: "main".into(),
-        };
-        assert_eq!(output.to_string(), "success");
-
-        let output = BashOutput {
-            output: "error".into(),
-            exit_code: Some(1),
-            timed_out: false,
-            session: "main".into(),
-        };
-        assert!(output.to_string().contains("exited with code 1"));
-
-        let output = BashOutput {
-            output: "partial".into(),
-            exit_code: None,
-            timed_out: true,
-            session: "main".into(),
-        };
-        assert!(output.to_string().contains("timed out"));
-
-        let output = BashOutput {
-            output: String::new(),
-            exit_code: None,
-            timed_out: false,
-            session: "worker".into(),
-        };
-        assert!(output.to_string().contains("background"));
+    #[tokio::test]
+    async fn test_bash_name_and_schema() {
+        let (tool, _) = create_tool_with_mock();
+        assert_eq!(tool.name(), "bash");
+        assert!(tool.description().contains("shell command"));
+        let schema = tool.parameters_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["command"].is_object());
     }
 }

@@ -87,7 +87,7 @@ rpassword = "7.3"
 urlencoding = "2.1"
 
 # AI/ML
-rig-core = "0.22"
+llm = { version = "1", features = ["groq"] }
 
 # Dev dependencies
 tempfile = "3"

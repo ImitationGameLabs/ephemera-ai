@@ -61,13 +61,11 @@ impl TmuxBackend {
         name: &str,
         cwd: Option<&Path>,
     ) -> Result<(), ShellError> {
-        let cwd_str = cwd
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|| {
-                std::env::current_dir()
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|_| "/tmp".to_string())
-            });
+        let cwd_str = cwd.map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| {
+            std::env::current_dir()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| "/tmp".to_string())
+        });
 
         let new_session = NewSession::new()
             .session_name(name)
@@ -128,14 +126,7 @@ impl TmuxBackend {
         lines: usize,
     ) -> Result<String, ShellError> {
         let output = Command::new("tmux")
-            .args([
-                "capture-pane",
-                "-t",
-                session,
-                "-p",
-                "-S",
-                &format!("-{}", lines),
-            ])
+            .args(["capture-pane", "-t", session, "-p", "-S", &format!("-{}", lines)])
             .output()
             .map_err(|e| ShellError::backend(format!("capture-pane failed: {}", e)))?;
 
@@ -150,16 +141,11 @@ impl TmuxBackend {
             .map_err(|e| ShellError::backend(e.to_string()))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let sessions: Vec<String> = stdout
-            .lines()
-            .filter(|s| s.starts_with("test_"))
-            .map(String::from)
-            .collect();
+        let sessions: Vec<String> =
+            stdout.lines().filter(|s| s.starts_with("test_")).map(String::from).collect();
 
         for session in sessions {
-            let _ = Command::new("tmux")
-                .args(["kill-session", "-t", &session])
-                .output();
+            let _ = Command::new("tmux").args(["kill-session", "-t", &session]).output();
         }
 
         Ok(())
@@ -197,45 +183,28 @@ impl ShellBackend for TmuxBackend {
             .map_err(|e| ShellError::execution_failed(format!("send-keys failed: {}", e)))?;
 
         if !output.status.success() {
-            return Err(ShellError::execution_failed(
-                "send-keys Enter returned non-zero",
-            ));
+            return Err(ShellError::execution_failed("send-keys Enter returned non-zero"));
         }
 
         if background {
-            return Ok(ShellOutput {
-                output: String::new(),
-                exit_code: None,
-                timed_out: false,
-            });
+            return Ok(ShellOutput { output: String::new(), exit_code: None, timed_out: false });
         }
 
         // Wait for command completion
         let output = match self.wait_for_completion(&session, timeout).await {
             Ok(o) => o,
             Err(ShellError::Timeout { timeout: _ }) => {
-                return Ok(ShellOutput {
-                    output: String::new(),
-                    exit_code: None,
-                    timed_out: true,
-                });
+                return Ok(ShellOutput { output: String::new(), exit_code: None, timed_out: true });
             }
             Err(e) => return Err(e),
         };
 
         // Get exit code from last command
         let _ = Command::new("tmux")
-            .args([
-                "send-keys",
-                "-t",
-                &session,
-                "echo __EXIT_CODE__$?__EXIT_CODE__",
-            ])
+            .args(["send-keys", "-t", &session, "echo __EXIT_CODE__$?__EXIT_CODE__"])
             .output();
 
-        let _ = Command::new("tmux")
-            .args(["send-keys", "-t", &session, "Enter"])
-            .output();
+        let _ = Command::new("tmux").args(["send-keys", "-t", &session, "Enter"]).output();
 
         sleep(Duration::from_millis(200)).await;
 
@@ -244,15 +213,9 @@ impl ShellBackend for TmuxBackend {
         // Parse exit code
         let exit_re =
             regex::Regex::new(r"__EXIT_CODE__(\d+)__EXIT_CODE__").expect("Invalid exit code regex");
-        let exit_code = exit_re
-            .captures(&exit_output)
-            .and_then(|caps| caps[1].parse::<i32>().ok());
+        let exit_code = exit_re.captures(&exit_output).and_then(|caps| caps[1].parse::<i32>().ok());
 
-        Ok(ShellOutput {
-            output,
-            exit_code,
-            timed_out: false,
-        })
+        Ok(ShellOutput { output, exit_code, timed_out: false })
     }
 
     async fn send_input(&mut self, input: &str, press_enter: bool) -> Result<(), ShellError> {
@@ -346,10 +309,8 @@ impl ShellBackend for TmuxBackend {
         // If we killed the current session, switch to another
         if self.current_session == name {
             let sessions = self.list_sessions().await?;
-            self.current_session = sessions
-                .first()
-                .map(|s| s.name.clone())
-                .unwrap_or_else(|| "main".to_string());
+            self.current_session =
+                sessions.first().map(|s| s.name.clone()).unwrap_or_else(|| "main".to_string());
         }
 
         Ok(())

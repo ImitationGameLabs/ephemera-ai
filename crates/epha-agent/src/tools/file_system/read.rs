@@ -1,5 +1,5 @@
+use crate::tools::AgentTool;
 use crate::tools::file_system::error::FileToolError;
-use rig::{completion::ToolDefinition, tool::Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
@@ -10,8 +10,11 @@ const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
 /// Default maximum lines to return
 const DEFAULT_MAX_LINES: usize = 2000;
 
+/// Tool name constant
+const NAME: &str = "read_file";
+
 /// Arguments for the ReadTool
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct ReadArgs {
     /// The absolute path to the file to read
     pub file_path: PathBuf,
@@ -26,7 +29,7 @@ pub struct ReadArgs {
 }
 
 /// Output from the ReadTool
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ReadOutput {
     /// The file content with line numbers (cat -n style)
     pub content: String,
@@ -58,12 +61,7 @@ impl ReadTool {
             .iter()
             .enumerate()
             .map(|(i, line)| {
-                format!(
-                    "{:>width$}\t{}",
-                    offset + i + 1,
-                    line,
-                    width = line_number_width
-                )
+                format!("{:>width$}\t{}", offset + i + 1, line, width = line_number_width)
             })
             .collect::<Vec<_>>()
             .join("\n")
@@ -76,40 +74,43 @@ impl Default for ReadTool {
     }
 }
 
-impl Tool for ReadTool {
-    const NAME: &'static str = "read_file";
-
-    type Error = FileToolError;
-    type Args = ReadArgs;
-    type Output = ReadOutput;
-
-    async fn definition(&self, _prompt: String) -> ToolDefinition {
-        serde_json::from_value(json!({
-            "name": "read_file",
-            "description": "Read a file from the local filesystem. Returns file contents with line numbers (cat -n style). You can access any file directly by using this tool.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "The absolute path to the file to read (not a relative path)"
-                    },
-                    "offset": {
-                        "type": "integer",
-                        "description": "The line number to start reading from (1-indexed). Only provide if the file is too large to read at once."
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "The number of lines to read. Only provide if the file is too large to read at once."
-                    }
-                },
-                "required": ["file_path"]
-            }
-        }))
-        .expect("Tool definition should be valid JSON")
+#[async_trait::async_trait]
+impl AgentTool for ReadTool {
+    fn name(&self) -> &str {
+        NAME
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+    fn description(&self) -> &str {
+        "Read a file from the local filesystem. Returns file contents with line numbers (cat -n style). You can access any file directly by using this tool."
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "The absolute path to the file to read (not a relative path)"
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "The line number to start reading from (1-indexed). Only provide if the file is too large to read at once."
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "The number of lines to read. Only provide if the file is too large to read at once."
+                }
+            },
+            "required": ["file_path"]
+        })
+    }
+
+    async fn call(
+        &self,
+        args_json: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let args: ReadArgs = serde_json::from_str(args_json)?;
+
         // Validate path exists and is a file
         let metadata = std::fs::metadata(&args.file_path).map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
@@ -122,17 +123,17 @@ impl Tool for ReadTool {
         })?;
 
         if !metadata.is_file() {
-            return Err(FileToolError::NotAFile(args.file_path));
+            return Err(Box::new(FileToolError::NotAFile(args.file_path)));
         }
 
         // Check file size
         let file_size = metadata.len();
         if file_size > MAX_FILE_SIZE {
-            return Err(FileToolError::FileTooLarge {
+            return Err(Box::new(FileToolError::FileTooLarge {
                 path: args.file_path,
                 size: file_size,
                 max: MAX_FILE_SIZE,
-            });
+            }));
         }
 
         // Read file content
@@ -141,7 +142,7 @@ impl Tool for ReadTool {
 
         // Check for binary content
         if Self::is_binary(&content) {
-            return Err(FileToolError::BinaryFile(args.file_path));
+            return Err(Box::new(FileToolError::BinaryFile(args.file_path)));
         }
 
         // Convert to string
@@ -164,25 +165,9 @@ impl Tool for ReadTool {
         // Format with line numbers
         let formatted = Self::format_with_line_numbers(selected_lines, offset);
 
-        Ok(ReadOutput {
-            content: formatted,
-            total_lines,
-            truncated,
-        })
-    }
-}
+        let output = ReadOutput { content: formatted, total_lines, truncated };
 
-impl std::fmt::Display for ReadOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.content)?;
-        if self.truncated {
-            write!(
-                f,
-                "\n... (file truncated, showing {} lines)",
-                self.content.lines().count()
-            )?;
-        }
-        Ok(())
+        Ok(serde_json::to_string(&output)?)
     }
 }
 
@@ -199,17 +184,14 @@ mod tests {
         fs::write(&file_path, "line 1\nline 2\nline 3\n").unwrap();
 
         let tool = ReadTool::new();
-        let args = ReadArgs {
-            file_path: file_path.clone(),
-            offset: None,
-            limit: None,
-        };
+        let args = ReadArgs { file_path: file_path.clone(), offset: None, limit: None };
 
-        let result = tool.call(args).await.unwrap();
-        assert!(result.content.contains("line 1"));
-        assert!(result.content.contains("line 2"));
-        assert_eq!(result.total_lines, 3);
-        assert!(!result.truncated);
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let output: ReadOutput = serde_json::from_str(&result).unwrap();
+        assert!(output.content.contains("line 1"));
+        assert!(output.content.contains("line 2"));
+        assert_eq!(output.total_lines, 3);
+        assert!(!output.truncated);
     }
 
     #[tokio::test]
@@ -225,12 +207,13 @@ mod tests {
             limit: Some(2),  // Read 2 lines
         };
 
-        let result = tool.call(args).await.unwrap();
-        assert!(result.content.contains("line 2"));
-        assert!(result.content.contains("line 3"));
-        assert!(!result.content.contains("line 1"));
-        assert!(!result.content.contains("line 4"));
-        assert_eq!(result.total_lines, 5);
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let output: ReadOutput = serde_json::from_str(&result).unwrap();
+        assert!(output.content.contains("line 2"));
+        assert!(output.content.contains("line 3"));
+        assert!(!output.content.contains("line 1"));
+        assert!(!output.content.contains("line 4"));
+        assert_eq!(output.total_lines, 5);
     }
 
     #[tokio::test]
@@ -242,8 +225,10 @@ mod tests {
             limit: None,
         };
 
-        let result = tool.call(args).await;
-        assert!(matches!(result, Err(FileToolError::NotFound(_))));
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("not found") || err_msg.contains("NotFound"));
     }
 
     #[tokio::test]
@@ -251,14 +236,12 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let tool = ReadTool::new();
-        let args = ReadArgs {
-            file_path: temp_dir.path().to_path_buf(),
-            offset: None,
-            limit: None,
-        };
+        let args = ReadArgs { file_path: temp_dir.path().to_path_buf(), offset: None, limit: None };
 
-        let result = tool.call(args).await;
-        assert!(matches!(result, Err(FileToolError::NotAFile(_))));
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("not a file") || err_msg.contains("NotAFile"));
     }
 
     #[tokio::test]
@@ -269,13 +252,11 @@ mod tests {
         fs::write(&file_path, b"\x00\x01\x02\x03binary").unwrap();
 
         let tool = ReadTool::new();
-        let args = ReadArgs {
-            file_path,
-            offset: None,
-            limit: None,
-        };
+        let args = ReadArgs { file_path, offset: None, limit: None };
 
-        let result = tool.call(args).await;
-        assert!(matches!(result, Err(FileToolError::BinaryFile(_))));
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("binary") || err_msg.contains("BinaryFile"));
     }
 }

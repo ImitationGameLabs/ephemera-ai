@@ -1,11 +1,14 @@
+use crate::tools::AgentTool;
 use crate::tools::file_system::error::EditError;
-use rig::{completion::ToolDefinition, tool::Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
+/// Tool name constant
+const NAME: &str = "edit_file";
+
 /// Arguments for the EditTool
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct EditArgs {
     /// The absolute path to the file to edit
     pub file_path: PathBuf,
@@ -22,7 +25,7 @@ pub struct EditArgs {
 }
 
 /// Output from the EditTool
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EditOutput {
     /// The path that was edited
     pub path: PathBuf,
@@ -54,47 +57,50 @@ impl Default for EditTool {
     }
 }
 
-impl Tool for EditTool {
-    const NAME: &'static str = "edit_file";
-
-    type Error = EditError;
-    type Args = EditArgs;
-    type Output = EditOutput;
-
-    async fn definition(&self, _prompt: String) -> ToolDefinition {
-        serde_json::from_value(json!({
-            "name": "edit_file",
-            "description": "Perform exact string replacements in files. Use this tool for editing existing files. The old_string must match EXACTLY once unless replace_all is true. This is safer and more precise than sed-style editing.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "The absolute path to the file to edit"
-                    },
-                    "old_string": {
-                        "type": "string",
-                        "description": "The text to search for - must match exactly. Include sufficient context to ensure unique matching."
-                    },
-                    "new_string": {
-                        "type": "string",
-                        "description": "The text to replace old_string with"
-                    },
-                    "replace_all": {
-                        "type": "boolean",
-                        "description": "If true, replace all occurrences of old_string. Use with caution."
-                    }
-                },
-                "required": ["file_path", "old_string", "new_string"]
-            }
-        }))
-        .expect("Tool definition should be valid JSON")
+#[async_trait::async_trait]
+impl AgentTool for EditTool {
+    fn name(&self) -> &str {
+        NAME
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+    fn description(&self) -> &str {
+        "Perform exact string replacements in files. Use this tool for editing existing files. The old_string must match EXACTLY once unless replace_all is true. This is safer and more precise than sed-style editing."
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "The absolute path to the file to edit"
+                },
+                "old_string": {
+                    "type": "string",
+                    "description": "The text to search for - must match exactly. Include sufficient context to ensure unique matching."
+                },
+                "new_string": {
+                    "type": "string",
+                    "description": "The text to replace old_string with"
+                },
+                "replace_all": {
+                    "type": "boolean",
+                    "description": "If true, replace all occurrences of old_string. Use with caution."
+                }
+            },
+            "required": ["file_path", "old_string", "new_string"]
+        })
+    }
+
+    async fn call(
+        &self,
+        args_json: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let args: EditArgs = serde_json::from_str(args_json)?;
+
         // Check if old and new are the same
         if args.old_string == args.new_string {
-            return Err(EditError::NoChange);
+            return Err(Box::new(EditError::NoChange));
         }
 
         // Read the file
@@ -115,17 +121,15 @@ impl Tool for EditTool {
         let occurrences = Self::count_occurrences(&content, &args.old_string);
 
         if occurrences == 0 {
-            return Err(EditError::NoMatch {
-                file: args.file_path,
-            });
+            return Err(Box::new(EditError::NoMatch { file: args.file_path }));
         }
 
         // Check for multiple matches when not using replace_all
         if !args.replace_all && occurrences > 1 {
-            return Err(EditError::MultipleMatches {
+            return Err(Box::new(EditError::MultipleMatches {
                 file: args.file_path,
                 count: occurrences,
-            });
+            }));
         }
 
         // Perform replacement
@@ -144,21 +148,9 @@ impl Tool for EditTool {
             ))
         })?;
 
-        Ok(EditOutput {
-            path: args.file_path,
-            replacements: occurrences,
-        })
-    }
-}
+        let output = EditOutput { path: args.file_path, replacements: occurrences };
 
-impl std::fmt::Display for EditOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Successfully made {} replacement(s) in {}",
-            self.replacements,
-            self.path.display()
-        )
+        Ok(serde_json::to_string(&output)?)
     }
 }
 
@@ -182,7 +174,7 @@ mod tests {
             replace_all: false,
         };
 
-        tool.call(args).await.unwrap();
+        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
 
         let content = fs::read_to_string(&file_path).unwrap();
         assert_eq!(content, "hello Rust\n");
@@ -202,8 +194,14 @@ mod tests {
             replace_all: false,
         };
 
-        let result = tool.call(args).await;
-        assert!(matches!(result, Err(EditError::NoMatch { .. })));
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("NoMatch")
+                || err_msg.contains("no match")
+                || err_msg.contains("No match")
+        );
     }
 
     #[tokio::test]
@@ -220,11 +218,10 @@ mod tests {
             replace_all: false,
         };
 
-        let result = tool.call(args).await;
-        assert!(matches!(
-            result,
-            Err(EditError::MultipleMatches { count: 3, .. })
-        ));
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("matches") || err_msg.contains("MultipleMatches"));
     }
 
     #[tokio::test]
@@ -241,8 +238,9 @@ mod tests {
             replace_all: true,
         };
 
-        let result = tool.call(args).await.unwrap();
-        assert_eq!(result.replacements, 3);
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let output: EditOutput = serde_json::from_str(&result).unwrap();
+        assert_eq!(output.replacements, 3);
 
         let content = fs::read_to_string(&file_path).unwrap();
         assert_eq!(content, "qux bar qux baz qux\n");
@@ -262,8 +260,10 @@ mod tests {
             replace_all: false,
         };
 
-        let result = tool.call(args).await;
-        assert!(matches!(result, Err(EditError::NoChange)));
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("identical") || err_msg.contains("NoChange"));
     }
 
     #[tokio::test]
@@ -280,7 +280,7 @@ mod tests {
             replace_all: false,
         };
 
-        tool.call(args).await.unwrap();
+        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
 
         let content = fs::read_to_string(&file_path).unwrap();
         assert_eq!(content, "new line 1\nnew line 2\nline 3\n");

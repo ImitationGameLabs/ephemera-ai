@@ -1,11 +1,14 @@
+use crate::tools::AgentTool;
 use crate::tools::file_system::error::FileToolError;
-use rig::{completion::ToolDefinition, tool::Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
+/// Tool name constant
+const NAME: &str = "write_file";
+
 /// Arguments for the WriteTool
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct WriteArgs {
     /// The absolute path to the file to write
     pub file_path: PathBuf,
@@ -15,7 +18,7 @@ pub struct WriteArgs {
 }
 
 /// Output from the WriteTool
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WriteOutput {
     /// The path that was written to
     pub path: PathBuf,
@@ -51,36 +54,39 @@ impl Default for WriteTool {
     }
 }
 
-impl Tool for WriteTool {
-    const NAME: &'static str = "write_file";
-
-    type Error = FileToolError;
-    type Args = WriteArgs;
-    type Output = WriteOutput;
-
-    async fn definition(&self, _prompt: String) -> ToolDefinition {
-        serde_json::from_value(json!({
-            "name": "write_file",
-            "description": "Write a file to the local filesystem. This tool will OVERWRITE any existing file. For existing files, you must read them first. Use this tool when you need to create new files or completely replace file contents.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "The absolute path to the file to write (not a relative path)"
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "The content to write to the file. ALWAYS provide the complete content."
-                    }
-                },
-                "required": ["file_path", "content"]
-            }
-        }))
-        .expect("Tool definition should be valid JSON")
+#[async_trait::async_trait]
+impl AgentTool for WriteTool {
+    fn name(&self) -> &str {
+        NAME
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+    fn description(&self) -> &str {
+        "Write a file to the local filesystem. This tool will OVERWRITE any existing file. For existing files, you must read them first. Use this tool when you need to create new files or completely replace file contents."
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "The absolute path to the file to write (not a relative path)"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "The content to write to the file. ALWAYS provide the complete content."
+                }
+            },
+            "required": ["file_path", "content"]
+        })
+    }
+
+    async fn call(
+        &self,
+        args_json: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let args: WriteArgs = serde_json::from_str(args_json)?;
+
         // Ensure parent directories exist
         Self::ensure_parent_dirs(&args.file_path)?;
 
@@ -89,21 +95,9 @@ impl Tool for WriteTool {
         std::fs::write(&args.file_path, &args.content)
             .map_err(|e| FileToolError::io(&args.file_path, e))?;
 
-        Ok(WriteOutput {
-            path: args.file_path,
-            bytes_written: bytes,
-        })
-    }
-}
+        let output = WriteOutput { path: args.file_path, bytes_written: bytes };
 
-impl std::fmt::Display for WriteOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Successfully wrote {} bytes to {}",
-            self.bytes_written,
-            self.path.display()
-        )
+        Ok(serde_json::to_string(&output)?)
     }
 }
 
@@ -119,13 +113,11 @@ mod tests {
         let file_path = temp_dir.path().join("new_file.txt");
 
         let tool = WriteTool::new();
-        let args = WriteArgs {
-            file_path: file_path.clone(),
-            content: "Hello, World!".to_string(),
-        };
+        let args = WriteArgs { file_path: file_path.clone(), content: "Hello, World!".to_string() };
 
-        let result = tool.call(args).await.unwrap();
-        assert_eq!(result.bytes_written, 13);
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let output: WriteOutput = serde_json::from_str(&result).unwrap();
+        assert_eq!(output.bytes_written, 13);
 
         // Verify content was written
         let content = fs::read_to_string(&file_path).unwrap();
@@ -139,13 +131,11 @@ mod tests {
         fs::write(&file_path, "Old content").unwrap();
 
         let tool = WriteTool::new();
-        let args = WriteArgs {
-            file_path: file_path.clone(),
-            content: "New content".to_string(),
-        };
+        let args = WriteArgs { file_path: file_path.clone(), content: "New content".to_string() };
 
-        let result = tool.call(args).await.unwrap();
-        assert_eq!(result.bytes_written, 11);
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let output: WriteOutput = serde_json::from_str(&result).unwrap();
+        assert_eq!(output.bytes_written, 11);
 
         // Verify content was overwritten
         let content = fs::read_to_string(&file_path).unwrap();
@@ -158,13 +148,12 @@ mod tests {
         let file_path = temp_dir.path().join("nested/deep/dir/file.txt");
 
         let tool = WriteTool::new();
-        let args = WriteArgs {
-            file_path: file_path.clone(),
-            content: "Nested content".to_string(),
-        };
+        let args =
+            WriteArgs { file_path: file_path.clone(), content: "Nested content".to_string() };
 
-        let result = tool.call(args).await.unwrap();
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let output: WriteOutput = serde_json::from_str(&result).unwrap();
         assert!(file_path.exists());
-        assert_eq!(result.bytes_written, 14);
+        assert_eq!(output.bytes_written, 14);
     }
 }

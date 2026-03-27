@@ -17,7 +17,7 @@
 //!
 //! ```rust,ignore
 //! use epha_agent::tools::file_system::{ReadTool, WriteTool, EditTool, file_system_tool_set};
-//! use rig::tool::Tool;
+//! use epha_agent::tools::AgentTool;
 //!
 //! // Get all file system tools as a vector
 //! let tools = file_system_tool_set();
@@ -44,12 +44,12 @@ pub use list::{DirEntry, ListArgs, ListOutput, ListTool};
 pub use read::{ReadArgs, ReadOutput, ReadTool};
 pub use write::{WriteArgs, WriteOutput, WriteTool};
 
-use rig::tool::ToolDyn;
+use crate::tools::AgentTool;
 
 /// Create a set of all file system tools
 ///
-/// Returns a vector of boxed tools that can be used with rig's agent system.
-pub fn file_system_tool_set() -> Vec<Box<dyn ToolDyn>> {
+/// Returns a vector of boxed tools that implement the AgentTool trait.
+pub fn file_system_tool_set() -> Vec<Box<dyn AgentTool>> {
     vec![
         Box::new(ReadTool::new()),
         Box::new(WriteTool::new()),

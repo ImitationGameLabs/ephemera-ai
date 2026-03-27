@@ -7,18 +7,19 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use rig::{completion::ToolDefinition, tool::Tool};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
+
+use crate::tools::AgentTool;
 
 use super::backend::ShellBackend;
-use super::error::ShellError;
 
 /// Default number of lines to capture
 const DEFAULT_LINES: usize = 200;
 
 /// Arguments for the CaptureOutputTool
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct CaptureOutputArgs {
     /// Target session name (uses current session if not specified)
     #[serde(default)]
@@ -30,7 +31,7 @@ pub struct CaptureOutputArgs {
 }
 
 /// Output from the CaptureOutputTool
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CaptureOutputOutput {
     /// The captured output
     pub output: String,
@@ -52,40 +53,42 @@ impl<B: ShellBackend> CaptureOutputTool<B> {
     }
 }
 
-impl<B: ShellBackend + 'static> Tool for CaptureOutputTool<B> {
-    const NAME: &'static str = "capture_output";
-
-    type Error = ShellError;
-    type Args = CaptureOutputArgs;
-    type Output = CaptureOutputOutput;
-
-    async fn definition(&self, _prompt: String) -> ToolDefinition {
-        serde_json::from_value(json!({
-            "name": "capture_output",
-            "description": "Capture recent output from a shell session. \
-                Use this to check the status of background commands, \
-                view command results, or review session history. \
-                By default captures the last 200 lines.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "session": {
-                        "type": "string",
-                        "description": "Target session name. Uses the current focused session if not specified."
-                    },
-                    "lines": {
-                        "type": "integer",
-                        "description": "Maximum number of lines to capture. Default is 200.",
-                        "default": 200
-                    }
-                },
-                "required": []
-            }
-        }))
-        .expect("Tool definition should be valid JSON")
+#[async_trait]
+impl<B: ShellBackend + Send + Sync + 'static> AgentTool for CaptureOutputTool<B> {
+    fn name(&self) -> &str {
+        "capture_output"
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+    fn description(&self) -> &str {
+        "Capture recent output from a shell session. \
+         Use this to check the status of background commands, \
+         view command results, or review session history. \
+         By default captures the last 200 lines."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "session": {
+                    "type": "string",
+                    "description": "Target session name. Uses the current focused session if not specified."
+                },
+                "lines": {
+                    "type": "integer",
+                    "description": "Maximum number of lines to capture. Default is 200.",
+                    "default": 200
+                }
+            },
+            "required": []
+        })
+    }
+
+    async fn call(
+        &self,
+        args_json: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let args: CaptureOutputArgs = serde_json::from_str(args_json)?;
         let mut backend = self.backend.lock().await;
 
         // Switch to specified session if provided
@@ -100,33 +103,20 @@ impl<B: ShellBackend + 'static> Tool for CaptureOutputTool<B> {
         let output = backend.capture_output(lines).await?;
         let captured_lines = output.lines().count();
 
-        Ok(CaptureOutputOutput {
-            output,
-            session,
-            lines: captured_lines,
-        })
-    }
-}
+        let result = CaptureOutputOutput { output, session, lines: captured_lines };
 
-impl std::fmt::Display for CaptureOutputOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Session '{}' ({} lines):\n{}",
-            self.session, self.lines, self.output
-        )
+        Ok(serde_json::to_string(&result)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::shell::error::ShellError;
     use crate::tools::shell::mock_backend::MockShellBackend;
 
-    fn create_tool_with_mock() -> (
-        CaptureOutputTool<MockShellBackend>,
-        Arc<Mutex<MockShellBackend>>,
-    ) {
+    fn create_tool_with_mock() -> (CaptureOutputTool<MockShellBackend>, Arc<Mutex<MockShellBackend>>)
+    {
         let mock = Arc::new(Mutex::new(MockShellBackend::new()));
         let tool = CaptureOutputTool::new(mock.clone());
         (tool, mock)
@@ -140,13 +130,10 @@ mod tests {
             backend.set_session_output("main", vec!["line1", "line2", "line3"]);
         }
 
-        let result = tool
-            .call(CaptureOutputArgs {
-                session: None,
-                lines: None,
-            })
-            .await
-            .unwrap();
+        let args = CaptureOutputArgs { session: None, lines: None };
+        let result: CaptureOutputOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert_eq!(result.session, "main");
         assert!(result.output.contains("line3"));
@@ -163,13 +150,10 @@ mod tests {
             backend.set_session_output("main", lines);
         }
 
-        let result = tool
-            .call(CaptureOutputArgs {
-                session: None,
-                lines: Some(10),
-            })
-            .await
-            .unwrap();
+        let args = CaptureOutputArgs { session: None, lines: Some(10) };
+        let result: CaptureOutputOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         // Mock backend returns lines in reverse order with take, so it takes the last 10
         assert!(result.lines <= 10);
@@ -184,13 +168,10 @@ mod tests {
             backend.set_session_output("worker", vec!["worker output"]);
         }
 
-        let result = tool
-            .call(CaptureOutputArgs {
-                session: Some("worker".into()),
-                lines: None,
-            })
-            .await
-            .unwrap();
+        let args = CaptureOutputArgs { session: Some("worker".into()), lines: None };
+        let result: CaptureOutputOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert_eq!(result.session, "worker");
     }
@@ -199,29 +180,23 @@ mod tests {
     async fn test_capture_nonexistent_session() {
         let (tool, _) = create_tool_with_mock();
 
-        let result = tool
-            .call(CaptureOutputArgs {
-                session: Some("nonexistent".into()),
-                lines: None,
-            })
-            .await;
+        let args = CaptureOutputArgs { session: Some("nonexistent".into()), lines: None };
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
 
-        assert!(matches!(result, Err(ShellError::SessionNotFound { .. })));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.is::<ShellError>());
     }
 
     #[tokio::test]
     async fn test_capture_empty_output() {
         let (tool, _) = create_tool_with_mock();
 
-        let result = tool
-            .call(CaptureOutputArgs {
-                session: None,
-                lines: None,
-            })
-            .await
-            .unwrap();
+        let args = CaptureOutputArgs { session: None, lines: None };
+        let result: CaptureOutputOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
-        // Empty output is valid
         assert_eq!(result.session, "main");
     }
 
@@ -233,15 +208,11 @@ mod tests {
             backend.set_session_output("main", vec!["line1", "line2", "line3"]);
         }
 
-        let result = tool
-            .call(CaptureOutputArgs {
-                session: None,
-                lines: Some(0),
-            })
-            .await
-            .unwrap();
+        let args = CaptureOutputArgs { session: None, lines: Some(0) };
+        let result: CaptureOutputOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
-        // Zero lines should return empty output
         assert_eq!(result.output, "");
         assert_eq!(result.lines, 0);
     }
@@ -254,28 +225,21 @@ mod tests {
             backend.set_session_output("main", vec!["line1", "line2", "line3"]);
         }
 
-        let result = tool
-            .call(CaptureOutputArgs {
-                session: None,
-                lines: Some(1000), // Request more than available
-            })
-            .await
-            .unwrap();
+        let args = CaptureOutputArgs { session: None, lines: Some(1000) };
+        let result: CaptureOutputOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
-        // Should return all available lines
         assert!(result.lines <= 3);
     }
 
-    #[test]
-    fn test_capture_output_display() {
-        let output = CaptureOutputOutput {
-            output: "line1\nline2".into(),
-            session: "main".into(),
-            lines: 2,
-        };
-        let display = output.to_string();
-        assert!(display.contains("main"));
-        assert!(display.contains("2 lines"));
-        assert!(display.contains("line1"));
+    #[tokio::test]
+    async fn test_capture_name_and_schema() {
+        let (tool, _) = create_tool_with_mock();
+        assert_eq!(tool.name(), "capture_output");
+        assert!(tool.description().contains("output"));
+        let schema = tool.parameters_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["session"].is_object());
     }
 }

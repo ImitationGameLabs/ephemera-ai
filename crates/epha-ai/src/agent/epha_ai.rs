@@ -2,22 +2,16 @@ use crate::agent::{CommonPrompt, State};
 use crate::context::EphemeraContext;
 use crate::sync::{SyncSender, start_sync_task};
 use crate::tools::{
-    MemoryGet, MemoryPin, MemoryRecent, MemoryTimeline, MemoryUnpin, StateTransition,
+    MemoryGet, MemoryPin, MemoryRecent, MemoryTimeline, MemoryUnpin, StateTransition, ToolDispatch,
 };
 use agora_client::{AgoraClient, AgoraClientTrait};
 use epha_agent::context::Context;
 use epha_agent::tools::{file_system_tool_set, shell::TmuxBackend, shell_tool_set};
+use llm::builder::{LLMBackend, LLMBuilder};
+use llm::chat::ChatMessage;
+use llm::{FunctionCall, LLMProvider, ToolCall};
 use loom_client::LoomClientTrait;
 use loom_client::memory::{MemoryFragment, MemoryKind};
-use rig::{
-    OneOrMany,
-    agent::Agent,
-    client::CompletionClient,
-    completion::{AssistantContent, Completion, Message},
-    message::{ToolResult, ToolResultContent, UserContent},
-    providers::deepseek::{Client, CompletionModel},
-    tool::{ToolSet, server::ToolServer},
-};
 use std::sync::Arc;
 use std::time::Duration;
 use time::OffsetDateTime;
@@ -27,7 +21,9 @@ use uuid::Uuid;
 
 pub struct EphemeraAI {
     state: Arc<Mutex<State>>,
-    agent: Agent<CompletionModel>,
+    llm: Box<dyn LLMProvider>,
+    tool_dispatch: ToolDispatch,
+    tool_definitions: Vec<llm::chat::Tool>,
     context: Context<EphemeraContext>,
     agora_client: Arc<dyn AgoraClientTrait>,
     config: crate::config::Config,
@@ -38,7 +34,6 @@ impl EphemeraAI {
     pub async fn new(
         config: crate::config::Config,
         loom_client: Arc<dyn LoomClientTrait>,
-        completion_client: Client,
         http_client: reqwest::Client,
     ) -> anyhow::Result<Self> {
         // 1. Create shared state
@@ -86,43 +81,44 @@ impl EphemeraAI {
         })?;
         info!("Agora service is available");
 
-        // 6. Create tool server with static tools
-        let tool_server = ToolServer::new()
-            .tool(MemoryGet::new(loom_client.clone(), context_data.clone()))
-            .tool(MemoryRecent::new(loom_client.clone(), context_data.clone()))
-            .tool(MemoryTimeline::new(loom_client.clone(), context_data.clone()))
-            .tool(MemoryPin::new(loom_client.clone(), context_data.clone()))
-            .tool(MemoryUnpin::new(loom_client.clone(), context_data.clone()))
-            .tool(StateTransition::new(state.clone()));
+        // 6. Build LLM provider
+        let llm = LLMBuilder::new()
+            .backend(LLMBackend::Groq)
+            .api_key(&config.llm.api_key)
+            .base_url(&config.llm.base_url)
+            .model(&config.llm.model)
+            .system(&common_prompt.content)
+            .build()
+            .map_err(|e| anyhow::anyhow!("Failed to build LLM provider: {}", e))?;
 
-        let tool_server_handle = tool_server.run();
+        // 7. Register all tools
+        let mut tool_dispatch = ToolDispatch::new();
 
-        // 7. Create ToolSet with boxed tools and append to server
-        let mut boxed_toolset = ToolSet::default();
+        // Memory and state tools
+        tool_dispatch.add_tool(Box::new(MemoryGet::new(loom_client.clone(), context_data.clone())));
+        tool_dispatch
+            .add_tool(Box::new(MemoryRecent::new(loom_client.clone(), context_data.clone())));
+        tool_dispatch
+            .add_tool(Box::new(MemoryTimeline::new(loom_client.clone(), context_data.clone())));
+        tool_dispatch.add_tool(Box::new(MemoryPin::new(loom_client.clone(), context_data.clone())));
+        tool_dispatch
+            .add_tool(Box::new(MemoryUnpin::new(loom_client.clone(), context_data.clone())));
+        tool_dispatch.add_tool(Box::new(StateTransition::new(state.clone())));
 
-        // Add file system tools
-        for tool in file_system_tool_set() {
-            boxed_toolset.add_tool_boxed(tool);
-        }
+        // File system tools
+        tool_dispatch.add_tools(file_system_tool_set());
 
-        // Add shell tools
-        for tool in shell_tool_set(Arc::new(tokio::sync::Mutex::new(backend))) {
-            boxed_toolset.add_tool_boxed(tool);
-        }
+        // Shell tools
+        tool_dispatch.add_tools(shell_tool_set(Arc::new(tokio::sync::Mutex::new(backend))));
 
-        // Append the boxed toolset to the running server
-        tool_server_handle.append_toolset(boxed_toolset).await?;
-
-        // 8. Build agent with tool server handle
-        let agent = completion_client
-            .agent(&config.llm.model)
-            .preamble(&common_prompt.content)
-            .tool_server_handle(tool_server_handle)
-            .build();
+        // Pre-compute tool definitions for the LLM API
+        let tool_definitions = tool_dispatch.to_llm_tools();
 
         Ok(Self {
             state,
-            agent,
+            llm,
+            tool_dispatch,
+            tool_definitions,
             context: Context::new(context_data),
             agora_client,
             config,
@@ -171,45 +167,35 @@ impl EphemeraAI {
 
         // 3. Explicit multi-turn loop
         let initial_prompt = format!("Current Context:\n{}", context_str);
-        let mut chat_history: Vec<Message> = vec![];
+        let mut chat_history: Vec<ChatMessage> = vec![];
         let mut current_prompt = initial_prompt;
         let mut current_depth = 0;
 
         loop {
-            // 3.1 Get completion
-            let builder = self.agent.completion(&current_prompt, chat_history.clone()).await?;
-
-            let response = builder.send().await?;
-
-            // 3.2 Extract and save Thought (AI text response)
-            let texts: Vec<String> = response
-                .choice
-                .iter()
-                .filter_map(|c| match c {
-                    AssistantContent::Text(t) => Some(t.text.clone()),
-                    _ => None,
-                })
-                .collect();
-
-            if !texts.is_empty() {
-                let thought = texts.join("\n");
-                self.save_thought(&thought);
+            // 3.1 Append current prompt to chat history
+            if !current_prompt.is_empty() {
+                chat_history.push(ChatMessage::user().content(&current_prompt).build());
             }
 
-            // 3.3 Extract tool calls
-            let tool_calls: Vec<_> = response
-                .choice
-                .iter()
-                .filter_map(|c| match c {
-                    AssistantContent::ToolCall(tc) => Some(tc.clone()),
-                    _ => None,
-                })
-                .collect();
+            // 3.2 Call LLM with tools
+            let response = self
+                .llm
+                .chat_with_tools(&chat_history, Some(&self.tool_definitions))
+                .await
+                .map_err(|e| anyhow::anyhow!("LLM request failed: {}", e))?;
 
-            // 3.4 If no tool calls, we're done
-            if tool_calls.is_empty() {
-                break;
+            // 3.3 Extract and save Thought (AI text response)
+            if let Some(text) = response.text()
+                && !text.is_empty()
+            {
+                self.save_thought(&text);
             }
+
+            // 3.4 Extract tool calls
+            let tool_calls = match response.tool_calls() {
+                Some(calls) if !calls.is_empty() => calls,
+                _ => break, // No tool calls -> done
+            };
 
             // 3.5 Check depth limit
             current_depth += 1;
@@ -219,32 +205,44 @@ impl EphemeraAI {
             }
 
             // 3.6 Execute tools and build results
-            let mut tool_results: Vec<ToolResult> = vec![];
+            let mut tool_results: Vec<(String, String, String)> = vec![];
 
             for tc in &tool_calls {
-                let args_str = tc.function.arguments.to_string();
-                let result =
-                    self.agent.tool_server_handle.call_tool(&tc.function.name, &args_str).await?;
+                let tool_name = &tc.function.name;
+                let args_str = &tc.function.arguments;
+
+                let result = self
+                    .tool_dispatch
+                    .call_tool(tool_name, args_str)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("{}", e))?;
 
                 // Save Action memory
-                self.save_action(&tc.function.name, &args_str, &result);
+                self.save_action(tool_name, args_str, &result);
 
-                // Build tool result for chat history
-                tool_results.push(ToolResult {
-                    id: tc.id.clone(),
-                    call_id: tc.call_id.clone(),
-                    content: OneOrMany::one(ToolResultContent::text(result)),
-                });
+                tool_results.push((tc.id.clone(), tool_name.clone(), result));
             }
 
             // 3.7 Update chat history for next iteration
-            chat_history.push(Message::Assistant { id: None, content: response.choice });
-            let user_contents: Vec<UserContent> =
-                tool_results.into_iter().map(UserContent::ToolResult).collect();
-            chat_history.push(Message::User {
-                content: OneOrMany::many(user_contents)
-                    .expect("tool_results should have at least one item"),
-            });
+            // Add assistant message with tool calls
+            chat_history
+                .push(ChatMessage::assistant().tool_use(tool_calls.clone()).content("").build());
+
+            // Add tool result message
+            // The llm crate's OpenAI compatible provider expands ToolResult into
+            // separate "tool" role messages using ToolCall.id as tool_call_id
+            // and ToolCall.function.arguments as the content.
+            let result_tool_calls: Vec<ToolCall> = tool_results
+                .into_iter()
+                .map(|(id, tool_name, result)| ToolCall {
+                    id,
+                    call_type: "function".to_string(),
+                    function: FunctionCall { name: tool_name, arguments: result },
+                })
+                .collect();
+
+            chat_history
+                .push(ChatMessage::user().tool_result(result_tool_calls).content("").build());
 
             // 3.8 Clear prompt for subsequent iterations
             current_prompt = String::new();

@@ -1,5 +1,3 @@
-
-
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -25,10 +23,7 @@ impl<T: ContextSerialize> Context<T> {
         let content = guard.serialize();
         let escaped_content = Self::escape_system_tags(content);
 
-        format!(
-            "<context>\n{}\n</context>",
-            escaped_content
-        )
+        format!("<context>\n{}\n</context>", escaped_content)
     }
 
     fn escape_system_tags(content: String) -> String {
@@ -36,8 +31,10 @@ impl<T: ContextSerialize> Context<T> {
 
         let mut escaped_content = content;
         for tag in &system_tags {
-            escaped_content = escaped_content.replace(&format!("<{}>", tag), &format!("&lt;{}&gt;", tag));
-            escaped_content = escaped_content.replace(&format!("</{}>", tag), &format!("&lt;/{}&gt;", tag));
+            escaped_content =
+                escaped_content.replace(&format!("<{}>", tag), &format!("&lt;{}&gt;", tag));
+            escaped_content =
+                escaped_content.replace(&format!("</{}>", tag), &format!("&lt;/{}&gt;", tag));
         }
 
         escaped_content

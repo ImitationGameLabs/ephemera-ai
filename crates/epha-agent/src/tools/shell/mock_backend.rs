@@ -121,15 +121,13 @@ impl MockShellBackend {
 
     /// Add a session to the mock backend
     pub fn add_session(&mut self, name: &str) -> &mut Self {
-        self.sessions
-            .insert(name.to_string(), MockSession::new(name, "/tmp"));
+        self.sessions.insert(name.to_string(), MockSession::new(name, "/tmp"));
         self
     }
 
     /// Add a session with a specific cwd
     pub fn add_session_with_cwd(&mut self, name: &str, cwd: &str) -> &mut Self {
-        self.sessions
-            .insert(name.to_string(), MockSession::new(name, cwd));
+        self.sessions.insert(name.to_string(), MockSession::new(name, cwd));
         self
     }
 
@@ -149,10 +147,7 @@ impl MockShellBackend {
 
     /// Check if a session has an environment variable
     pub fn has_env(&self, session: &str, key: &str) -> bool {
-        self.sessions
-            .get(session)
-            .map(|s| s.env.contains_key(key))
-            .unwrap_or(false)
+        self.sessions.get(session).map(|s| s.env.contains_key(key)).unwrap_or(false)
     }
 
     /// Get all inputs received via send_input
@@ -205,39 +200,21 @@ impl ShellBackend for MockShellBackend {
         // Check for timeout
         if self.should_timeout {
             self.should_timeout = false;
-            return Ok(ShellOutput {
-                output: String::new(),
-                exit_code: None,
-                timed_out: true,
-            });
+            return Ok(ShellOutput { output: String::new(), exit_code: None, timed_out: true });
         }
 
         // Background mode returns immediately without exit code
         if background {
-            return Ok(ShellOutput {
-                output: String::new(),
-                exit_code: None,
-                timed_out: false,
-            });
+            return Ok(ShellOutput { output: String::new(), exit_code: None, timed_out: false });
         }
 
         // Get output from queue or use default
-        let output = self
-            .next_outputs
-            .pop_front()
-            .unwrap_or_else(|| self.default_output.clone());
+        let output = self.next_outputs.pop_front().unwrap_or_else(|| self.default_output.clone());
 
         // Get exit code from queue or use default
-        let exit_code = self
-            .next_exit_codes
-            .pop_front()
-            .unwrap_or(self.default_exit_code);
+        let exit_code = self.next_exit_codes.pop_front().unwrap_or(self.default_exit_code);
 
-        Ok(ShellOutput {
-            output,
-            exit_code: Some(exit_code),
-            timed_out: false,
-        })
+        Ok(ShellOutput { output, exit_code: Some(exit_code), timed_out: false })
     }
 
     async fn send_input(&mut self, input: &str, press_enter: bool) -> Result<(), ShellError> {
@@ -295,12 +272,10 @@ impl ShellBackend for MockShellBackend {
             return Err(ShellError::session_exists(name));
         }
 
-        let cwd_str = cwd
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|| "/tmp".to_string());
+        let cwd_str =
+            cwd.map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| "/tmp".to_string());
 
-        self.sessions
-            .insert(name.to_string(), MockSession::new(name, &cwd_str));
+        self.sessions.insert(name.to_string(), MockSession::new(name, &cwd_str));
         Ok(())
     }
 
@@ -322,12 +297,8 @@ impl ShellBackend for MockShellBackend {
 
         // If we killed the current session, switch to another
         if self.current == name {
-            self.current = self
-                .sessions
-                .keys()
-                .next()
-                .cloned()
-                .unwrap_or_else(|| "main".to_string());
+            self.current =
+                self.sessions.keys().next().cloned().unwrap_or_else(|| "main".to_string());
         }
 
         Ok(())
@@ -376,9 +347,7 @@ mod tests {
             let m = mock.clone();
             handles.push(tokio::spawn(async move {
                 let mut backend = m.lock().await;
-                backend
-                    .execute(&format!("cmd {}", i), Duration::from_secs(1), false)
-                    .await
+                backend.execute(&format!("cmd {}", i), Duration::from_secs(1), false).await
             }));
         }
 
@@ -393,10 +362,7 @@ mod tests {
         backend.push_output("hello world");
         backend.push_exit_code(0);
 
-        let result = backend
-            .execute("echo hello", Duration::from_secs(10), false)
-            .await
-            .unwrap();
+        let result = backend.execute("echo hello", Duration::from_secs(10), false).await.unwrap();
 
         assert_eq!(result.output, "hello world");
         assert_eq!(result.exit_code, Some(0));
@@ -408,10 +374,7 @@ mod tests {
         let mut backend = MockShellBackend::new();
         backend.set_should_timeout(true);
 
-        let result = backend
-            .execute("sleep 100", Duration::from_secs(1), false)
-            .await
-            .unwrap();
+        let result = backend.execute("sleep 100", Duration::from_secs(1), false).await.unwrap();
 
         assert!(result.timed_out);
         assert!(result.exit_code.is_none());
@@ -421,10 +384,7 @@ mod tests {
     async fn test_mock_execute_background() {
         let mut backend = MockShellBackend::new();
 
-        let result = backend
-            .execute("long-cmd", Duration::from_secs(10), true)
-            .await
-            .unwrap();
+        let result = backend.execute("long-cmd", Duration::from_secs(10), true).await.unwrap();
 
         assert!(result.exit_code.is_none());
         assert!(!result.timed_out);
@@ -480,9 +440,7 @@ mod tests {
         let mut backend = MockShellBackend::new();
         backend.set_current("nonexistent");
 
-        let result = backend
-            .execute("echo test", Duration::from_secs(10), false)
-            .await;
+        let result = backend.execute("echo test", Duration::from_secs(10), false).await;
 
         assert!(matches!(result, Err(ShellError::SessionNotFound { .. })));
     }
@@ -525,24 +483,15 @@ mod tests {
         backend.push_output("third");
         backend.push_exit_code(2);
 
-        let result1 = backend
-            .execute("cmd1", Duration::from_secs(1), false)
-            .await
-            .unwrap();
+        let result1 = backend.execute("cmd1", Duration::from_secs(1), false).await.unwrap();
         assert_eq!(result1.output, "first");
         assert_eq!(result1.exit_code, Some(0));
 
-        let result2 = backend
-            .execute("cmd2", Duration::from_secs(1), false)
-            .await
-            .unwrap();
+        let result2 = backend.execute("cmd2", Duration::from_secs(1), false).await.unwrap();
         assert_eq!(result2.output, "second");
         assert_eq!(result2.exit_code, Some(1));
 
-        let result3 = backend
-            .execute("cmd3", Duration::from_secs(1), false)
-            .await
-            .unwrap();
+        let result3 = backend.execute("cmd3", Duration::from_secs(1), false).await.unwrap();
         assert_eq!(result3.output, "third");
         assert_eq!(result3.exit_code, Some(2));
     }
@@ -555,18 +504,12 @@ mod tests {
         backend.set_default_exit_code(42);
 
         // Queue is empty, should use defaults
-        let result1 = backend
-            .execute("cmd1", Duration::from_secs(1), false)
-            .await
-            .unwrap();
+        let result1 = backend.execute("cmd1", Duration::from_secs(1), false).await.unwrap();
         assert_eq!(result1.output, "default output");
         assert_eq!(result1.exit_code, Some(42));
 
         // Still using defaults
-        let result2 = backend
-            .execute("cmd2", Duration::from_secs(1), false)
-            .await
-            .unwrap();
+        let result2 = backend.execute("cmd2", Duration::from_secs(1), false).await.unwrap();
         assert_eq!(result2.output, "default output");
         assert_eq!(result2.exit_code, Some(42));
     }

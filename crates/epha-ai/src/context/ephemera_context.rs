@@ -855,16 +855,8 @@ mod restoration_tests {
         let fragments: Vec<MemoryFragment> = (1..=25)
             .map(|i| {
                 let content_size = 100 + (i * 15) % 400; // Varying sizes
-                let content = format!(
-                    "Activity {} - {}",
-                    i,
-                    "x".repeat(content_size)
-                );
-                let kind = if i % 3 == 0 {
-                    MemoryKind::Thought
-                } else {
-                    MemoryKind::Action
-                };
+                let content = format!("Activity {} - {}", i, "x".repeat(content_size));
+                let kind = if i % 3 == 0 { MemoryKind::Thought } else { MemoryKind::Action };
                 create_fragment_with_kind(i as i64, &content, kind)
             })
             .collect();
@@ -901,10 +893,7 @@ mod restoration_tests {
 
         // Phase 2: Restart with same data
         let mut mock_restart = MockLoomClient::new();
-        mock_restart.set_default_memory(MemoryResponse {
-            fragments,
-            total: 25,
-        });
+        mock_restart.set_default_memory(MemoryResponse { fragments, total: 25 });
         mock_restart.set_default_pinned(PinnedMemoriesResponse { items: pinned });
 
         let mut ctx_restarted = create_test_context(mock_restart);
@@ -1005,11 +994,7 @@ mod restoration_tests {
         for i in 1..=NUM_ACTIVITIES as i64 {
             // Create content with unique marker
             // Size ~1200 chars -> ~300 tokens when serialized
-            let content = format!(
-                "ACTIVITY_MARKER_{:02}_{}",
-                i,
-                "x".repeat(1150)
-            );
+            let content = format!("ACTIVITY_MARKER_{:02}_{}", i, "x".repeat(1150));
             ctx.add_activity(create_fragment(i, &content));
             added_ids.push(i);
         }
@@ -1112,7 +1097,8 @@ mod restoration_tests {
         let mut ctx = create_test_context_with_config(mock, config.clone());
 
         // Track expected state
-        let mut expected_pinned_ids: std::collections::HashSet<i64> = std::collections::HashSet::new();
+        let mut expected_pinned_ids: std::collections::HashSet<i64> =
+            std::collections::HashSet::new();
         let mut total_activities_added = 0;
 
         // === Phase 1: Add initial activities and trigger first eviction ===
@@ -1239,8 +1225,8 @@ mod restoration_tests {
         // Verify pinned content is present
         for pinned in final_pinned {
             assert!(
-                final_serialized.contains(&format!("Activity_{}", pinned.fragment.id)) ||
-                final_serialized.contains(&pinned.fragment.content),
+                final_serialized.contains(&format!("Activity_{}", pinned.fragment.id))
+                    || final_serialized.contains(&pinned.fragment.content),
                 "Pinned memory {} content should be present in serialization",
                 pinned.fragment.id
             );
@@ -1254,7 +1240,8 @@ mod restoration_tests {
         // Initial state from Loom: 20 activities, 3 pinned
         let initial_fragments: Vec<MemoryFragment> = (1..=20)
             .map(|i| {
-                let content = format!("Initial activity {} - {}", i, "data".repeat(i as usize % 5 + 3));
+                let content =
+                    format!("Initial activity {} - {}", i, "data".repeat(i as usize % 5 + 3));
                 create_fragment(i, &content)
             })
             .collect();
@@ -1267,13 +1254,9 @@ mod restoration_tests {
 
         // Phase 1: Initial startup
         let mut mock_initial = MockLoomClient::new();
-        mock_initial.set_default_memory(MemoryResponse {
-            fragments: initial_fragments.clone(),
-            total: 20,
-        });
-        mock_initial.set_default_pinned(PinnedMemoriesResponse {
-            items: initial_pinned.clone(),
-        });
+        mock_initial
+            .set_default_memory(MemoryResponse { fragments: initial_fragments.clone(), total: 20 });
+        mock_initial.set_default_pinned(PinnedMemoriesResponse { items: initial_pinned.clone() });
 
         let mut ctx_initial = create_test_context(mock_initial);
         ctx_initial.restore_from_loom(50).await.unwrap();
@@ -1281,7 +1264,8 @@ mod restoration_tests {
 
         // Add 10 more activities during runtime (simulating AI operations)
         for i in 21..=30 {
-            let content = format!("Runtime activity {} - {}", i, "runtime".repeat(i as usize % 8 + 2));
+            let content =
+                format!("Runtime activity {} - {}", i, "runtime".repeat(i as usize % 8 + 2));
             ctx_initial.add_activity(create_fragment(i, &content));
         }
 
@@ -1313,9 +1297,7 @@ mod restoration_tests {
             fragments: restart_fragments,
             total: final_activity_count,
         });
-        mock_restart.set_default_pinned(PinnedMemoriesResponse {
-            items: initial_pinned,
-        });
+        mock_restart.set_default_pinned(PinnedMemoriesResponse { items: initial_pinned });
 
         let mut ctx_restarted = create_test_context(mock_restart);
         ctx_restarted.restore_from_loom(50).await.unwrap();

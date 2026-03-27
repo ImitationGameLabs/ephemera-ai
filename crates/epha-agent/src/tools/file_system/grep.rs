@@ -1,9 +1,12 @@
+use crate::tools::AgentTool;
 use crate::tools::file_system::error::GrepError;
 use regex::Regex;
-use rig::{completion::ToolDefinition, tool::Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
+
+/// Tool name constant
+const NAME: &str = "grep_search";
 
 /// Maximum search depth to prevent infinite recursion
 const MAX_DEPTH: usize = 20;
@@ -25,20 +28,14 @@ const DEFAULT_IGNORE_DIRS: &[&str] = &[
 ];
 
 /// Default file patterns to ignore
-const DEFAULT_IGNORE_FILES: &[&str] = &[
-    "*.lock",
-    "*.min.js",
-    "*.min.css",
-    "package-lock.json",
-    "yarn.lock",
-    "Cargo.lock",
-];
+const DEFAULT_IGNORE_FILES: &[&str] =
+    &["*.lock", "*.min.js", "*.min.css", "package-lock.json", "yarn.lock", "Cargo.lock"];
 
 /// Maximum total matches to return
 const MAX_MATCHES: usize = 1000;
 
 /// Arguments for the GrepTool
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct GrepArgs {
     /// The regular expression pattern to search for
     pub pattern: String,
@@ -73,7 +70,7 @@ fn default_output_mode() -> String {
 }
 
 /// A single match result
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GrepMatch {
     pub file_path: PathBuf,
     pub line_number: usize,
@@ -83,7 +80,7 @@ pub struct GrepMatch {
 }
 
 /// Output from the GrepTool
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GrepOutput {
     /// The pattern that was searched
     pub pattern: String,
@@ -288,78 +285,76 @@ impl Default for GrepTool {
     }
 }
 
-impl Tool for GrepTool {
-    const NAME: &'static str = "grep_search";
-
-    type Error = GrepError;
-    type Args = GrepArgs;
-    type Output = GrepOutput;
-
-    async fn definition(&self, _prompt: String) -> ToolDefinition {
-        serde_json::from_value(json!({
-            "name": "grep_search",
-            "description": "A powerful search tool built on regex for searching file contents. Supports full regex syntax. Use this when you need to search within files rather than just finding files.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "pattern": {
-                        "type": "string",
-                        "description": "The regular expression pattern to search for"
-                    },
-                    "path": {
-                        "type": "string",
-                        "description": "The directory or file to search in. Defaults to current directory."
-                    },
-                    "glob": {
-                        "type": "string",
-                        "description": "Glob pattern to filter files (e.g., '*.rs', '*.{js,ts}')"
-                    },
-                    "output_mode": {
-                        "type": "string",
-                        "enum": ["content", "files_with_matches"],
-                        "description": "Output mode: 'content' shows matching lines, 'files_with_matches' shows only file paths"
-                    },
-                    "case_insensitive": {
-                        "type": "boolean",
-                        "description": "Case insensitive search"
-                    },
-                    "before_context": {
-                        "type": "integer",
-                        "description": "Show N lines before each match"
-                    },
-                    "after_context": {
-                        "type": "integer",
-                        "description": "Show N lines after each match"
-                    }
-                },
-                "required": ["pattern"]
-            }
-        }))
-        .expect("Tool definition should be valid JSON")
+#[async_trait::async_trait]
+impl AgentTool for GrepTool {
+    fn name(&self) -> &str {
+        NAME
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+    fn description(&self) -> &str {
+        "A powerful search tool built on regex for searching file contents. Supports full regex syntax. Use this when you need to search within files rather than just finding files."
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "The regular expression pattern to search for"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "The directory or file to search in. Defaults to current directory."
+                },
+                "glob": {
+                    "type": "string",
+                    "description": "Glob pattern to filter files (e.g., '*.rs', '*.{js,ts}')"
+                },
+                "output_mode": {
+                    "type": "string",
+                    "enum": ["content", "files_with_matches"],
+                    "description": "Output mode: 'content' shows matching lines, 'files_with_matches' shows only file paths"
+                },
+                "case_insensitive": {
+                    "type": "boolean",
+                    "description": "Case insensitive search"
+                },
+                "before_context": {
+                    "type": "integer",
+                    "description": "Show N lines before each match"
+                },
+                "after_context": {
+                    "type": "integer",
+                    "description": "Show N lines after each match"
+                }
+            },
+            "required": ["pattern"]
+        })
+    }
+
+    async fn call(
+        &self,
+        args_json: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let args: GrepArgs = serde_json::from_str(args_json)?;
+
         // Build regex
         let mut regex_builder = regex::RegexBuilder::new(&args.pattern);
         regex_builder.case_insensitive(args.case_insensitive);
-        let regex = regex_builder
-            .build()
-            .map_err(|e| GrepError::InvalidPattern {
-                pattern: args.pattern.clone(),
-                reason: e.to_string(),
-            })?;
+        let regex = regex_builder.build().map_err(|e| GrepError::InvalidPattern {
+            pattern: args.pattern.clone(),
+            reason: e.to_string(),
+        })?;
 
         // Determine base path
-        let base_path = args
-            .path
-            .clone()
-            .unwrap_or_else(|| std::env::current_dir().unwrap());
+        let base_path = args.path.clone().unwrap_or_else(|| std::env::current_dir().unwrap());
 
         // Validate base path exists
         if !base_path.exists() {
-            return Err(GrepError::FileTool(
+            return Err(Box::new(GrepError::FileTool(
                 crate::tools::file_system::error::FileToolError::NotFound(base_path),
-            ));
+            )));
         }
 
         let mut matches = Vec::new();
@@ -368,79 +363,20 @@ impl Tool for GrepTool {
         if base_path.is_file() {
             Self::search_file(&base_path, &regex, &args, &mut matches, &mut total_matches)?;
         } else {
-            Self::search_dir(
-                &base_path,
-                &regex,
-                &args,
-                &mut matches,
-                &mut total_matches,
-                0,
-            )?;
+            Self::search_dir(&base_path, &regex, &args, &mut matches, &mut total_matches, 0)?;
         }
 
         let truncated = total_matches >= MAX_MATCHES;
 
-        Ok(GrepOutput {
+        let output = GrepOutput {
             pattern: args.pattern,
             base_path,
             output_mode: args.output_mode.clone(),
             matches,
             truncated,
-        })
-    }
-}
+        };
 
-impl std::fmt::Display for GrepOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.matches.is_empty() {
-            writeln!(
-                f,
-                "No matches found for pattern '{}' in {}",
-                self.pattern,
-                self.base_path.display()
-            )?;
-            return Ok(());
-        }
-
-        if self.output_mode == "files_with_matches" {
-            // Group by file
-            let mut files: std::collections::HashSet<&PathBuf> = std::collections::HashSet::new();
-            for m in &self.matches {
-                files.insert(&m.file_path);
-            }
-            writeln!(
-                f,
-                "Found {} matches in {} file(s):",
-                self.matches.len(),
-                files.len()
-            )?;
-            for file in files {
-                writeln!(f, "  {}", file.display())?;
-            }
-        } else {
-            writeln!(
-                f,
-                "Found {} match(es) for '{}':",
-                self.matches.len(),
-                self.pattern
-            )?;
-            for m in &self.matches {
-                writeln!(f, "\n{}:{}", m.file_path.display(), m.line_number)?;
-                for ctx in &m.context_before {
-                    writeln!(f, "  {}", ctx)?;
-                }
-                writeln!(f, "  {}", m.line_content)?;
-                for ctx in &m.context_after {
-                    writeln!(f, "  {}", ctx)?;
-                }
-            }
-        }
-
-        if self.truncated {
-            writeln!(f, "\n(Results truncated at {} matches)", MAX_MATCHES)?;
-        }
-
-        Ok(())
+        Ok(serde_json::to_string(&output)?)
     }
 }
 
@@ -453,11 +389,8 @@ mod tests {
     #[tokio::test]
     async fn test_grep_search_content() {
         let temp_dir = TempDir::new().unwrap();
-        fs::write(
-            temp_dir.path().join("test.rs"),
-            "fn main() {\n    println!(\"hello\");\n}\n",
-        )
-        .unwrap();
+        fs::write(temp_dir.path().join("test.rs"), "fn main() {\n    println!(\"hello\");\n}\n")
+            .unwrap();
 
         let tool = GrepTool::new();
         let args = GrepArgs {
@@ -470,9 +403,10 @@ mod tests {
             after_context: None,
         };
 
-        let result = tool.call(args).await.unwrap();
-        assert_eq!(result.matches.len(), 1);
-        assert_eq!(result.matches[0].line_number, 2);
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let output: GrepOutput = serde_json::from_str(&result).unwrap();
+        assert_eq!(output.matches.len(), 1);
+        assert_eq!(output.matches[0].line_number, 2);
     }
 
     #[tokio::test]
@@ -492,9 +426,10 @@ mod tests {
             after_context: None,
         };
 
-        let result = tool.call(args).await.unwrap();
-        assert_eq!(result.matches.len(), 1);
-        assert!(result.matches[0].file_path.ends_with("test.rs"));
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let output: GrepOutput = serde_json::from_str(&result).unwrap();
+        assert_eq!(output.matches.len(), 1);
+        assert!(output.matches[0].file_path.ends_with("test.rs"));
     }
 
     #[tokio::test]
@@ -510,8 +445,10 @@ mod tests {
             after_context: None,
         };
 
-        let result = tool.call(args).await;
-        assert!(matches!(result, Err(GrepError::InvalidPattern { .. })));
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("InvalidPattern") || err_msg.contains("invalid"));
     }
 
     #[tokio::test]
@@ -530,8 +467,9 @@ mod tests {
             after_context: None,
         };
 
-        let result = tool.call(args).await.unwrap();
-        assert_eq!(result.matches.len(), 1);
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let output: GrepOutput = serde_json::from_str(&result).unwrap();
+        assert_eq!(output.matches.len(), 1);
     }
 
     #[tokio::test]
@@ -554,9 +492,10 @@ mod tests {
             after_context: Some(2),
         };
 
-        let result = tool.call(args).await.unwrap();
-        assert_eq!(result.matches.len(), 1);
-        assert_eq!(result.matches[0].context_before.len(), 2);
-        assert_eq!(result.matches[0].context_after.len(), 2);
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let output: GrepOutput = serde_json::from_str(&result).unwrap();
+        assert_eq!(output.matches.len(), 1);
+        assert_eq!(output.matches[0].context_before.len(), 2);
+        assert_eq!(output.matches[0].context_after.len(), 2);
     }
 }

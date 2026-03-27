@@ -3,15 +3,16 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use rig::{completion::ToolDefinition, tool::Tool};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
+
+use crate::tools::AgentTool;
 
 use crate::tools::shell::backend::ShellBackend;
-use crate::tools::shell::error::ShellError;
 
 /// Arguments for the RestartSessionTool
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct RestartSessionArgs {
     /// Name of the session to restart
     pub name: String,
@@ -22,7 +23,7 @@ pub struct RestartSessionArgs {
 }
 
 /// Output from the RestartSessionTool
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RestartSessionOutput {
     /// Name of the restarted session
     pub name: String,
@@ -42,73 +43,62 @@ impl<B: ShellBackend> RestartSessionTool<B> {
     }
 }
 
-impl<B: ShellBackend + 'static> Tool for RestartSessionTool<B> {
-    const NAME: &'static str = "restart_session";
-
-    type Error = ShellError;
-    type Args = RestartSessionArgs;
-    type Output = RestartSessionOutput;
-
-    async fn definition(&self, _prompt: String) -> ToolDefinition {
-        serde_json::from_value(json!({
-            "name": "restart_session",
-            "description": "Restart a shell session with a clean state. \
-                This kills and recreates the session. Use this when a session \
-                gets into a bad state or when you need a fresh environment. \
-                Set clean_env=true to also clear all environment variables.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Name of the session to restart"
-                    },
-                    "clean_env": {
-                        "type": "boolean",
-                        "description": "If true, clear all environment variables. Default is false.",
-                        "default": false
-                    }
-                },
-                "required": ["name"]
-            }
-        }))
-        .expect("Tool definition should be valid JSON")
+#[async_trait]
+impl<B: ShellBackend + Send + Sync + 'static> AgentTool for RestartSessionTool<B> {
+    fn name(&self) -> &str {
+        "restart_session"
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+    fn description(&self) -> &str {
+        "Restart a shell session with a clean state. \
+         This kills and recreates the session. Use this when a session \
+         gets into a bad state or when you need a fresh environment. \
+         Set clean_env=true to also clear all environment variables."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the session to restart"
+                },
+                "clean_env": {
+                    "type": "boolean",
+                    "description": "If true, clear all environment variables. Default is false.",
+                    "default": false
+                }
+            },
+            "required": ["name"]
+        })
+    }
+
+    async fn call(
+        &self,
+        args_json: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let args: RestartSessionArgs = serde_json::from_str(args_json)?;
         let mut backend = self.backend.lock().await;
 
         // Restart the session
         backend.restart_session(&args.name, args.clean_env).await?;
 
-        Ok(RestartSessionOutput {
-            name: args.name,
-            clean_env: args.clean_env,
-        })
-    }
-}
+        let output = RestartSessionOutput { name: args.name, clean_env: args.clean_env };
 
-impl std::fmt::Display for RestartSessionOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let env_status = if self.clean_env {
-            "with clean environment"
-        } else {
-            "preserving environment"
-        };
-        write!(f, "Restarted session '{}' {}", self.name, env_status)
+        Ok(serde_json::to_string(&output)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::shell::error::ShellError;
     use crate::tools::shell::mock_backend::MockShellBackend;
     use std::time::Duration;
 
-    fn create_tool_with_mock() -> (
-        RestartSessionTool<MockShellBackend>,
-        Arc<Mutex<MockShellBackend>>,
-    ) {
+    fn create_tool_with_mock()
+    -> (RestartSessionTool<MockShellBackend>, Arc<Mutex<MockShellBackend>>) {
         let mock = Arc::new(Mutex::new(MockShellBackend::new()));
         let tool = RestartSessionTool::new(mock.clone());
         (tool, mock)
@@ -118,15 +108,11 @@ mod tests {
     async fn test_restart_session() {
         let (tool, _) = create_tool_with_mock();
 
-        let result = tool
-            .call(RestartSessionArgs {
-                name: "main".into(),
-                clean_env: false,
-            })
-            .await;
+        let args = RestartSessionArgs { name: "main".into(), clean_env: false };
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
 
         assert!(result.is_ok());
-        let output = result.unwrap();
+        let output: RestartSessionOutput = serde_json::from_str(&result.unwrap()).unwrap();
         assert_eq!(output.name, "main");
         assert!(!output.clean_env);
     }
@@ -145,13 +131,10 @@ mod tests {
             assert!(backend.has_env("main", "MY_VAR"));
         }
 
-        let result = tool
-            .call(RestartSessionArgs {
-                name: "main".into(),
-                clean_env: true,
-            })
-            .await
-            .unwrap();
+        let args = RestartSessionArgs { name: "main".into(), clean_env: true };
+        let result: RestartSessionOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert!(result.clean_env);
 
@@ -164,14 +147,12 @@ mod tests {
     async fn test_restart_nonexistent_session() {
         let (tool, _) = create_tool_with_mock();
 
-        let result = tool
-            .call(RestartSessionArgs {
-                name: "nonexistent".into(),
-                clean_env: false,
-            })
-            .await;
+        let args = RestartSessionArgs { name: "nonexistent".into(), clean_env: false };
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
 
-        assert!(matches!(result, Err(ShellError::SessionNotFound { .. })));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.is::<ShellError>());
     }
 
     #[tokio::test]
@@ -179,21 +160,13 @@ mod tests {
         let (tool, mock) = create_tool_with_mock();
         {
             let mut backend = mock.lock().await;
-            // Execute some commands to add to history
             let _ = backend.execute("cmd1", Duration::from_secs(1), false).await;
             let _ = backend.execute("cmd2", Duration::from_secs(1), false).await;
         }
 
-        // Restart session
-        tool.call(RestartSessionArgs {
-            name: "main".into(),
-            clean_env: false,
-        })
-        .await
-        .unwrap();
+        let args = RestartSessionArgs { name: "main".into(), clean_env: false };
+        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
 
-        // History should be cleared (mock backend clears history on restart)
-        // We can't directly access history, but the session should still work
         let backend = mock.lock().await;
         assert!(backend.has_session("main"));
     }
@@ -206,34 +179,21 @@ mod tests {
             backend.set_env("main", "MY_VAR", "preserved");
         }
 
-        tool.call(RestartSessionArgs {
-            name: "main".into(),
-            clean_env: false, // Don't clean env
-        })
-        .await
-        .unwrap();
+        let args = RestartSessionArgs { name: "main".into(), clean_env: false };
+        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
 
-        // Environment should be preserved (mock doesn't clear when clean_env=false)
-        // But in our mock implementation, restart always clears history regardless
-        // Let's check the mock behavior
         let backend = mock.lock().await;
-        // In MockShellBackend, restart_session only clears env when clean_env is true
-        // So MY_VAR should still be there
         assert!(backend.has_env("main", "MY_VAR"));
     }
 
-    #[test]
-    fn test_restart_session_display() {
-        let output = RestartSessionOutput {
-            name: "main".into(),
-            clean_env: false,
-        };
-        assert!(output.to_string().contains("preserving environment"));
-
-        let output = RestartSessionOutput {
-            name: "main".into(),
-            clean_env: true,
-        };
-        assert!(output.to_string().contains("clean environment"));
+    #[tokio::test]
+    async fn test_restart_session_name_and_schema() {
+        let (tool, _) = create_tool_with_mock();
+        assert_eq!(tool.name(), "restart_session");
+        assert!(tool.description().contains("Restart"));
+        let schema = tool.parameters_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["name"].is_object());
+        assert!(schema["properties"]["clean_env"].is_object());
     }
 }

@@ -52,24 +52,17 @@ impl ShellError {
 
     /// Create an execution failed error
     pub fn execution_failed(reason: impl Into<String>) -> Self {
-        ShellError::ExecutionFailed {
-            reason: reason.into(),
-        }
+        ShellError::ExecutionFailed { reason: reason.into() }
     }
 
     /// Create a backend error
     pub fn backend(reason: impl Into<String>) -> Self {
-        ShellError::BackendError {
-            reason: reason.into(),
-        }
+        ShellError::BackendError { reason: reason.into() }
     }
 
     /// Create a session creation failed error
     pub fn session_create_failed(name: impl Into<String>, reason: impl Into<String>) -> Self {
-        ShellError::SessionCreateFailed {
-            name: name.into(),
-            reason: reason.into(),
-        }
+        ShellError::SessionCreateFailed { name: name.into(), reason: reason.into() }
     }
 
     /// Create an IO error (hides implementation details)
@@ -104,19 +97,13 @@ mod tests {
         assert_eq!(err.to_string(), "No sessions available");
 
         let err = ShellError::execution_failed("command not found");
-        assert_eq!(
-            err.to_string(),
-            "Command execution failed: command not found"
-        );
+        assert_eq!(err.to_string(), "Command execution failed: command not found");
 
         let err = ShellError::backend("tmux not installed");
         assert_eq!(err.to_string(), "Backend error: tmux not installed");
 
         let err = ShellError::session_create_failed("test", "permission denied");
-        assert_eq!(
-            err.to_string(),
-            "Failed to create session 'test': permission denied"
-        );
+        assert_eq!(err.to_string(), "Failed to create session 'test': permission denied");
 
         let err = ShellError::Io("file not found".into());
         assert_eq!(err.to_string(), "IO error: file not found");

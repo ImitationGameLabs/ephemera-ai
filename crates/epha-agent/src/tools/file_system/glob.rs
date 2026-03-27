@@ -1,8 +1,11 @@
+use crate::tools::AgentTool;
 use crate::tools::file_system::error::GlobError;
-use rig::{completion::ToolDefinition, tool::Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
+
+/// Tool name constant
+const NAME: &str = "glob_search";
 
 /// Default directories to ignore during glob search
 const DEFAULT_IGNORE_DIRS: &[&str] = &[
@@ -21,7 +24,7 @@ const DEFAULT_IGNORE_DIRS: &[&str] = &[
 ];
 
 /// Arguments for the GlobTool
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct GlobArgs {
     /// The glob pattern to match files against (e.g., "**/*.rs", "src/**/*.ts")
     pub pattern: String,
@@ -32,7 +35,7 @@ pub struct GlobArgs {
 }
 
 /// Output from the GlobTool
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GlobOutput {
     /// The pattern that was searched
     pub pattern: String,
@@ -96,43 +99,44 @@ impl Default for GlobTool {
     }
 }
 
-impl Tool for GlobTool {
-    const NAME: &'static str = "glob_search";
-
-    type Error = GlobError;
-    type Args = GlobArgs;
-    type Output = GlobOutput;
-
-    async fn definition(&self, _prompt: String) -> ToolDefinition {
-        serde_json::from_value(json!({
-            "name": "glob_search",
-            "description": "Fast file pattern matching tool that works with any codebase size. Supports glob patterns like '**/*.js' or 'src/**/*.ts'. Returns matching file paths sorted by modification time.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "pattern": {
-                        "type": "string",
-                        "description": "The glob pattern to match files against (e.g., '**/*.rs', 'src/**/*.ts', '*.json')"
-                    },
-                    "path": {
-                        "type": "string",
-                        "description": "The directory to search in. Defaults to current working directory."
-                    }
-                },
-                "required": ["pattern"]
-            }
-        }))
-        .expect("Tool definition should be valid JSON")
+#[async_trait::async_trait]
+impl AgentTool for GlobTool {
+    fn name(&self) -> &str {
+        NAME
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let base_path = args
-            .path
-            .unwrap_or_else(|| std::env::current_dir().unwrap());
+    fn description(&self) -> &str {
+        "Fast file pattern matching tool that works with any codebase size. Supports glob patterns like '**/*.js' or 'src/**/*.ts'. Returns matching file paths sorted by modification time."
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "The glob pattern to match files against (e.g., '**/*.rs', 'src/**/*.ts', '*.json')"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "The directory to search in. Defaults to current working directory."
+                }
+            },
+            "required": ["pattern"]
+        })
+    }
+
+    async fn call(
+        &self,
+        args_json: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let args: GlobArgs = serde_json::from_str(args_json)?;
+
+        let base_path = args.path.unwrap_or_else(|| std::env::current_dir().unwrap());
 
         // Validate base path exists
         if !base_path.exists() {
-            return Err(GlobError::PathNotFound(base_path));
+            return Err(Box::new(GlobError::PathNotFound(base_path)));
         }
 
         // Parse the glob pattern
@@ -156,38 +160,9 @@ impl Tool for GlobTool {
             b_time.cmp(&a_time)
         });
 
-        Ok(GlobOutput {
-            pattern: args.pattern,
-            base_path,
-            matches,
-        })
-    }
-}
+        let output = GlobOutput { pattern: args.pattern, base_path, matches };
 
-impl std::fmt::Display for GlobOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.matches.is_empty() {
-            writeln!(
-                f,
-                "No files matching pattern '{}' in {}",
-                self.pattern,
-                self.base_path.display()
-            )?;
-        } else {
-            writeln!(
-                f,
-                "Found {} file(s) matching '{}' in {}:",
-                self.matches.len(),
-                self.pattern,
-                self.base_path.display()
-            )?;
-            for path in &self.matches {
-                // Show relative path if possible
-                let display_path = path.strip_prefix(&self.base_path).unwrap_or(path);
-                writeln!(f, "  {}", display_path.display())?;
-            }
-        }
-        Ok(())
+        Ok(serde_json::to_string(&output)?)
     }
 }
 
@@ -207,13 +182,12 @@ mod tests {
         fs::write(temp_dir.path().join("src/mod.rs"), "").unwrap();
 
         let tool = GlobTool::new();
-        let args = GlobArgs {
-            pattern: "**/*.rs".to_string(),
-            path: Some(temp_dir.path().to_path_buf()),
-        };
+        let args =
+            GlobArgs { pattern: "**/*.rs".to_string(), path: Some(temp_dir.path().to_path_buf()) };
 
-        let result = tool.call(args).await.unwrap();
-        assert_eq!(result.matches.len(), 3);
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let output: GlobOutput = serde_json::from_str(&result).unwrap();
+        assert_eq!(output.matches.len(), 3);
     }
 
     #[tokio::test]
@@ -224,25 +198,27 @@ mod tests {
         fs::write(temp_dir.path().join("node_modules/package.js"), "").unwrap();
 
         let tool = GlobTool::new();
-        let args = GlobArgs {
-            pattern: "**/*.js".to_string(),
-            path: Some(temp_dir.path().to_path_buf()),
-        };
+        let args =
+            GlobArgs { pattern: "**/*.js".to_string(), path: Some(temp_dir.path().to_path_buf()) };
 
-        let result = tool.call(args).await.unwrap();
-        assert_eq!(result.matches.len(), 1);
-        assert!(result.matches[0].ends_with("index.js"));
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let output: GlobOutput = serde_json::from_str(&result).unwrap();
+        assert_eq!(output.matches.len(), 1);
+        assert!(output.matches[0].ends_with("index.js"));
     }
 
     #[tokio::test]
     async fn test_glob_invalid_pattern() {
         let tool = GlobTool::new();
-        let args = GlobArgs {
-            pattern: "[invalid".to_string(),
-            path: None,
-        };
+        let args = GlobArgs { pattern: "[invalid".to_string(), path: None };
 
-        let result = tool.call(args).await;
-        assert!(matches!(result, Err(GlobError::InvalidPattern { .. })));
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Invalid glob pattern")
+                || err_msg.contains("invalid pattern")
+                || err_msg.contains("InvalidPattern")
+        );
     }
 }

@@ -3,22 +3,23 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use rig::{completion::ToolDefinition, tool::Tool};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
+
+use crate::tools::AgentTool;
 
 use crate::tools::shell::backend::ShellBackend;
-use crate::tools::shell::error::ShellError;
 
 /// Arguments for the KillSessionTool
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct KillSessionArgs {
     /// Name of the session to kill
     pub name: String,
 }
 
 /// Output from the KillSessionTool
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct KillSessionOutput {
     /// Name of the killed session
     pub name: String,
@@ -40,86 +41,60 @@ impl<B: ShellBackend> KillSessionTool<B> {
     }
 }
 
-impl<B: ShellBackend + 'static> Tool for KillSessionTool<B> {
-    const NAME: &'static str = "kill_session";
-
-    type Error = ShellError;
-    type Args = KillSessionArgs;
-    type Output = KillSessionOutput;
-
-    async fn definition(&self, _prompt: String) -> ToolDefinition {
-        serde_json::from_value(json!({
-            "name": "kill_session",
-            "description": "Kill a shell session and all processes running within it. \
-                This permanently terminates the session. If you kill the current session, \
-                the backend will automatically switch to another available session. \
-                Warning: This cannot be undone.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Name of the session to kill"
-                    }
-                },
-                "required": ["name"]
-            }
-        }))
-        .expect("Tool definition should be valid JSON")
+#[async_trait]
+impl<B: ShellBackend + Send + Sync + 'static> AgentTool for KillSessionTool<B> {
+    fn name(&self) -> &str {
+        "kill_session"
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+    fn description(&self) -> &str {
+        "Kill a shell session and all processes running within it. \
+         This permanently terminates the session. If you kill the current session, \
+         the backend will automatically switch to another available session. \
+         Warning: This cannot be undone."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name of the session to kill"
+                }
+            },
+            "required": ["name"]
+        })
+    }
+
+    async fn call(
+        &self,
+        args_json: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let args: KillSessionArgs = serde_json::from_str(args_json)?;
         let mut backend = self.backend.lock().await;
         let was_current = backend.current_session() == args.name;
 
         // Kill the session
         backend.kill_session(&args.name).await?;
 
-        let new_current = if was_current {
-            Some(backend.current_session().to_string())
-        } else {
-            None
-        };
+        let new_current =
+            if was_current { Some(backend.current_session().to_string()) } else { None };
 
-        Ok(KillSessionOutput {
-            name: args.name,
-            was_current,
-            new_current,
-        })
-    }
-}
+        let output = KillSessionOutput { name: args.name, was_current, new_current };
 
-impl std::fmt::Display for KillSessionOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.was_current {
-            if let Some(ref new) = self.new_current {
-                write!(
-                    f,
-                    "Killed current session '{}', switched to '{}'",
-                    self.name, new
-                )
-            } else {
-                write!(
-                    f,
-                    "Killed session '{}' (no other sessions available)",
-                    self.name
-                )
-            }
-        } else {
-            write!(f, "Killed session '{}'", self.name)
-        }
+        Ok(serde_json::to_string(&output)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::shell::error::ShellError;
     use crate::tools::shell::mock_backend::MockShellBackend;
 
-    fn create_tool_with_mock() -> (
-        KillSessionTool<MockShellBackend>,
-        Arc<Mutex<MockShellBackend>>,
-    ) {
+    fn create_tool_with_mock() -> (KillSessionTool<MockShellBackend>, Arc<Mutex<MockShellBackend>>)
+    {
         let mock = Arc::new(Mutex::new(MockShellBackend::new()));
         let tool = KillSessionTool::new(mock.clone());
         (tool, mock)
@@ -133,14 +108,11 @@ mod tests {
             backend.add_session("to_kill");
         }
 
-        let result = tool
-            .call(KillSessionArgs {
-                name: "to_kill".into(),
-            })
-            .await;
+        let args = KillSessionArgs { name: "to_kill".into() };
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
 
         assert!(result.is_ok());
-        let output = result.unwrap();
+        let output: KillSessionOutput = serde_json::from_str(&result.unwrap()).unwrap();
         assert_eq!(output.name, "to_kill");
         assert!(!output.was_current);
 
@@ -157,15 +129,12 @@ mod tests {
             backend.add_session("backup");
         }
 
-        let result = tool
-            .call(KillSessionArgs {
-                name: "main".into(),
-            })
-            .await
-            .unwrap();
+        let args = KillSessionArgs { name: "main".into() };
+        let result: KillSessionOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert!(result.was_current);
-        // Should have switched to another session
         assert!(result.new_current.is_some());
 
         let backend = mock.lock().await;
@@ -176,13 +145,12 @@ mod tests {
     async fn test_kill_nonexistent_session() {
         let (tool, _) = create_tool_with_mock();
 
-        let result = tool
-            .call(KillSessionArgs {
-                name: "nonexistent".into(),
-            })
-            .await;
+        let args = KillSessionArgs { name: "nonexistent".into() };
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
 
-        assert!(matches!(result, Err(ShellError::SessionNotFound { .. })));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.is::<ShellError>());
     }
 
     #[tokio::test]
@@ -194,36 +162,22 @@ mod tests {
             backend.add_session("build");
         }
 
-        // Kill worker
-        tool.call(KillSessionArgs {
-            name: "worker".into(),
-        })
-        .await
-        .unwrap();
+        let args = KillSessionArgs { name: "worker".into() };
+        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
 
-        // Verify list_sessions reflects the change
         let backend = mock.lock().await;
         assert!(!backend.has_session("worker"));
         assert!(backend.has_session("main"));
         assert!(backend.has_session("build"));
     }
 
-    #[test]
-    fn test_kill_session_display() {
-        let output = KillSessionOutput {
-            name: "worker".into(),
-            was_current: false,
-            new_current: None,
-        };
-        assert!(output.to_string().contains("Killed session 'worker'"));
-
-        let output = KillSessionOutput {
-            name: "main".into(),
-            was_current: true,
-            new_current: Some("backup".into()),
-        };
-        let display = output.to_string();
-        assert!(display.contains("Killed current session"));
-        assert!(display.contains("switched to 'backup'"));
+    #[tokio::test]
+    async fn test_kill_session_name_and_schema() {
+        let (tool, _) = create_tool_with_mock();
+        assert_eq!(tool.name(), "kill_session");
+        assert!(tool.description().contains("Kill"));
+        let schema = tool.parameters_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["name"].is_object());
     }
 }

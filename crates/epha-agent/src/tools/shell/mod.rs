@@ -77,21 +77,22 @@ pub use session::{
     SwitchSessionTool,
 };
 
-use rig::tool::ToolDyn;
+use crate::tools::AgentTool;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// Create a set of all shell tools with the given backend
 ///
-/// This function creates all shell tools configured with the same backend,
-/// suitable for use with rig's agent system.
+/// This function creates all shell tools configured with the same backend.
 ///
 /// # Arguments
 /// * `backend` - Shared backend instance wrapped in Arc<Mutex>
 ///
 /// # Returns
-/// A vector of boxed tools implementing ToolDyn
-pub fn shell_tool_set<B: ShellBackend + 'static>(backend: Arc<Mutex<B>>) -> Vec<Box<dyn ToolDyn>> {
+/// A vector of boxed tools implementing AgentTool
+pub fn shell_tool_set<B: ShellBackend + Send + Sync + 'static>(
+    backend: Arc<Mutex<B>>,
+) -> Vec<Box<dyn AgentTool>> {
     vec![
         Box::new(BashTool::new(backend.clone())),
         Box::new(SendInputTool::new(backend.clone())),
@@ -108,7 +109,7 @@ pub fn shell_tool_set<B: ShellBackend + 'static>(backend: Arc<Mutex<B>>) -> Vec<
 ///
 /// This is a convenience function for tests that don't need real tmux.
 #[cfg(test)]
-pub fn mock_shell_tool_set() -> (Vec<Box<dyn ToolDyn>>, Arc<Mutex<MockShellBackend>>) {
+pub fn mock_shell_tool_set() -> (Vec<Box<dyn AgentTool>>, Arc<Mutex<MockShellBackend>>) {
     let backend = Arc::new(Mutex::new(MockShellBackend::new()));
     let tools = shell_tool_set(backend.clone());
     (tools, backend)

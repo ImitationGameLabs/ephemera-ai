@@ -8,8 +8,12 @@
 //! - [`file_system`] - File operations (read, write, edit, list, glob, grep)
 //! - [`shell`] - Shell session management (bash, session management)
 
+pub mod agent_tool;
 pub mod file_system;
 pub mod shell;
+
+// Re-export the AgentTool trait for downstream crates
+pub use agent_tool::AgentTool;
 
 // Re-export commonly used types for convenience
 pub use file_system::{

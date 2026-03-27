@@ -5,14 +5,14 @@
 //! changing tool implementations.
 
 use async_trait::async_trait;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::Duration;
 
 use super::error::ShellError;
 
 /// Information about a shell session
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionInfo {
     /// Session name
     pub name: String,
@@ -134,11 +134,8 @@ mod tests {
 
     #[test]
     fn test_shell_output() {
-        let output = ShellOutput {
-            output: "hello world".to_string(),
-            exit_code: Some(0),
-            timed_out: false,
-        };
+        let output =
+            ShellOutput { output: "hello world".to_string(), exit_code: Some(0), timed_out: false };
 
         assert_eq!(output.output, "hello world");
         assert_eq!(output.exit_code, Some(0));
@@ -147,11 +144,8 @@ mod tests {
 
     #[test]
     fn test_shell_output_timeout() {
-        let output = ShellOutput {
-            output: "partial output".to_string(),
-            exit_code: None,
-            timed_out: true,
-        };
+        let output =
+            ShellOutput { output: "partial output".to_string(), exit_code: None, timed_out: true };
 
         assert!(output.timed_out);
         assert!(output.exit_code.is_none());

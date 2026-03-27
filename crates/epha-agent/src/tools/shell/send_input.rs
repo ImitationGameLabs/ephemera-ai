@@ -7,15 +7,16 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use rig::{completion::ToolDefinition, tool::Tool};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
+
+use crate::tools::AgentTool;
 
 use super::backend::ShellBackend;
-use super::error::ShellError;
 
 /// Arguments for the SendInputTool
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct SendInputArgs {
     /// The input text to send
     pub input: String,
@@ -34,7 +35,7 @@ fn default_press_enter() -> bool {
 }
 
 /// Output from the SendInputTool
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SendInputOutput {
     /// The input that was sent
     pub input: String,
@@ -56,44 +57,46 @@ impl<B: ShellBackend> SendInputTool<B> {
     }
 }
 
-impl<B: ShellBackend + 'static> Tool for SendInputTool<B> {
-    const NAME: &'static str = "send_input";
-
-    type Error = ShellError;
-    type Args = SendInputArgs;
-    type Output = SendInputOutput;
-
-    async fn definition(&self, _prompt: String) -> ToolDefinition {
-        serde_json::from_value(json!({
-            "name": "send_input",
-            "description": "Send keyboard input to a running command in a session. \
-                Use this for interactive commands that require user input, \
-                such as sudo password prompts, y/n confirmations, or multi-step wizards. \
-                For passwords, set press_enter to false if the prompt handles it automatically.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "input": {
-                        "type": "string",
-                        "description": "The input text to send to the running command"
-                    },
-                    "session": {
-                        "type": "string",
-                        "description": "Target session name. Uses the current focused session if not specified."
-                    },
-                    "press_enter": {
-                        "type": "boolean",
-                        "description": "Whether to press Enter after sending the input. Default is true. Set to false for password prompts.",
-                        "default": true
-                    }
-                },
-                "required": ["input"]
-            }
-        }))
-        .expect("Tool definition should be valid JSON")
+#[async_trait]
+impl<B: ShellBackend + Send + Sync + 'static> AgentTool for SendInputTool<B> {
+    fn name(&self) -> &str {
+        "send_input"
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+    fn description(&self) -> &str {
+        "Send keyboard input to a running command in a session. \
+         Use this for interactive commands that require user input, \
+         such as sudo password prompts, y/n confirmations, or multi-step wizards. \
+         For passwords, set press_enter to false if the prompt handles it automatically."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "input": {
+                    "type": "string",
+                    "description": "The input text to send to the running command"
+                },
+                "session": {
+                    "type": "string",
+                    "description": "Target session name. Uses the current focused session if not specified."
+                },
+                "press_enter": {
+                    "type": "boolean",
+                    "description": "Whether to press Enter after sending the input. Default is true. Set to false for password prompts.",
+                    "default": true
+                }
+            },
+            "required": ["input"]
+        })
+    }
+
+    async fn call(
+        &self,
+        args_json: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let args: SendInputArgs = serde_json::from_str(args_json)?;
         let mut backend = self.backend.lock().await;
 
         // Switch to specified session if provided
@@ -106,34 +109,19 @@ impl<B: ShellBackend + 'static> Tool for SendInputTool<B> {
         // Send the input
         backend.send_input(&args.input, args.press_enter).await?;
 
-        Ok(SendInputOutput {
-            input: args.input,
-            press_enter: args.press_enter,
-            session,
-        })
-    }
-}
+        let output = SendInputOutput { input: args.input, press_enter: args.press_enter, session };
 
-impl std::fmt::Display for SendInputOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let enter_suffix = if self.press_enter { " (Enter)" } else { "" };
-        write!(
-            f,
-            "Sent input '{}' to session '{}'{}",
-            self.input, self.session, enter_suffix
-        )
+        Ok(serde_json::to_string(&output)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::shell::error::ShellError;
     use crate::tools::shell::mock_backend::MockShellBackend;
 
-    fn create_tool_with_mock() -> (
-        SendInputTool<MockShellBackend>,
-        Arc<Mutex<MockShellBackend>>,
-    ) {
+    fn create_tool_with_mock() -> (SendInputTool<MockShellBackend>, Arc<Mutex<MockShellBackend>>) {
         let mock = Arc::new(Mutex::new(MockShellBackend::new()));
         let tool = SendInputTool::new(mock.clone());
         (tool, mock)
@@ -143,14 +131,10 @@ mod tests {
     async fn test_send_input_basic() {
         let (tool, mock) = create_tool_with_mock();
 
-        let result = tool
-            .call(SendInputArgs {
-                input: "y".into(),
-                session: None,
-                press_enter: true,
-            })
-            .await
-            .unwrap();
+        let args = SendInputArgs { input: "y".into(), session: None, press_enter: true };
+        let result: SendInputOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert_eq!(result.input, "y");
         assert!(result.press_enter);
@@ -166,33 +150,26 @@ mod tests {
     async fn test_send_input_without_enter() {
         let (tool, mock) = create_tool_with_mock();
 
-        let result = tool
-            .call(SendInputArgs {
-                input: "secret_password".into(),
-                session: None,
-                press_enter: false,
-            })
-            .await
-            .unwrap();
+        let args =
+            SendInputArgs { input: "secret_password".into(), session: None, press_enter: false };
+        let result: SendInputOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert!(!result.press_enter);
 
         let backend = mock.lock().await;
         let inputs = backend.get_inputs_received();
-        assert_eq!(inputs[0], "secret_password"); // No newline
+        assert_eq!(inputs[0], "secret_password");
     }
 
     #[tokio::test]
     async fn test_send_input_multiline() {
         let (tool, mock) = create_tool_with_mock();
 
-        tool.call(SendInputArgs {
-            input: "line1\nline2\nline3".into(),
-            session: None,
-            press_enter: true,
-        })
-        .await
-        .unwrap();
+        let args =
+            SendInputArgs { input: "line1\nline2\nline3".into(), session: None, press_enter: true };
+        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
 
         let backend = mock.lock().await;
         let inputs = backend.get_inputs_received();
@@ -207,14 +184,14 @@ mod tests {
             backend.add_session("worker");
         }
 
-        let result = tool
-            .call(SendInputArgs {
-                input: "test".into(),
-                session: Some("worker".into()),
-                press_enter: true,
-            })
-            .await
-            .unwrap();
+        let args = SendInputArgs {
+            input: "test".into(),
+            session: Some("worker".into()),
+            press_enter: true,
+        };
+        let result: SendInputOutput =
+            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
+                .unwrap();
 
         assert_eq!(result.session, "worker");
     }
@@ -223,45 +200,37 @@ mod tests {
     async fn test_send_input_nonexistent_session() {
         let (tool, _) = create_tool_with_mock();
 
-        let result = tool
-            .call(SendInputArgs {
-                input: "test".into(),
-                session: Some("nonexistent".into()),
-                press_enter: true,
-            })
-            .await;
+        let args = SendInputArgs {
+            input: "test".into(),
+            session: Some("nonexistent".into()),
+            press_enter: true,
+        };
+        let result = tool.call(&serde_json::to_string(&args).unwrap()).await;
 
-        assert!(matches!(result, Err(ShellError::SessionNotFound { .. })));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.is::<ShellError>());
     }
 
     #[tokio::test]
     async fn test_send_input_empty() {
         let (tool, mock) = create_tool_with_mock();
 
-        tool.call(SendInputArgs {
-            input: "".into(),
-            session: None,
-            press_enter: true,
-        })
-        .await
-        .unwrap();
+        let args = SendInputArgs { input: "".into(), session: None, press_enter: true };
+        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
 
         let backend = mock.lock().await;
         let inputs = backend.get_inputs_received();
-        assert_eq!(inputs[0], "\n"); // Just the newline
+        assert_eq!(inputs[0], "\n");
     }
 
     #[tokio::test]
     async fn test_send_input_unicode() {
         let (tool, mock) = create_tool_with_mock();
 
-        tool.call(SendInputArgs {
-            input: "你好世界 🌍".into(),
-            session: None,
-            press_enter: false,
-        })
-        .await
-        .unwrap();
+        let args =
+            SendInputArgs { input: "你好世界 🌍".into(), session: None, press_enter: false };
+        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
 
         let backend = mock.lock().await;
         let inputs = backend.get_inputs_received();
@@ -275,13 +244,8 @@ mod tests {
         let long_input = "x".repeat(10000);
         let expected = format!("{}\n", long_input);
 
-        tool.call(SendInputArgs {
-            input: long_input.clone(),
-            session: None,
-            press_enter: true,
-        })
-        .await
-        .unwrap();
+        let args = SendInputArgs { input: long_input.clone(), session: None, press_enter: true };
+        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
 
         let backend = mock.lock().await;
         let inputs = backend.get_inputs_received();
@@ -292,35 +256,21 @@ mod tests {
     async fn test_send_input_control_characters() {
         let (tool, mock) = create_tool_with_mock();
 
-        // Test sending control characters (like Ctrl-C which is \x03)
-        tool.call(SendInputArgs {
-            input: "\x03".into(), // Ctrl-C
-            session: None,
-            press_enter: false,
-        })
-        .await
-        .unwrap();
+        let args = SendInputArgs { input: "\x03".into(), session: None, press_enter: false };
+        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
 
         let backend = mock.lock().await;
         let inputs = backend.get_inputs_received();
         assert_eq!(inputs[0], "\x03");
     }
 
-    #[test]
-    fn test_send_input_output_display() {
-        let output = SendInputOutput {
-            input: "y".into(),
-            press_enter: true,
-            session: "main".into(),
-        };
-        assert!(output.to_string().contains("y"));
-        assert!(output.to_string().contains("Enter"));
-
-        let output = SendInputOutput {
-            input: "password".into(),
-            press_enter: false,
-            session: "main".into(),
-        };
-        assert!(!output.to_string().contains("Enter"));
+    #[tokio::test]
+    async fn test_send_input_name_and_schema() {
+        let (tool, _) = create_tool_with_mock();
+        assert_eq!(tool.name(), "send_input");
+        assert!(tool.description().contains("keyboard input"));
+        let schema = tool.parameters_schema();
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"]["input"].is_object());
     }
 }

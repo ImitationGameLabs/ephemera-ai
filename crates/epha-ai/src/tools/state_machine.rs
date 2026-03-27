@@ -1,9 +1,11 @@
-use crate::agent::State;
-use rig::{completion::ToolDefinition, tool::Tool};
+use async_trait::async_trait;
+use epha_agent::tools::AgentTool;
 use serde::Deserialize;
-use std::fmt;
+use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+use crate::agent::State;
 
 /// Arguments for state transition
 #[derive(Debug, Deserialize)]
@@ -13,18 +15,6 @@ pub struct StateTransitionArgs {
     /// Reason for the transition
     pub reason: String,
 }
-
-/// Error type for state transition tool
-#[derive(Debug)]
-pub struct StateTransitionError(String);
-
-impl fmt::Display for StateTransitionError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "State transition error: {}", self.0)
-    }
-}
-
-impl std::error::Error for StateTransitionError {}
 
 /// Tool for transitioning between existence states
 pub struct StateTransition {
@@ -37,35 +27,39 @@ impl StateTransition {
     }
 }
 
-impl Tool for StateTransition {
-    const NAME: &'static str = "state_transition";
-    type Error = StateTransitionError;
-    type Args = StateTransitionArgs;
-    type Output = String;
-
-    async fn definition(&self, _prompt: String) -> ToolDefinition {
-        serde_json::from_value(serde_json::json!({
-            "name": "state_transition",
-            "description": "Transition between existence states: Active (normal mode), Dormant (slow mode), or Suspended (exit loop)",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "mode": {
-                        "type": "string",
-                        "enum": ["Active", "Dormant", "Suspended"],
-                        "description": "The target existence state"
-                    },
-                    "reason": {
-                        "type": "string",
-                        "description": "Reason for making this state transition"
-                    }
-                },
-                "required": ["mode", "reason"]
-            }
-        })).expect("Tool Definition")
+#[async_trait]
+impl AgentTool for StateTransition {
+    fn name(&self) -> &str {
+        "state_transition"
     }
 
-    async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
+    fn description(&self) -> &str {
+        "Transition between existence states: Active (normal mode), Dormant (slow mode), or Suspended (exit loop)"
+    }
+
+    fn parameters_schema(&self) -> Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": ["Active", "Dormant", "Suspended"],
+                    "description": "The target existence state"
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Reason for making this state transition"
+                }
+            },
+            "required": ["mode", "reason"]
+        })
+    }
+
+    async fn call(
+        &self,
+        args_json: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let args: StateTransitionArgs = serde_json::from_str(args_json)?;
         let mut state = self.state.lock().await;
 
         let current = *state;

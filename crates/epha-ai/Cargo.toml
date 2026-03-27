@@ -8,7 +8,7 @@ edition = "2024"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 time = { workspace = true }
-rig-core = { workspace = true }
+llm = { workspace = true, features = ["groq"] }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
