@@ -19,34 +19,103 @@ pub fn pending_memory(content: String, kind: MemoryKind) -> MemoryFragment {
     MemoryFragment { id: 0, content, timestamp: OffsetDateTime::now_utc(), kind }
 }
 
-/// Render an Event as XML for clean LLM consumption.
-fn render_event_xml(event: &Event) -> String {
-    let ts = format_rfc3339(&event.timestamp);
-    let priority = format!("{:?}", event.priority).to_lowercase();
-    format!(
-        "<event type=\"{}\" from=\"{}\" timestamp=\"{}\" priority=\"{}\">\n  <payload>{}</payload>\n</event>",
-        xml_escape(&event.event_type),
-        xml_escape(&event.herald_id),
-        ts,
-        priority,
-        xml_escape(&event.payload.to_string()),
-    )
-}
-
 /// Format an OffsetDateTime as RFC 3339 string
-fn format_rfc3339(dt: &OffsetDateTime) -> String {
+pub(crate) fn format_rfc3339(dt: &OffsetDateTime) -> String {
     let format =
         time::format_description::parse("[year]-[month]-[day]T[hour]:[minute]:[second]Z").unwrap();
     dt.format(&format).unwrap_or_else(|_| "unknown".to_string())
 }
 
-/// Escape special XML characters
-fn xml_escape(s: &str) -> String {
+/// Escape XML special characters for attribute values (`"`, `'`, `&`, `<`, `>`).
+pub(crate) fn xml_escape_attr(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&apos;")
+}
+
+/// Escape XML special characters for element content (only `&`, `<`, `>`).
+///
+/// Quotes must NOT be escaped inside element content — this keeps JSON payloads
+/// inside `<payload>`, `<args>`, etc. readable by the LLM.
+pub(crate) fn xml_escape_content(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
+/// Trait for serializing types into structured XML for LLM context consumption.
+///
+/// Implementations parse their internal structure and produce clean XML
+/// where JSON data appears directly inside XML tags, avoiding JSON-in-JSON nesting.
+pub(crate) trait SerializeContext {
+    fn serialize_context(&self) -> String;
+}
+
+impl SerializeContext for ThoughtContent {
+    fn serialize_context(&self) -> String {
+        format!("<text>{}</text>", xml_escape_content(&self.text))
+    }
+}
+
+impl SerializeContext for EventContent {
+    fn serialize_context(&self) -> String {
+        if let Ok(event) = serde_json::from_str::<Event>(&self.text) {
+            let ts = format_rfc3339(&event.timestamp);
+            let priority = format!("{:?}", event.priority).to_lowercase();
+            format!(
+                "<event type=\"{}\" from=\"{}\" timestamp=\"{}\" priority=\"{}\">\n  <payload>{}</payload>\n</event>",
+                xml_escape_attr(&event.event_type),
+                xml_escape_attr(&event.herald_id),
+                ts,
+                priority,
+                xml_escape_content(&event.payload.to_string()),
+            )
+        } else {
+            format!("<text>{}</text>", xml_escape_content(&self.text))
+        }
+    }
+}
+
+impl SerializeContext for ActionMemoryContent {
+    fn serialize_context(&self) -> String {
+        let mut xml = String::from("<action>\n");
+        for tc in &self.tool_calls {
+            xml.push_str(&format!(
+                "  <tool_call id=\"{}\" tool=\"{}\">\n",
+                xml_escape_attr(&tc.id),
+                xml_escape_attr(&tc.tool)
+            ));
+            xml.push_str(&format!(
+                "    <args>{}</args>\n",
+                xml_escape_content(&serde_json::to_string(&tc.args).unwrap_or_default())
+            ));
+            xml.push_str(&format!("    <result>{}</result>\n", xml_escape_content(&tc.result)));
+            xml.push_str("  </tool_call)\n");
+        }
+        xml.push_str("</action>");
+        xml
+    }
+}
+
+impl SerializeContext for MemoryFragment {
+    fn serialize_context(&self) -> String {
+        match self.kind {
+            MemoryKind::Thought => serde_json::from_str::<ThoughtContent>(&self.content)
+                .map(|c| c.serialize_context())
+                .unwrap_or_else(|_| format!("<text>{}</text>", xml_escape_content(&self.content))),
+            MemoryKind::Event => serde_json::from_str::<EventContent>(&self.content)
+                .map(|c| c.serialize_context())
+                .unwrap_or_else(|_| format!("<text>{}</text>", xml_escape_content(&self.content))),
+            MemoryKind::Action => serde_json::from_str::<ActionMemoryContent>(&self.content)
+                .map(|c| c.serialize_context())
+                .unwrap_or_else(|_| {
+                    format!("<content>{}</content>", xml_escape_content(&self.content))
+                }),
+            MemoryKind::Unknown => {
+                format!("<content>{}</content>", xml_escape_content(&self.content))
+            }
+        }
+    }
 }
 
 /// Thought memory content — AI's text thinking or response.
@@ -88,14 +157,7 @@ impl ThoughtContent {
 
 impl EventContent {
     pub fn to_chat_message(&self) -> ChatMessage {
-        // Try to parse the inner text as an Event JSON for XML rendering
-        let xml_content = if let Ok(event) = serde_json::from_str::<Event>(&self.text) {
-            render_event_xml(&event)
-        } else {
-            // Fallback for old-format events: wrap raw content in <event>
-            format!("<event>{}</event>", xml_escape(&self.text))
-        };
-        ChatMessage::user().content(&xml_content).build()
+        ChatMessage::user().content(self.serialize_context()).build()
     }
 }
 
@@ -164,7 +226,8 @@ impl ToChatMessages for MemoryFragment {
                     .map(|c| c.to_chat_message())
                     .unwrap_or_else(|_| {
                         // Fallback: old-format event JSON or plain text, wrap in <event>
-                        let xml_content = format!("<event>{}</event>", xml_escape(&self.content));
+                        let xml_content =
+                            format!("<event>{}</event>", xml_escape_content(&self.content));
                         ChatMessage::user().content(&xml_content).build()
                     });
                 vec![msg]

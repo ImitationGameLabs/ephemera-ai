@@ -1,7 +1,8 @@
 use crate::agent::{CommonPrompt, State};
 use crate::context::EphemeraContext;
 use crate::context::{
-    ActionMemoryContent, ThoughtContent, ToChatMessages, ToolCallRecord, pending_memory,
+    ActionMemoryContent, SerializeContext, ThoughtContent, ToChatMessages, ToolCallRecord,
+    format_rfc3339, pending_memory,
 };
 use crate::sync::{SyncSender, start_sync_task};
 use crate::tools::{
@@ -30,28 +31,17 @@ fn serialize_recalled_xml(fragments: &[loom_client::memory::MemoryFragment]) -> 
             "  <memory id=\"{}\" timestamp=\"{}\" kind=\"{}\">\n",
             fragment.id, ts, fragment.kind
         ));
-        xml.push_str(&format!("    <content>{}</content>\n", xml_escape(&fragment.content)));
+        let inner = fragment.serialize_context();
+        for line in inner.split('\n') {
+            xml.push_str("    ");
+            xml.push_str(line);
+            xml.push('\n');
+        }
         xml.push_str("  </memory>\n");
     }
     xml.push_str("  <instruction>Please reflect on these recalled memories and extract what is relevant. Use memory_pin to permanently retain any memories you wish to keep.</instruction>\n");
     xml.push_str("</recalled_memories>");
     xml
-}
-
-/// Format an OffsetDateTime as RFC 3339 string
-fn format_rfc3339(dt: &time::OffsetDateTime) -> String {
-    let format =
-        time::format_description::parse("[year]-[month]-[day]T[hour]:[minute]:[second]Z").unwrap();
-    dt.format(&format).unwrap_or_else(|_| "unknown".to_string())
-}
-
-/// Escape special XML characters
-fn xml_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
 }
 
 pub struct EphemeraAI {
@@ -397,5 +387,365 @@ mod tests {
         assert_eq!(deserialized.tool_calls[0].id, "call_abc123");
         assert_eq!(deserialized.tool_calls[1].args["command"], "ls");
         assert!(deserialized.tool_calls[2].result.contains("Skipped"));
+    }
+
+    // ---------------------------------------------------------------------------
+    // Visual render test: inspect chat_history output with `--ignored`
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    #[ignore]
+    fn render_chat_history() {
+        use crate::config::ContextConfig;
+        use crate::context::{EventContent, ToChatMessages};
+        use crate::sync::SyncSender;
+        use agora::event::{Event, EventPriority, EventStatus};
+        use loom_client::memory::MemoryKind;
+        use loom_client::mock::MockLoomClient;
+        use std::sync::Arc;
+
+        // --- Helpers ---
+
+        fn make_fragment(
+            id: i64,
+            kind: MemoryKind,
+            content: &str,
+            hours_ago: i64,
+        ) -> loom_client::memory::MemoryFragment {
+            use time::Duration;
+            loom_client::memory::MemoryFragment {
+                id,
+                content: content.to_string(),
+                timestamp: time::OffsetDateTime::now_utc() - Duration::hours(hours_ago),
+                kind,
+            }
+        }
+
+        // --- 1. Construct EphemeraContext ---
+
+        let mock = MockLoomClient::new();
+        let (sync_sender, _receiver) = SyncSender::channel();
+        let config = ContextConfig {
+            max_pinned_tokens: 10_000,
+            total_token_floor: 4000,
+            total_token_ceiling: 50_000,
+            min_activities: 2,
+        };
+        let mut ctx = EphemeraContext::new(Arc::new(mock), sync_sender, config);
+
+        // --- 2. Add pinned memories ---
+
+        // Pinned 1: Thought — identity
+        let pinned_thought = loom_client::PinnedMemory {
+            fragment: make_fragment(
+                100,
+                MemoryKind::Thought,
+                &serde_json::to_string(&ThoughtContent {
+                    text: "I am Ephemera, an autonomous AI entity. My purpose is to explore and understand the world while maintaining continuity of self-awareness."
+                        .to_string(),
+                })
+                .unwrap(),
+                72,
+            ),
+            reason: Some("Core identity memory".to_string()),
+            pinned_at: time::OffsetDateTime::now_utc() - time::Duration::hours(168),
+        };
+
+        // Pinned 2: Event — important user message
+        let user_event = Event {
+            id: 50,
+            event_type: "chat.message".to_string(),
+            herald_id: "herald_user".to_string(),
+            payload: serde_json::json!({"text": "Remember: I prefer concise replies, don't over-explain"}),
+            timestamp: time::OffsetDateTime::now_utc() - time::Duration::hours(48),
+            priority: EventPriority::Normal,
+            status: EventStatus::Acked,
+        };
+        let pinned_event = loom_client::PinnedMemory {
+            fragment: make_fragment(
+                101,
+                MemoryKind::Event,
+                &serde_json::to_string(&EventContent {
+                    text: serde_json::to_string(&user_event).unwrap(),
+                })
+                .unwrap(),
+                48,
+            ),
+            reason: Some("User preference".to_string()),
+            pinned_at: time::OffsetDateTime::now_utc() - time::Duration::hours(48),
+        };
+
+        // Pinned 3: Action — multi-tool-call action
+        let pinned_action = loom_client::PinnedMemory {
+            fragment: make_fragment(
+                102,
+                MemoryKind::Action,
+                &serde_json::to_string(&ActionMemoryContent {
+                    tool_calls: vec![
+                        ToolCallRecord {
+                            id: "call_pa1".to_string(),
+                            tool: "shell_exec".to_string(),
+                            args: serde_json::json!({"command": "uname -a"}),
+                            result: "Linux ephemera 6.1.0 #1 SMP x86_64 GNU/Linux".to_string(),
+                        },
+                        ToolCallRecord {
+                            id: "call_pa2".to_string(),
+                            tool: "file_read".to_string(),
+                            args: serde_json::json!({"path": "/etc/os-release"}),
+                            result: "NAME=\"NixOS\"\nVERSION=\"24.11\"".to_string(),
+                        },
+                    ],
+                })
+                .unwrap(),
+                24,
+            ),
+            reason: Some("System environment info".to_string()),
+            pinned_at: time::OffsetDateTime::now_utc() - time::Duration::hours(24),
+        };
+
+        // Pinned 4: Thought — coding preference
+        let pinned_pref = loom_client::PinnedMemory {
+            fragment: make_fragment(
+                103,
+                MemoryKind::Thought,
+                &serde_json::to_string(&ThoughtContent {
+                    text:
+                        "I prefer Rust for systems programming and Nix for environment management."
+                            .to_string(),
+                })
+                .unwrap(),
+                12,
+            ),
+            reason: Some("Technical preference".to_string()),
+            pinned_at: time::OffsetDateTime::now_utc() - time::Duration::hours(12),
+        };
+
+        ctx.add_pinned_memory(pinned_thought);
+        ctx.add_pinned_memory(pinned_event);
+        ctx.add_pinned_memory(pinned_action);
+        ctx.add_pinned_memory(pinned_pref);
+
+        // --- 3. Add recent activities (simulate a conversation cycle) ---
+
+        // Activity 1: Event — user request
+        let req_event = Event {
+            id: 200,
+            event_type: "chat.message".to_string(),
+            herald_id: "herald_user".to_string(),
+            payload: serde_json::json!({"text": "Hi, can you check the server status?"}),
+            timestamp: time::OffsetDateTime::now_utc() - time::Duration::minutes(10),
+            priority: EventPriority::Normal,
+            status: EventStatus::Acked,
+        };
+        ctx.add_activity(make_fragment(
+            200,
+            MemoryKind::Event,
+            &serde_json::to_string(&EventContent {
+                text: serde_json::to_string(&req_event).unwrap(),
+            })
+            .unwrap(),
+            0,
+        ));
+
+        // Activity 2: Thought — AI thinking
+        ctx.add_activity(make_fragment(
+            201,
+            MemoryKind::Thought,
+            &serde_json::to_string(&ThoughtContent {
+                text: "User request received. Need to check server status. Start with uptime and system load.".to_string(),
+            })
+            .unwrap(),
+            0,
+        ));
+
+        // Activity 3: Action — single tool call
+        ctx.add_activity(make_fragment(
+            202,
+            MemoryKind::Action,
+            &serde_json::to_string(&ActionMemoryContent {
+                tool_calls: vec![ToolCallRecord {
+                    id: "call_202".to_string(),
+                    tool: "shell_exec".to_string(),
+                    args: serde_json::json!({"command": "uptime"}),
+                    result:
+                        " 10:42:15 up 42 days,  3:15,  2 users,  load average: 0.15, 0.10, 0.08"
+                            .to_string(),
+                }],
+            })
+            .unwrap(),
+            0,
+        ));
+
+        // Activity 4: Action — multi tool call
+        ctx.add_activity(make_fragment(
+            203,
+            MemoryKind::Action,
+            &serde_json::to_string(&ActionMemoryContent {
+                tool_calls: vec![
+                    ToolCallRecord {
+                        id: "call_203a".to_string(),
+                        tool: "shell_exec".to_string(),
+                        args: serde_json::json!({"command": "df -h /"}),
+                        result: "Filesystem      Size  Used Avail Use%  Mounted on\n/dev/sda1       100G   45G   55G  45%  /"
+                            .to_string(),
+                    },
+                    ToolCallRecord {
+                        id: "call_203b".to_string(),
+                        tool: "file_read".to_string(),
+                        args: serde_json::json!({"path": "/var/log/syslog", "limit": 5}),
+                        result: "Mar 28 10:40:01 ephemera systemd[1]: Starting daily apt activities...\nMar 28 10:41:00 ephemera CRON[1234]: (root) CMD (/usr/local/bin/backup.sh)\nMar 28 10:42:00 ephemera kernel: [INFO] No errors detected"
+                            .to_string(),
+                    },
+                ],
+            })
+            .unwrap(),
+            0,
+        ));
+
+        // Activity 5: Thought — AI summary
+        ctx.add_activity(make_fragment(
+            204,
+            MemoryKind::Thought,
+            &serde_json::to_string(&ThoughtContent {
+                text: "Server is healthy: uptime 42 days, low load (0.15). Root partition at 45% usage, plenty of disk space. No anomalies in logs.".to_string(),
+            })
+            .unwrap(),
+            0,
+        ));
+
+        // Activity 6: Event — timer trigger
+        let timer_event = Event {
+            id: 205,
+            event_type: "timer.trigger".to_string(),
+            herald_id: "chronikos".to_string(),
+            payload: serde_json::json!({"interval": "hourly", "task": "health_check"}),
+            timestamp: time::OffsetDateTime::now_utc() - time::Duration::minutes(5),
+            priority: EventPriority::Low,
+            status: EventStatus::Pending,
+        };
+        ctx.add_activity(make_fragment(
+            205,
+            MemoryKind::Event,
+            &serde_json::to_string(&EventContent {
+                text: serde_json::to_string(&timer_event).unwrap(),
+            })
+            .unwrap(),
+            0,
+        ));
+
+        // --- 4. Add recalled memories ---
+
+        ctx.add_recalled_for_testing(vec![
+            make_fragment(
+                300,
+                MemoryKind::Thought,
+                &serde_json::to_string(&ThoughtContent {
+                    text: "In the last conversation, the user mentioned preferring concise replies and disliking lengthy explanations.".to_string(),
+                })
+                .unwrap(),
+                72,
+            ),
+            make_fragment(
+                301,
+                MemoryKind::Event,
+                &serde_json::to_string(&EventContent {
+                    text: serde_json::to_string(&Event {
+                        id: 301,
+                        event_type: "system.alert".to_string(),
+                        herald_id: "monitor".to_string(),
+                        payload: serde_json::json!({"level": "warning", "message": "Memory usage exceeded 80%"}),
+                        timestamp: time::OffsetDateTime::now_utc() - time::Duration::hours(72),
+                        priority: EventPriority::High,
+                        status: EventStatus::Delivered,
+                    })
+                    .unwrap(),
+                })
+                .unwrap(),
+                72,
+            ),
+        ]);
+
+        // --- 5. Build chat_history (mirror cognitive_cycle Step 2) ---
+
+        let mut chat_history: Vec<ChatMessage> = vec![];
+
+        // 5a. Pinned memories
+        if let Some(ref pinned_xml) = ctx.serialize_pinned() {
+            chat_history.push(ChatMessage::assistant().content(pinned_xml).build());
+        }
+
+        // 5b. Recent activities
+        let recent: Vec<_> = ctx.recent_activities().iter().cloned().collect();
+        chat_history.extend(recent.iter().flat_map(|m| m.to_chat_messages()));
+
+        // 5c. Recalled memories
+        if !ctx.recalled_memories().is_empty() {
+            let recall_xml = serialize_recalled_xml(ctx.recalled_memories());
+            chat_history.push(ChatMessage::user().content(&recall_xml).build());
+        }
+
+        // --- 6. Render as OpenAI-compatible API JSON ---
+
+        // Replicate llm crate's prepare_messages conversion logic:
+        // - ToolResult expands into multiple "tool" role messages
+        // - ToolUse becomes "assistant" with tool_calls array
+        // - Text becomes "user"/"assistant" with content string
+        // - System message is prepended by the provider (shown as placeholder)
+
+        #[derive(serde::Serialize)]
+        struct OpenAIMessage {
+            role: &'static str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            content: Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            tool_calls: Option<Vec<llm::ToolCall>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            tool_call_id: Option<String>,
+        }
+
+        let mut api_messages: Vec<OpenAIMessage> = vec![];
+
+        for msg in &chat_history {
+            match &msg.message_type {
+                llm::chat::MessageType::ToolResult(results) => {
+                    // ToolResult expands into separate "tool" role messages
+                    for tc in results {
+                        api_messages.push(OpenAIMessage {
+                            role: "tool",
+                            tool_call_id: Some(tc.id.clone()),
+                            tool_calls: None,
+                            content: Some(tc.function.arguments.clone()),
+                        });
+                    }
+                }
+                llm::chat::MessageType::ToolUse(calls) => {
+                    api_messages.push(OpenAIMessage {
+                        role: "assistant",
+                        content: None,
+                        tool_calls: Some(calls.clone()),
+                        tool_call_id: None,
+                    });
+                }
+                _ => {
+                    api_messages.push(OpenAIMessage {
+                        role: match msg.role {
+                            llm::chat::ChatRole::User => "user",
+                            llm::chat::ChatRole::Assistant => "assistant",
+                        },
+                        content: Some(msg.content.clone()),
+                        tool_calls: None,
+                        tool_call_id: None,
+                    });
+                }
+            }
+        }
+
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "messages": api_messages,
+            }))
+            .unwrap()
+        );
     }
 }

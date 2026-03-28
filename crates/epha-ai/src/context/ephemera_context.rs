@@ -1,5 +1,6 @@
 use super::MemoryFragmentList;
 use super::memory_constructors::from_agora_event;
+use super::memory_content::{SerializeContext, format_rfc3339};
 use crate::config::ContextConfig;
 use crate::sync::SyncSender;
 use agora::event::Event;
@@ -134,50 +135,12 @@ impl EphemeraContext {
                 fragment.id, pinned_at, reason_str
             ));
 
-            // Render inner content based on MemoryKind
-            match fragment.kind {
-                MemoryKind::Thought => {
-                    if let Ok(thought) =
-                        serde_json::from_str::<crate::context::ThoughtContent>(&fragment.content)
-                    {
-                        xml.push_str(&format!(
-                            "    <thought>{}</thought>\n",
-                            xml_escape(&thought.text)
-                        ));
-                    } else {
-                        xml.push_str(&format!(
-                            "    <thought>{}</thought>\n",
-                            xml_escape(&fragment.content)
-                        ));
-                    }
-                }
-                MemoryKind::Event => {
-                    if let Ok(event_content) =
-                        serde_json::from_str::<crate::context::EventContent>(&fragment.content)
-                    {
-                        xml.push_str(&format!(
-                            "    <event>{}</event>\n",
-                            xml_escape(&event_content.text)
-                        ));
-                    } else {
-                        xml.push_str(&format!(
-                            "    <event>{}</event>\n",
-                            xml_escape(&fragment.content)
-                        ));
-                    }
-                }
-                MemoryKind::Action => {
-                    xml.push_str(&format!(
-                        "    <action>{}</action>\n",
-                        xml_escape(&fragment.content)
-                    ));
-                }
-                MemoryKind::Unknown => {
-                    xml.push_str(&format!(
-                        "    <content>{}</content>\n",
-                        xml_escape(&fragment.content)
-                    ));
-                }
+            // Render inner content using structured XML serialization
+            let inner = fragment.serialize_context();
+            for line in inner.split('\n') {
+                xml.push_str("    ");
+                xml.push_str(line);
+                xml.push('\n');
             }
 
             xml.push_str("  </memory>\n");
@@ -431,22 +394,6 @@ impl ContextSerialize for EphemeraContext {
 
         output
     }
-}
-
-/// Format an OffsetDateTime as RFC 3339 string
-fn format_rfc3339(dt: &OffsetDateTime) -> String {
-    let format =
-        time::format_description::parse("[year]-[month]-[day]T[hour]:[minute]:[second]Z").unwrap();
-    dt.format(&format).unwrap_or_else(|_| "unknown".to_string())
-}
-
-/// Escape special XML characters
-fn xml_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
 }
 
 // ============================================================================
