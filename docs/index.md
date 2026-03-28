@@ -25,6 +25,7 @@ Welcome to the Ephemera AI documentation. Start here to understand what makes th
 - **[Architecture](architecture/index.md)** — System design overview
   - [Existence State](architecture/existence-state.md) — Active, Dormant, Suspended modes
   - [Memory Kinds](architecture/memory-kinds.md) — Thought, Action, Event classification
+  - [Context Architecture](architecture/context.md) — Context window construction, XML serialization, prefix caching
   - [Event System](architecture/event-system.md) — Herald-Agora architecture
 
 ### For Developers
