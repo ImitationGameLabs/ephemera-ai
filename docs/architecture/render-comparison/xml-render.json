@@ -1,0 +1,77 @@
+{
+  "messages": [
+    {
+      "content": "<pinned_memories>\n  <memory id=\"100\" pinned-at=\"2026-03-21T08:38:58Z\" reason=\"Core identity memory\">\n    <text>I am Ephemera, an autonomous AI entity. My purpose is to explore and understand the world while maintaining continuity of self-awareness.</text>\n  </memory>\n  <memory id=\"101\" pinned-at=\"2026-03-26T08:38:58Z\" reason=\"User preference\">\n    <event type=\"chat.message\" from=\"herald_user\" timestamp=\"2026-03-26T08:38:58Z\" priority=\"normal\">\n      <payload>{\"text\":\"Remember: I prefer concise replies, don't over-explain\"}</payload>\n    </event>\n  </memory>\n  <memory id=\"102\" pinned-at=\"2026-03-27T08:38:58Z\" reason=\"System environment info\">\n    <action>\n      <tool_call id=\"call_pa1\" tool=\"shell_exec\">\n        <args>{\"command\":\"uname -a\"}</args>\n        <result>Linux ephemera 6.1.0 #1 SMP x86_64 GNU/Linux</result>\n      </tool_call)\n      <tool_call id=\"call_pa2\" tool=\"file_read\">\n        <args>{\"path\":\"/etc/os-release\"}</args>\n        <result>NAME=\"NixOS\"\n    VERSION=\"24.11\"</result>\n      </tool_call)\n    </action>\n  </memory>\n  <memory id=\"103\" pinned-at=\"2026-03-27T20:38:58Z\" reason=\"Technical preference\">\n    <text>I prefer Rust for systems programming and Nix for environment management.</text>\n  </memory>\n</pinned_memories>",
+      "role": "assistant"
+    },
+    {
+      "content": "<event type=\"chat.message\" from=\"herald_user\" timestamp=\"2026-03-28T08:28:58Z\" priority=\"normal\">\n  <payload>{\"text\":\"Hi, can you check the server status?\"}</payload>\n</event>",
+      "role": "user"
+    },
+    {
+      "content": "User request received. Need to check server status. Start with uptime and system load.",
+      "role": "assistant"
+    },
+    {
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"command\":\"uptime\"}",
+            "name": "shell_exec"
+          },
+          "id": "call_202",
+          "type": "function"
+        }
+      ]
+    },
+    {
+      "content": " 10:42:15 up 42 days,  3:15,  2 users,  load average: 0.15, 0.10, 0.08",
+      "role": "tool",
+      "tool_call_id": "call_202"
+    },
+    {
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"command\":\"df -h /\"}",
+            "name": "shell_exec"
+          },
+          "id": "call_203a",
+          "type": "function"
+        },
+        {
+          "function": {
+            "arguments": "{\"limit\":5,\"path\":\"/var/log/syslog\"}",
+            "name": "file_read"
+          },
+          "id": "call_203b",
+          "type": "function"
+        }
+      ]
+    },
+    {
+      "content": "Filesystem      Size  Used Avail Use%  Mounted on\n/dev/sda1       100G   45G   55G  45%  /",
+      "role": "tool",
+      "tool_call_id": "call_203a"
+    },
+    {
+      "content": "Mar 28 10:40:01 ephemera systemd[1]: Starting daily apt activities...\nMar 28 10:41:00 ephemera CRON[1234]: (root) CMD (/usr/local/bin/backup.sh)\nMar 28 10:42:00 ephemera kernel: [INFO] No errors detected",
+      "role": "tool",
+      "tool_call_id": "call_203b"
+    },
+    {
+      "content": "Server is healthy: uptime 42 days, low load (0.15). Root partition at 45% usage, plenty of disk space. No anomalies in logs.",
+      "role": "assistant"
+    },
+    {
+      "content": "<event type=\"timer.trigger\" from=\"chronikos\" timestamp=\"2026-03-28T08:33:58Z\" priority=\"low\">\n  <payload>{\"interval\":\"hourly\",\"task\":\"health_check\"}</payload>\n</event>",
+      "role": "user"
+    },
+    {
+      "content": "<recalled_memories count=\"2\">\n  <memory id=\"300\" timestamp=\"2026-03-25T08:38:58Z\" kind=\"thought\">\n    <text>In the last conversation, the user mentioned preferring concise replies and disliking lengthy explanations.</text>\n  </memory>\n  <memory id=\"301\" timestamp=\"2026-03-25T08:38:58Z\" kind=\"event\">\n    <event type=\"system.alert\" from=\"monitor\" timestamp=\"2026-03-25T08:38:58Z\" priority=\"high\">\n      <payload>{\"level\":\"warning\",\"message\":\"Memory usage exceeded 80%\"}</payload>\n    </event>\n  </memory>\n  <instruction>Please reflect on these recalled memories and extract what is relevant. Use memory_pin to permanently retain any memories you wish to keep.</instruction>\n</recalled_memories>",
+      "role": "user"
+    }
+  ]
+}

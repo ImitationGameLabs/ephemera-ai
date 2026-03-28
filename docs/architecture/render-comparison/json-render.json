@@ -1,0 +1,77 @@
+{
+  "messages": [
+    {
+      "content": "{\n  \"pinned_memories\": [\n    {\n      \"content\": \"{\\\"text\\\":\\\"I am Ephemera, an autonomous AI entity. My purpose is to explore and understand the world while maintaining continuity of self-awareness.\\\"}\",\n      \"id\": 100,\n      \"pinned_at\": \"2026-03-21T08:38:38Z\",\n      \"reason\": \"Core identity memory\"\n    },\n    {\n      \"content\": \"{\\\"id\\\":50,\\\"event_type\\\":\\\"chat.message\\\",\\\"herald_id\\\":\\\"herald_user\\\",\\\"payload\\\":{\\\"text\\\":\\\"Remember: I prefer concise replies, don't over-explain\\\"},\\\"priority\\\":\\\"normal\\\",\\\"timestamp\\\":\\\"2026-03-26T08:38:38.145584686Z\\\",\\\"status\\\":\\\"acked\\\"}\",\n      \"id\": 101,\n      \"pinned_at\": \"2026-03-26T08:38:38Z\",\n      \"reason\": \"User preference\"\n    },\n    {\n      \"content\": \"{\\\"tool_calls\\\":[{\\\"id\\\":\\\"call_pa1\\\",\\\"tool\\\":\\\"shell_exec\\\",\\\"args\\\":{\\\"command\\\":\\\"uname -a\\\"},\\\"result\\\":\\\"Linux ephemera 6.1.0 #1 SMP x86_64 GNU/Linux\\\"},{\\\"id\\\":\\\"call_pa2\\\",\\\"tool\\\":\\\"file_read\\\",\\\"args\\\":{\\\"path\\\":\\\"/etc/os-release\\\"},\\\"result\\\":\\\"NAME=\\\\\\\"NixOS\\\\\\\"\\\\nVERSION=\\\\\\\"24.11\\\\\\\"\\\"}]}\",\n      \"id\": 102,\n      \"pinned_at\": \"2026-03-27T08:38:38Z\",\n      \"reason\": \"System environment info\"\n    },\n    {\n      \"content\": \"{\\\"text\\\":\\\"I prefer Rust for systems programming and Nix for environment management.\\\"}\",\n      \"id\": 103,\n      \"pinned_at\": \"2026-03-27T20:38:38Z\",\n      \"reason\": \"Technical preference\"\n    }\n  ]\n}",
+      "role": "assistant"
+    },
+    {
+      "content": "<event type=\"chat.message\" from=\"herald_user\" timestamp=\"2026-03-28T08:28:38Z\" priority=\"normal\">\n  <payload>{\"text\":\"Hi, can you check the server status?\"}</payload>\n</event>",
+      "role": "user"
+    },
+    {
+      "content": "User request received. Need to check server status. Start with uptime and system load.",
+      "role": "assistant"
+    },
+    {
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"command\":\"uptime\"}",
+            "name": "shell_exec"
+          },
+          "id": "call_202",
+          "type": "function"
+        }
+      ]
+    },
+    {
+      "content": " 10:42:15 up 42 days,  3:15,  2 users,  load average: 0.15, 0.10, 0.08",
+      "role": "tool",
+      "tool_call_id": "call_202"
+    },
+    {
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"command\":\"df -h /\"}",
+            "name": "shell_exec"
+          },
+          "id": "call_203a",
+          "type": "function"
+        },
+        {
+          "function": {
+            "arguments": "{\"limit\":5,\"path\":\"/var/log/syslog\"}",
+            "name": "file_read"
+          },
+          "id": "call_203b",
+          "type": "function"
+        }
+      ]
+    },
+    {
+      "content": "Filesystem      Size  Used Avail Use%  Mounted on\n/dev/sda1       100G   45G   55G  45%  /",
+      "role": "tool",
+      "tool_call_id": "call_203a"
+    },
+    {
+      "content": "Mar 28 10:40:01 ephemera systemd[1]: Starting daily apt activities...\nMar 28 10:41:00 ephemera CRON[1234]: (root) CMD (/usr/local/bin/backup.sh)\nMar 28 10:42:00 ephemera kernel: [INFO] No errors detected",
+      "role": "tool",
+      "tool_call_id": "call_203b"
+    },
+    {
+      "content": "Server is healthy: uptime 42 days, low load (0.15). Root partition at 45% usage, plenty of disk space. No anomalies in logs.",
+      "role": "assistant"
+    },
+    {
+      "content": "<event type=\"timer.trigger\" from=\"chronikos\" timestamp=\"2026-03-28T08:33:38Z\" priority=\"low\">\n  <payload>{\"interval\":\"hourly\",\"task\":\"health_check\"}</payload>\n</event>",
+      "role": "user"
+    },
+    {
+      "content": "{\n  \"instruction\": \"Please reflect on these recalled memories and extract what is relevant. Use memory_pin to permanently retain any memories you wish to keep.\",\n  \"recalled_memories\": {\n    \"count\": 2,\n    \"memories\": [\n      {\n        \"content\": \"{\\\"text\\\":\\\"In the last conversation, the user mentioned preferring concise replies and disliking lengthy explanations.\\\"}\",\n        \"id\": 300,\n        \"kind\": \"thought\",\n        \"timestamp\": \"2026-03-25T08:38:38Z\"\n      },\n      {\n        \"content\": \"{\\\"id\\\":301,\\\"event_type\\\":\\\"system.alert\\\",\\\"herald_id\\\":\\\"monitor\\\",\\\"payload\\\":{\\\"level\\\":\\\"warning\\\",\\\"message\\\":\\\"Memory usage exceeded 80%\\\"},\\\"priority\\\":\\\"high\\\",\\\"timestamp\\\":\\\"2026-03-25T08:38:38.145978374Z\\\",\\\"status\\\":\\\"delivered\\\"}\",\n        \"id\": 301,\n        \"kind\": \"event\",\n        \"timestamp\": \"2026-03-25T08:38:38Z\"\n      }\n    ]\n  }\n}",
+      "role": "user"
+    }
+  ]
+}
