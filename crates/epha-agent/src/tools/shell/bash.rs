@@ -332,6 +332,7 @@ mod tests {
         assert_eq!(result.exit_code, Some(0));
     }
 
+    /// Test that commands and output containing non-ASCII characters are handled correctly.
     #[tokio::test]
     async fn test_bash_unicode_command() {
         let (tool, mock) = create_tool_with_mock();

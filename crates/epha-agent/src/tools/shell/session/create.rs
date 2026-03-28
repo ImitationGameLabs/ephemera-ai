@@ -170,6 +170,7 @@ mod tests {
         assert!(backend.has_session("my-test_session-123"));
     }
 
+    /// Test that session names containing non-ASCII characters are accepted.
     #[tokio::test]
     async fn test_create_session_with_unicode_name() {
         let (tool, mock) = create_tool_with_mock();

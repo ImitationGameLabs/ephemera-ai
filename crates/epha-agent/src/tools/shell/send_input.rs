@@ -224,6 +224,7 @@ mod tests {
         assert_eq!(inputs[0], "\n");
     }
 
+    /// Test that input containing non-ASCII characters is passed through correctly.
     #[tokio::test]
     async fn test_send_input_unicode() {
         let (tool, mock) = create_tool_with_mock();

@@ -11,7 +11,7 @@
 //! ```text
 //! AI → Tools → ShellBackend trait → TmuxBackend → tmux → shell
 //!                  ↑                      ↑
-//!             抽象接口              实现之一（可替换）
+//!          abstract interface      one implementation (swappable)
 //! ```
 //!
 //! This allows swapping backends (tmux, PTY, Docker, SSH) without
