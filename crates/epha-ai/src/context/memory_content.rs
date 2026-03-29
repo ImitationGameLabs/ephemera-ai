@@ -90,7 +90,7 @@ impl SerializeContext for ActionMemoryContent {
                 xml_escape_content(&serde_json::to_string(&tc.args).unwrap_or_default())
             ));
             xml.push_str(&format!("    <result>{}</result>\n", xml_escape_content(&tc.result)));
-            xml.push_str("  </tool_call)\n");
+            xml.push_str("  </tool_call>\n");
         }
         xml.push_str("</action>");
         xml
