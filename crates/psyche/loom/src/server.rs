@@ -1,5 +1,6 @@
 use axum::Router;
 use sea_orm::{Database, DatabaseConnection};
+use sea_orm_migration::MigratorTrait;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::info;
@@ -91,6 +92,7 @@ impl LoomServer {
 
 async fn init_memory_service(config: &Config) -> anyhow::Result<MemoryManager> {
     let db = connect_db(config).await?;
+    crate::services::db_migration::Migrator::up(&db, None).await?;
     Ok(MemoryManager::new(db, 0))
 }
 
