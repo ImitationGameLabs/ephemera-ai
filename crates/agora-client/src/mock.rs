@@ -36,21 +36,12 @@ pub enum MockResponse {
 }
 
 /// Internal state for the mock client
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct MockState {
     /// Queue of responses to return for subsequent calls
     responses: VecDeque<Result<MockResponse, String>>,
     /// All calls made to this mock
     calls: Vec<MockCall>,
-}
-
-impl Default for MockState {
-    fn default() -> Self {
-        Self {
-            responses: VecDeque::new(),
-            calls: Vec::new(),
-        }
-    }
 }
 
 /// Mock Agora client for testing
