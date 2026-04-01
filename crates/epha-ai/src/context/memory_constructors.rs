@@ -5,7 +5,7 @@
 
 use crate::context::memory_content::EventContent;
 use crate::context::memory_content::pending_memory;
-use agora::event::Event;
+use agora_common::event::Event;
 use loom_client::memory::MemoryKind;
 
 /// Create an Event memory from an Agora event.
@@ -31,8 +31,8 @@ mod tests {
             herald_id: "herald_1".to_string(),
             payload: serde_json::json!("hello from herald"),
             timestamp: time::OffsetDateTime::now_utc(),
-            priority: agora::event::EventPriority::Normal,
-            status: agora::event::EventStatus::Pending,
+            priority: agora_common::event::EventPriority::Normal,
+            status: agora_common::event::EventStatus::Pending,
         };
         let fragment = from_agora_event(event);
         assert_eq!(fragment.kind, MemoryKind::Event);

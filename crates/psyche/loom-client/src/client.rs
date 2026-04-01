@@ -4,8 +4,8 @@ use serde::de::DeserializeOwned;
 use std::fmt;
 use tracing::{debug, instrument};
 
-use loom::memory::models::*;
-use loom::memory::types::MemoryFragment;
+use loom_common::models::*;
+use loom_common::types::MemoryFragment;
 
 use crate::LoomClientTrait;
 

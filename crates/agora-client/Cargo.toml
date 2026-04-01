@@ -6,7 +6,7 @@ description = "Client library for Agora event hub"
 
 [dependencies]
 # Agora server dependency for shared types
-agora = { path = "../agora" }
+agora-common = { path = "../agora-common" }
 
 async-trait = { workspace = true }
 reqwest = { workspace = true }

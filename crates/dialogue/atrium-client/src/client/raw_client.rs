@@ -1,7 +1,7 @@
 use reqwest::{Client, Response, Error as ReqwestError};
 use serde::de::DeserializeOwned;
 use std::fmt;
-use atrium::models::*;
+use atrium_common::*;
 
 #[derive(Debug)]
 pub enum ClientError {

@@ -5,7 +5,6 @@ edition = "2024"
 description = "Atrium herald for Agora event hub"
 
 [dependencies]
-agora = { path = "../../agora" }
 atrium-client = { path = "../atrium-client" }
 
 anyhow = { workspace = true }

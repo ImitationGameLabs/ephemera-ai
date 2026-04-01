@@ -3,7 +3,7 @@ use super::memory_constructors::from_agora_event;
 use super::memory_content::{SerializeContext, format_rfc3339};
 use crate::config::ContextConfig;
 use crate::sync::SyncSender;
-use agora::event::Event;
+use agora_common::event::Event;
 use loom_client::memory::{MemoryFragment, MemoryKind};
 use loom_client::{CreateMemoryRequest, LoomClientTrait};
 use std::collections::VecDeque;

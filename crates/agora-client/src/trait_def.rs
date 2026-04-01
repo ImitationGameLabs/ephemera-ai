@@ -3,8 +3,8 @@
 //! This trait allows for mocking in tests and dependency injection.
 
 use async_trait::async_trait;
-use agora::event::Event;
-use agora::herald::HeraldInfo;
+use agora_common::event::Event;
+use agora_common::herald::HeraldInfo;
 
 use crate::AgoraClientError;
 

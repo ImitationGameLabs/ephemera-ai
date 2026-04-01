@@ -7,8 +7,8 @@ mod client;
 
 pub use client::{KairosClient, KairosClientError};
 
-// Re-export commonly used types from kairos
-pub use kairos::schedule::{
+// Re-export commonly used types from kairos-common
+pub use kairos_common::schedule::{
     AckTriggeredRequest, CreateScheduleRequest, Period, Priority, Schedule, ScheduleId,
     ScheduleStatus, SchedulesListResponse, StatusResponse, TriggerSpec, TriggeredSchedule,
     UpdateScheduleRequest,

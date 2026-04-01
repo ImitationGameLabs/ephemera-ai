@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use atrium::models::*;
+use atrium_common::*;
 use super::raw_client::{RawClient, ClientError};
 use reqwest::Client;
 

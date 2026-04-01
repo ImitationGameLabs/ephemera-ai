@@ -6,8 +6,8 @@ use serde::de::DeserializeOwned;
 use std::fmt;
 use tracing::{debug, instrument};
 
-use agora::event::{Event, EventsListResponse};
-use agora::herald::{HeraldInfo, HeraldsListResponse};
+use agora_common::event::{Event, EventsListResponse};
+use agora_common::herald::{HeraldInfo, HeraldsListResponse};
 
 use crate::AgoraClientTrait;
 

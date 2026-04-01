@@ -7,8 +7,8 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use loom::memory::models::*;
-use loom::memory::types::MemoryFragment;
+use loom_common::models::*;
+use loom_common::types::MemoryFragment;
 
 use crate::{LoomClientError, LoomClientTrait};
 
@@ -283,7 +283,7 @@ impl LoomClientTrait for MockLoomClient {
                     id: memory_id,
                     content: String::new(),
                     timestamp: time::OffsetDateTime::now_utc(),
-                    kind: loom::memory::types::MemoryKind::Action,
+                    kind: loom_common::types::MemoryKind::Action,
                 },
                 reason,
                 pinned_at: time::OffsetDateTime::now_utc(),
@@ -332,7 +332,7 @@ mod tests {
             id: 0,
             content: "test".to_string(),
             timestamp: time::OffsetDateTime::now_utc(),
-            kind: loom::memory::types::MemoryKind::Action,
+            kind: loom_common::types::MemoryKind::Action,
         };
         mock.push_memory(MemoryResponse { fragments: vec![fragment.clone()], total: 1 });
 
@@ -351,7 +351,7 @@ mod tests {
             id: 42,
             content: "test content".to_string(),
             timestamp: time::OffsetDateTime::now_utc(),
-            kind: loom::memory::types::MemoryKind::Action,
+            kind: loom_common::types::MemoryKind::Action,
         };
         mock.push_memory(MemoryResponse { fragments: vec![fragment], total: 1 });
 
@@ -412,7 +412,7 @@ mod tests {
             id: 100,
             content: "pinned content".to_string(),
             timestamp: time::OffsetDateTime::now_utc(),
-            kind: loom::memory::types::MemoryKind::Action,
+            kind: loom_common::types::MemoryKind::Action,
         };
         mock.push_pinned_memory(PinnedMemory {
             fragment,
@@ -443,7 +443,7 @@ mod tests {
             id: 1,
             content: "default".to_string(),
             timestamp: time::OffsetDateTime::now_utc(),
-            kind: loom::memory::types::MemoryKind::Action,
+            kind: loom_common::types::MemoryKind::Action,
         };
         mock.set_default_memory(MemoryResponse { fragments: vec![fragment], total: 1 });
 
@@ -475,7 +475,7 @@ mod tests {
                 id: 1,
                 content: "first".to_string(),
                 timestamp: time::OffsetDateTime::now_utc(),
-                kind: loom::memory::types::MemoryKind::Action,
+                kind: loom_common::types::MemoryKind::Action,
             }],
             total: 1,
         });
@@ -484,7 +484,7 @@ mod tests {
                 id: 2,
                 content: "second".to_string(),
                 timestamp: time::OffsetDateTime::now_utc(),
-                kind: loom::memory::types::MemoryKind::Action,
+                kind: loom_common::types::MemoryKind::Action,
             }],
             total: 1,
         });
@@ -522,7 +522,7 @@ mod tests {
             id: 1,
             content: "timeline event".to_string(),
             timestamp: time::OffsetDateTime::now_utc(),
-            kind: loom::memory::types::MemoryKind::Action,
+            kind: loom_common::types::MemoryKind::Action,
         };
         mock.push_memory(MemoryResponse { fragments: vec![fragment], total: 1 });
 

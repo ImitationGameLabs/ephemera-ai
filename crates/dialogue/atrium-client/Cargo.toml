@@ -5,8 +5,7 @@ edition = "2024"
 description = "Client library for Dialogue Atrium chat system"
 
 [dependencies]
-# Atrium server dependency for shared types
-atrium = { path = "../atrium" }
+atrium-common = { path = "../atrium-common" }
 
 reqwest = { workspace = true }
 serde = { workspace = true }

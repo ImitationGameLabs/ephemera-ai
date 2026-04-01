@@ -5,7 +5,7 @@ use serde::de::DeserializeOwned;
 use std::fmt;
 use tracing::{debug, instrument};
 
-use kairos::schedule::{
+use kairos_common::schedule::{
     AckTriggeredRequest, CreateScheduleRequest, Schedule, ScheduleStatus,
     SchedulesListResponse, StatusResponse, TriggeredSchedule, UpdateScheduleRequest,
 };

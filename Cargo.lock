@@ -120,6 +120,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 name = "agora"
 version = "0.1.0"
 dependencies = [
+ "agora-common",
  "anyhow",
  "axum 0.8.8",
  "clap",
@@ -139,7 +140,7 @@ dependencies = [
 name = "agora-client"
 version = "0.1.0"
 dependencies = [
- "agora",
+ "agora-common",
  "async-trait",
  "reqwest",
  "serde",
@@ -148,6 +149,15 @@ dependencies = [
  "time",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "agora-common"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "time",
 ]
 
 [[package]]
@@ -349,6 +359,7 @@ name = "atrium"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "atrium-common",
  "axum 0.8.8",
  "clap",
  "reqwest",
@@ -392,7 +403,7 @@ dependencies = [
 name = "atrium-client"
 version = "0.1.0"
 dependencies = [
- "atrium",
+ "atrium-common",
  "reqwest",
  "rpassword",
  "serde",
@@ -403,10 +414,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "atrium-common"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "time",
+]
+
+[[package]]
 name = "atrium-herald"
 version = "0.1.0"
 dependencies = [
- "agora",
  "anyhow",
  "atrium-client",
  "clap",
@@ -1683,8 +1702,8 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 name = "epha-ai"
 version = "0.1.0"
 dependencies = [
- "agora",
  "agora-client",
+ "agora-common",
  "anyhow",
  "async-trait",
  "atrium-client",
@@ -2626,6 +2645,7 @@ dependencies = [
  "anyhow",
  "axum 0.8.8",
  "clap",
+ "kairos-common",
  "serde",
  "serde_json",
  "sqlx",
@@ -2659,7 +2679,7 @@ dependencies = [
 name = "kairos-client"
 version = "0.1.0"
 dependencies = [
- "kairos",
+ "kairos-common",
  "reqwest",
  "serde",
  "serde_json",
@@ -2667,6 +2687,15 @@ dependencies = [
  "time",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "kairos-common"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "time",
 ]
 
 [[package]]
@@ -2829,6 +2858,7 @@ dependencies = [
  "async-trait",
  "axum 0.8.8",
  "clap",
+ "loom-common",
  "sea-orm",
  "sea-orm-migration",
  "serde",
@@ -2850,7 +2880,7 @@ name = "loom-client"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "loom",
+ "loom-common",
  "reqwest",
  "serde",
  "serde_json",
@@ -2858,6 +2888,16 @@ dependencies = [
  "time",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "loom-common"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+ "time",
 ]
 
 [[package]]

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+loom-common = { path = "../loom-common" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 sea-orm = { workspace = true }

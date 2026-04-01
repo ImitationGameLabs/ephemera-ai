@@ -3,7 +3,7 @@
 //! All memory constructors produce content in one of these structured formats,
 //! enabling reliable conversion to role-aware ChatMessages.
 
-use agora::event::Event;
+use agora_common::event::Event;
 use llm::chat::ChatMessage;
 use llm::{FunctionCall, ToolCall};
 use loom_client::memory::{MemoryFragment, MemoryKind};
@@ -317,14 +317,14 @@ mod tests {
 
     #[test]
     fn event_converts_to_user_message() {
-        let event = agora::event::Event {
+        let event = agora_common::event::Event {
             id: 1,
             event_type: "message".to_string(),
             herald_id: "herald_1".to_string(),
             payload: serde_json::json!("user said hi"),
             timestamp: time::OffsetDateTime::now_utc(),
-            priority: agora::event::EventPriority::Normal,
-            status: agora::event::EventStatus::Pending,
+            priority: agora_common::event::EventPriority::Normal,
+            status: agora_common::event::EventStatus::Pending,
         };
         let text = serde_json::to_string(&event).unwrap();
         let content = EventContent { text };

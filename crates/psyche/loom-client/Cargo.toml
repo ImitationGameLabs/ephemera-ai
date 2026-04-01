@@ -5,8 +5,8 @@ edition = "2024"
 description = "Client library for Loom memory service"
 
 [dependencies]
-# Loom server dependency for shared types
-loom = { path = "../loom" }
+# Loom common types (no server dependency needed)
+loom-common = { path = "../loom-common" }
 
 async-trait = { workspace = true }
 reqwest = { workspace = true }

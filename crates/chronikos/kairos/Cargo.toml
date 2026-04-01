@@ -5,6 +5,7 @@ edition = "2024"
 description = "Time management service for Ephemera AI - the brain of time"
 
 [dependencies]
+kairos-common = { path = "../kairos-common" }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

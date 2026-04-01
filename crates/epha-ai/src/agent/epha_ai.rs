@@ -395,7 +395,7 @@ mod tests {
         use crate::config::ContextConfig;
         use crate::context::{EventContent, ToChatMessages};
         use crate::sync::SyncSender;
-        use agora::event::{Event, EventPriority, EventStatus};
+        use agora_common::event::{Event, EventPriority, EventStatus};
         use loom_client::memory::MemoryKind;
         use loom_client::mock::MockLoomClient;
         use std::sync::Arc;

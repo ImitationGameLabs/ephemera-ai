@@ -5,6 +5,7 @@ edition = "2024"
 description = "Event hub for Ephemera AI"
 
 [dependencies]
+agora-common = { path = "../agora-common" }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

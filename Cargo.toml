@@ -4,16 +4,20 @@ members = [
 
   "crates/agora",
   "crates/agora-client",
+  "crates/agora-common",
 
+  "crates/chronikos/kairos-common",
   "crates/chronikos/kairos",
   "crates/chronikos/kairos-client",
   "crates/chronikos/kairos-cli",
   "crates/chronikos/kairos-herald",
 
   "crates/psyche/loom",
+  "crates/psyche/loom-common",
   "crates/psyche/loom-client",
 
   "crates/dialogue/atrium",
+  "crates/dialogue/atrium-common",
   "crates/dialogue/atrium-client",
   "crates/dialogue/atrium-cli",
   "crates/dialogue/atrium-herald",

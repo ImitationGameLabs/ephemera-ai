@@ -25,6 +25,6 @@ tmux_interface = { workspace = true }
 loom-client = { path = "../psyche/loom-client" }
 atrium-client = { path = "../dialogue/atrium-client" }
 agora-client = { path = "../agora-client" }
-agora = { path = "../agora" }
+agora-common = { path = "../agora-common" }
 clap = { workspace = true }
 uuid = { workspace = true }

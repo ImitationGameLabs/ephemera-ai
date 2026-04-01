@@ -20,6 +20,7 @@ tracing-subscriber = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 clap = { workspace = true }
+atrium-common = { path = "../atrium-common" }
 url = { workspace = true }
 reqwest = { workspace = true, optional = true }
 

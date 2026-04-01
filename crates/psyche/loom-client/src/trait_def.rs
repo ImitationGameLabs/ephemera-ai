@@ -3,8 +3,8 @@
 //! This trait allows for mocking in tests and dependency injection.
 
 use async_trait::async_trait;
-use loom::memory::models::*;
-use loom::memory::types::MemoryFragment;
+use loom_common::models::*;
+use loom_common::types::MemoryFragment;
 
 use crate::LoomClientError;
 

@@ -6,6 +6,6 @@ mod trait_def;
 pub use client::*;
 pub use trait_def::LoomClientTrait;
 
-// Re-export commonly used types from loom
-pub use loom::memory::models::*;
-pub use loom::memory::types::MemoryKind;
+// Re-export commonly used types from loom-common
+pub use loom_common::models::*;
+pub use loom_common::types::MemoryKind;

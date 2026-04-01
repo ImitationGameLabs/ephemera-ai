@@ -5,8 +5,8 @@ edition = "2024"
 description = "Client library for Kairos time management service"
 
 [dependencies]
-# Kairos server dependency for shared types
-kairos = { path = "../kairos" }
+# Shared schedule types
+kairos-common = { path = "../kairos-common" }
 
 reqwest = { workspace = true }
 serde = { workspace = true }
