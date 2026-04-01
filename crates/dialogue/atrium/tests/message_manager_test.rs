@@ -1,7 +1,8 @@
 mod fixtures;
 
 use fixtures::{create_message_manager, create_user_manager, setup_test_db};
-use atrium::db::{CreateMessageDto, CreateUserDto, MessageError};
+use atrium::db::message_manager::{CreateMessageDto, MessageError};
+use atrium::db::user_manager::CreateUserDto;
 
 /// 测试消息 CRUD 场景
 #[tokio::test]

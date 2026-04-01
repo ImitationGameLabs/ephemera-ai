@@ -2,7 +2,8 @@ use sea_orm::Database;
 use sea_orm_migration::MigratorTrait;
 use testcontainers_modules::{mysql::Mysql, testcontainers::runners::AsyncRunner};
 
-use atrium::db::{MessageManager, UserManager};
+use atrium::db::message_manager::MessageManager;
+use atrium::db::user_manager::UserManager;
 use atrium::migration::Migrator;
 
 /// Setup a test database using testcontainers.

@@ -1,7 +1,7 @@
 mod fixtures;
 
 use fixtures::{create_user_manager, setup_test_db};
-use atrium::db::CreateUserDto;
+use atrium::db::user_manager::CreateUserDto;
 
 /// 测试单用户在线状态
 #[tokio::test]

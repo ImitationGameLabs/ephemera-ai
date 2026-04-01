@@ -120,7 +120,7 @@ impl AuthenticatedClient {
         }
 
         // Get the current since_id
-        let since_id = self.last_read_message_id.lock().await.clone();
+        let since_id = *self.last_read_message_id.lock().await;
 
         // Fetch messages using since_id
         let query = GetMessagesQuery {
@@ -157,7 +157,7 @@ impl AuthenticatedClient {
         }).await?;
 
         // Get the last_read_id after the HTTP call
-        let last_read_id = self.last_read_message_id.lock().await.clone();
+        let last_read_id = *self.last_read_message_id.lock().await;
 
         if latest_messages.messages.is_empty() {
             return Ok(0)

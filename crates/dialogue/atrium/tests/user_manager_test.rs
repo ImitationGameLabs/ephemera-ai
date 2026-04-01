@@ -1,7 +1,7 @@
 mod fixtures;
 
 use fixtures::{create_user_manager, setup_test_db};
-use atrium::db::{CreateUserDto, UpdateUserDto, UserError};
+use atrium::db::user_manager::{CreateUserDto, UpdateUserDto, UserError};
 
 /// 测试用户创建和认证场景
 #[tokio::test]
