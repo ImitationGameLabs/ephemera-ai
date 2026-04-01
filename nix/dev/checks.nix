@@ -49,7 +49,7 @@ in
   # Audit dependencies
   ephemera-ai-audit = craneLib.cargoAudit {
     inherit src;
-    advisory-db = advisory-db;
+    inherit advisory-db;
   };
 
   # Audit licenses
