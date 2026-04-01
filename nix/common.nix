@@ -70,15 +70,15 @@ let
 
   # Library-only crates (only needed for fileset dependencies, not built separately)
   libraryCratePaths = mapToAbsolute {
-    epha-agent = "crates/epha-agent";
+    agora-common = "crates/agora-common";
     agora-client = "crates/agora-client";
+    kairos-common = "crates/chronikos/kairos-common";
     kairos-client = "crates/chronikos/kairos-client";
+    loom-common = "crates/psyche/loom-common";
     loom-client = "crates/psyche/loom-client";
+    atrium-common = "crates/dialogue/atrium-common";
     atrium-client = "crates/dialogue/atrium-client";
   };
-
-  # All crates combined (for fileset generation)
-  allCratePaths = binaryCratePaths // libraryCratePaths;
 
   # mkCrateSources is a function that converts a crate paths attrset to a list of filesets.
   # Used to gather all workspace crate sources for dependency tracking.
@@ -86,9 +86,13 @@ let
     cratePaths:
     lib.mapAttrsToList (_: cratepath: craneLib.fileset.commonCargoSources cratepath) cratePaths;
 
+  # All workspace crates combined (for fileset generation)
+  allCratePaths = binaryCratePaths // libraryCratePaths;
+
   # mkCrateFileset is a function that creates a fileset for building a specific crate.
-  # Includes workspace-level files (Cargo.toml, Cargo.lock) and all crate sources
-  # to ensure reproducible builds with correct dependencies.
+  # Includes workspace-level files (Cargo.toml, Cargo.lock) and all workspace crate
+  # sources. All members are needed because cargo validates their existence even
+  # when building a single crate with -p.
   mkCrateFileset =
     cratepath:
     lib.fileset.toSource {
@@ -112,7 +116,6 @@ in
     gitVersion
     binaryCratePaths
     libraryCratePaths
-    allCratePaths
     mkCrateFileset
     ;
 }
