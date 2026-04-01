@@ -30,6 +30,8 @@ Welcome to the Ephemera AI documentation. Start here to understand what makes th
 
 ### For Developers
 
+- **[Installation Guide](installation-guide.md)** — Prerequisites, environment setup, and deployment
+- **[Development Guide](development-guide.md)** — Building and developing the project
 - **[CONTRIBUTING.md](../CONTRIBUTING.md)** — Development setup and guidelines
 - **[API Documentation](api/)** — Service APIs
   - [Loom Memory API](api/psyche-loom-api.md)

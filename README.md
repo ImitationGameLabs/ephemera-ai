@@ -30,13 +30,15 @@ When people hear about an AI with autonomy and freedom, a natural concern arises
 
 **[Read more about our approach to safety →](docs/philosophy/safety.md)**
 
+## Getting Started
 
-## What We're Building
+Clone the repository to explore the codebase, architecture, and design:
 
-- **Self-Evolution**: The AI can safely modify its own configuration with atomic transitions — changes either fully apply or fully roll back. Infrastructure designed for minimal human intervention.
-- **Memory for Continuity**: Time-ordered memory stream as the foundation of continuous self; semantic search as an external tool that can be rebuilt
+```bash
+git clone https://github.com/ImitationGameLabs/ephemera-ai.git
+```
 
-See [Architecture](docs/architecture/index.md) for details.
+When you're ready to deploy, see the [Installation Guide](docs/installation-guide.md) for prerequisites, environment setup, and deployment instructions.
 
 ## Documentation
 
