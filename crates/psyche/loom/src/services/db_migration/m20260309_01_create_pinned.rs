@@ -31,7 +31,11 @@ impl MigrationTrait for Migration {
     }
 }
 
+// PinnedAt shares the "Pinned" prefix with the enum name, triggering
+// clippy::enum_variant_names. We allow this because using just "At"
+// would lose the semantic clarity that this is the timestamp when a memory was pinned.
 #[derive(DeriveIden)]
+#[allow(clippy::enum_variant_names)]
 enum Pinned {
     Table,
     MemoryId,

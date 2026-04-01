@@ -46,7 +46,7 @@ impl MemoryManager {
     /// Append memory fragments to the store
     pub async fn append(
         &self,
-        fragments: &mut Vec<MemoryFragment>,
+        fragments: &mut [MemoryFragment],
     ) -> Result<Vec<i64>, MemoryError> {
         if fragments.is_empty() {
             return Ok(vec![]);
@@ -200,6 +200,7 @@ impl MemoryManager {
     }
 
     /// Check if a memory is pinned
+    #[allow(dead_code)]
     pub async fn is_pinned(&self, memory_id: i64) -> Result<bool, MemoryError> {
         let is_pinned = PinnedEntity::find_by_id(memory_id).one(&self.db).await?.is_some();
 

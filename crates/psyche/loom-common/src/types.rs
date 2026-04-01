@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 ///   - System events (startup, shutdown, config changes)
 ///   - Producer events (dialogue, timer, notifications via EventHub)
 /// - Unknown: Classification error - should be investigated
+///
+/// Intentionally does not implement `Default` — all call sites must
+/// explicitly specify the kind to avoid accidental misclassification.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum MemoryKind {
@@ -44,12 +47,6 @@ impl MemoryKind {
             "event" => MemoryKind::Event,
             _ => MemoryKind::Unknown,
         }
-    }
-}
-
-impl Default for MemoryKind {
-    fn default() -> Self {
-        MemoryKind::Event
     }
 }
 
