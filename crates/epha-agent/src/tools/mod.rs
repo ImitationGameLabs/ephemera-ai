@@ -5,22 +5,13 @@
 //!
 //! # Available Tool Categories
 //!
-//! - [`file_system`] - File operations (read, write, edit, list, glob, grep)
 //! - [`shell`] - Shell session management (bash, session management)
 
 pub mod agent_tool;
-pub mod file_system;
 pub mod shell;
 
 // Re-export the AgentTool trait for downstream crates
 pub use agent_tool::AgentTool;
-
-// Re-export commonly used types for convenience
-pub use file_system::{
-    EditArgs, EditOutput, EditTool, GlobArgs, GlobOutput, GlobTool, GrepArgs, GrepOutput, GrepTool,
-    ListArgs, ListOutput, ListTool, ReadArgs, ReadOutput, ReadTool, WriteArgs, WriteOutput,
-    WriteTool, file_system_tool_set,
-};
 
 pub use shell::{
     BashArgs, BashOutput, BashTool, CaptureOutputArgs, CaptureOutputOutput, CaptureOutputTool,

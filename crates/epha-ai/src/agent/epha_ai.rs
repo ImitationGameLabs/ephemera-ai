@@ -10,7 +10,7 @@ use crate::tools::{
 };
 use agora_client::{AgoraClient, AgoraClientTrait};
 use epha_agent::context::Context;
-use epha_agent::tools::{file_system_tool_set, shell::TmuxBackend, shell_tool_set};
+use epha_agent::tools::{shell::TmuxBackend, shell_tool_set};
 use llm::builder::{LLMBackend, LLMBuilder};
 use llm::chat::ChatMessage;
 use llm::{FunctionCall, LLMProvider, ToolCall};
@@ -129,9 +129,6 @@ impl EphemeraAI {
         tool_dispatch
             .add_tool(Box::new(MemoryUnpin::new(loom_client.clone(), context_data.clone())));
         tool_dispatch.add_tool(Box::new(StateTransition::new(state.clone())));
-
-        // File system tools
-        tool_dispatch.add_tools(file_system_tool_set());
 
         // Shell tools
         tool_dispatch.add_tools(shell_tool_set(Arc::new(tokio::sync::Mutex::new(backend))));

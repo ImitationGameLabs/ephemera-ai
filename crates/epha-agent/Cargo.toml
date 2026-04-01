@@ -17,12 +17,6 @@ async-trait = { workspace = true }
 serde_yaml = { workspace = true }
 tracing-subscriber = { workspace = true }
 
-# File system tools dependencies
-regex = { workspace = true }
-glob = { workspace = true }
-
 # Shell tools dependencies
+regex = { workspace = true }
 tmux_interface = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }

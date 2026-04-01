@@ -1685,13 +1685,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "glob",
  "llm",
  "regex",
  "serde",
  "serde_json",
  "serde_yaml",
- "tempfile",
  "thiserror",
  "time",
  "tmux_interface",
