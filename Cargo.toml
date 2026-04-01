@@ -1,7 +1,6 @@
 [workspace]
 members = [
   "crates/epha-ai",
-  "crates/epha-agent",
 
   "crates/agora",
   "crates/agora-client",

@@ -18,7 +18,10 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 log = { workspace = true }
 
-epha-agent = { path = "../epha-agent" }
+serde_yaml = { workspace = true }
+regex = { workspace = true }
+tmux_interface = { workspace = true }
+
 loom-client = { path = "../psyche/loom-client" }
 atrium-client = { path = "../dialogue/atrium-client" }
 agora-client = { path = "../agora-client" }

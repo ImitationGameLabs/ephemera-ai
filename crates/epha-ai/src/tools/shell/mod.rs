@@ -34,8 +34,8 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use epha_agent::tools::shell::{BashTool, shell_tool_set};
-//! use epha_agent::tools::shell::tmux_backend::TmuxBackend;
+//! use crate::tools::shell::{BashTool, shell_tool_set};
+//! use crate::tools::shell::tmux_backend::TmuxBackend;
 //! use std::sync::Arc;
 //! use tokio::sync::Mutex;
 //!

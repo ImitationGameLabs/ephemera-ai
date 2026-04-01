@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use epha_agent::tools::AgentTool;
+use crate::tools::AgentTool;
 use llm::chat::Tool;
 
 /// Dispatches tool calls to registered tools by name.

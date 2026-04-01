@@ -5,12 +5,11 @@ use crate::context::{
     format_rfc3339, pending_memory,
 };
 use crate::sync::{SyncSender, start_sync_task};
+use crate::tools::shell::{TmuxBackend, shell_tool_set};
 use crate::tools::{
     MemoryGet, MemoryPin, MemoryRecent, MemoryTimeline, MemoryUnpin, StateTransition, ToolDispatch,
 };
 use agora_client::{AgoraClient, AgoraClientTrait};
-use epha_agent::context::Context;
-use epha_agent::tools::{shell::TmuxBackend, shell_tool_set};
 use llm::builder::{LLMBackend, LLMBuilder};
 use llm::chat::ChatMessage;
 use llm::{FunctionCall, LLMProvider, ToolCall};
@@ -49,7 +48,7 @@ pub struct EphemeraAI {
     llm: Box<dyn LLMProvider>,
     tool_dispatch: ToolDispatch,
     tool_definitions: Vec<llm::chat::Tool>,
-    context: Context<EphemeraContext>,
+    context: Arc<Mutex<EphemeraContext>>,
     agora_client: Arc<dyn AgoraClientTrait>,
     config: crate::config::Config,
     sync_sender: SyncSender,
@@ -141,7 +140,7 @@ impl EphemeraAI {
             llm,
             tool_dispatch,
             tool_definitions,
-            context: Context::new(context_data),
+            context: context_data,
             agora_client,
             config,
             sync_sender,
@@ -178,14 +177,14 @@ impl EphemeraAI {
             let event_ids: Vec<u64> = events.iter().map(|e| e.id).collect();
 
             // Add events to context
-            self.context.data().lock().await.add_agora_events(events);
+            self.context.lock().await.add_agora_events(events);
 
             // Acknowledge processed events
             self.agora_client.ack_events(event_ids).await?;
         }
 
         // 2. Build chat_history from memory (replaces context.serialize())
-        let data = self.context.data();
+        let data = self.context.clone();
         let ctx = data.lock().await;
         let mut chat_history: Vec<ChatMessage> = vec![];
 
@@ -313,7 +312,7 @@ impl EphemeraAI {
 
             // 3.7.1 Inject recalled memories if any tool populated them
             {
-                let context_handle = self.context.data();
+                let context_handle = self.context.clone();
                 let context_guard = context_handle.lock().await;
                 if !context_guard.recalled_memories().is_empty() {
                     let recall_text = serialize_recalled_xml(context_guard.recalled_memories());
@@ -326,7 +325,7 @@ impl EphemeraAI {
         }
 
         // 4. Clear recall buffer for next cycle
-        self.context.data().lock().await.clear_recalled_memories();
+        self.context.lock().await.clear_recalled_memories();
 
         Ok(())
     }

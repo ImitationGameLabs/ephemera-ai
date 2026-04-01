@@ -1,4 +1,3 @@
-use epha_agent::context::ContextSerialize;
 use loom_client::memory::MemoryFragment;
 use std::collections::VecDeque;
 
@@ -40,8 +39,8 @@ impl From<VecDeque<MemoryFragment>> for MemoryFragmentList {
     }
 }
 
-impl ContextSerialize for MemoryFragmentList {
-    fn serialize(&self) -> String {
+impl MemoryFragmentList {
+    pub fn serialize(&self) -> String {
         if self.0.is_empty() {
             return "No memories found.".to_string();
         }

@@ -4,7 +4,6 @@ use super::memory_content::{SerializeContext, format_rfc3339};
 use crate::config::ContextConfig;
 use crate::sync::SyncSender;
 use agora::event::Event;
-use epha_agent::context::ContextSerialize;
 use loom_client::memory::{MemoryFragment, MemoryKind};
 use loom_client::{CreateMemoryRequest, LoomClientTrait};
 use std::collections::VecDeque;
@@ -363,8 +362,9 @@ impl EphemeraContext {
     }
 }
 
-impl ContextSerialize for EphemeraContext {
-    fn serialize(&self) -> String {
+#[cfg(test)]
+impl EphemeraContext {
+    pub fn serialize(&self) -> String {
         let mut output = String::new();
 
         // 1. Pinned content (highest priority)
