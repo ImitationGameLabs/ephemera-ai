@@ -227,7 +227,7 @@ impl ShellBackend for TmuxBackend {
             .args([
                 "list-sessions",
                 "-F",
-                "#{session_name}:#{session_path}:#{?session_attached,1,0}:#{window_count}",
+                "#{session_name}\t#{session_path}\t#{?session_attached,1,0}\t#{window_count}",
             ])
             .output()
             .map_err(|e| ShellError::backend(e.to_string()))?;
@@ -236,7 +236,7 @@ impl ShellBackend for TmuxBackend {
         let sessions: Vec<SessionInfo> = stdout
             .lines()
             .filter_map(|line| {
-                let parts: Vec<&str> = line.split(':').collect();
+                let parts: Vec<&str> = line.split('\t').collect();
                 if parts.len() >= 4 {
                     Some(SessionInfo {
                         name: parts[0].to_string(),
