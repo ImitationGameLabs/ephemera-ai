@@ -92,10 +92,7 @@ impl<B: ShellBackend + Send + Sync + 'static> AgentTool for SendInputTool<B> {
         })
     }
 
-    async fn call(
-        &self,
-        args_json: &str,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn call(&self, args_json: &str) -> anyhow::Result<String> {
         let args: SendInputArgs = serde_json::from_str(args_json)?;
         let mut backend = self.backend.lock().await;
 

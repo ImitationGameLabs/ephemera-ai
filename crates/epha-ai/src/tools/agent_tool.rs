@@ -32,8 +32,13 @@ pub trait AgentTool: Send + Sync {
     }
 
     /// Execute the tool with JSON-serialized arguments, returning a result string.
-    async fn call(
-        &self,
-        args_json: &str,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>>;
+    ///
+    /// Error semantics:
+    /// - `Ok(String)` — tool executed normally; the string may indicate a
+    ///   business-logic failure (e.g. "shell command exited with non-zero code").
+    ///
+    /// - `Err` — system-level abnormality (network timeout, serialization
+    ///   failure, programming bug). Logged at error level and may trigger
+    ///   operator alerts.
+    async fn call(&self, args_json: &str) -> anyhow::Result<String>;
 }

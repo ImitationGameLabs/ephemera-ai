@@ -18,7 +18,7 @@ use loom_client::memory::{MemoryFragment, MemoryKind};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 /// Serialize recalled memories as XML for temporary injection into chat_history.
@@ -280,7 +280,11 @@ impl EphemeraAI {
                 let result = match self.tool_dispatch.call_tool(tool_name, args_str).await {
                     Ok(result) => result,
                     Err(e) => {
-                        warn!("Tool '{}' failed: {}", tool_name, e);
+                        // Err means system-level failure (network, serialization, etc.),
+                        // not a business-logic failure — those are returned as Ok(String).
+                        // e already carries tool name and full error chain from dispatch;
+                        // args is appended here since dispatch has no access to it.
+                        error!("Tool failed (args: {}): {}", args_str, e);
                         tool_results.push(ToolCallRecord {
                             id: tc.id.clone(),
                             tool: tool_name.clone(),

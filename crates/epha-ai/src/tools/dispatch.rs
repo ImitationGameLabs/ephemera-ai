@@ -46,7 +46,10 @@ impl ToolDispatch {
 
         tool.call(args_json)
             .await
-            .map_err(|e| format!("Tool '{}' execution failed: {}", name, e))
+            // Use {:#} to show the full error chain from .context() calls.
+            // Err here means a system-level failure (network, serialization, etc.),
+            // not a business-logic failure — those are returned as Ok(String).
+            .map_err(|e| format!("Tool '{}' execution failed: {:#}", name, e))
     }
 
     /// Convert all registered tools to llm crate Tool structs for the API.

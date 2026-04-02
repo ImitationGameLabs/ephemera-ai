@@ -56,10 +56,7 @@ impl<B: ShellBackend + Send + Sync + 'static> AgentTool for ListSessionsTool<B> 
         })
     }
 
-    async fn call(
-        &self,
-        args_json: &str,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn call(&self, args_json: &str) -> anyhow::Result<String> {
         let _args: ListSessionsArgs = serde_json::from_str(args_json)?;
         let backend = self.backend.lock().await;
         let sessions = backend.list_sessions().await?;

@@ -102,10 +102,7 @@ impl<B: ShellBackend + Send + Sync + 'static> AgentTool for BashTool<B> {
         })
     }
 
-    async fn call(
-        &self,
-        args_json: &str,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn call(&self, args_json: &str) -> anyhow::Result<String> {
         let args: BashArgs = serde_json::from_str(args_json)?;
         let timeout = Duration::from_secs(args.timeout.unwrap_or(DEFAULT_TIMEOUT_SECS));
 

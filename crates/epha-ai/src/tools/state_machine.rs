@@ -55,10 +55,7 @@ impl AgentTool for StateTransition {
         })
     }
 
-    async fn call(
-        &self,
-        args_json: &str,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn call(&self, args_json: &str) -> anyhow::Result<String> {
         let args: StateTransitionArgs = serde_json::from_str(args_json)?;
         let mut state = self.state.lock().await;
 

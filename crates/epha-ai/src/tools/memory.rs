@@ -1,12 +1,13 @@
-use crate::tools::AgentTool;
+use anyhow::Context;
 use async_trait::async_trait;
+use loom_client::LoomClientTrait;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::context::EphemeraContext;
-use loom_client::LoomClientTrait;
+use crate::tools::AgentTool;
 
 // ============================================================================
 // MemoryGet - Get memory fragments by IDs
@@ -58,10 +59,7 @@ impl AgentTool for MemoryGet {
         })
     }
 
-    async fn call(
-        &self,
-        args_json: &str,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn call(&self, args_json: &str) -> anyhow::Result<String> {
         let args: MemoryGetArgs = serde_json::from_str(args_json)?;
 
         if args.ids.is_empty() {
@@ -77,7 +75,7 @@ impl AgentTool for MemoryGet {
                     }
                 }
                 Err(e) => {
-                    return Err(format!("Failed to get memory {}: {}", id, e).into());
+                    return Err(e).context(format!("Failed to get memory {id}"));
                 }
             }
         }
@@ -161,10 +159,7 @@ impl AgentTool for MemoryRecent {
         })
     }
 
-    async fn call(
-        &self,
-        args_json: &str,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn call(&self, args_json: &str) -> anyhow::Result<String> {
         let args: MemoryRecentArgs = serde_json::from_str(args_json)?;
         let limit = args.limit.clamp(1, 100);
 
@@ -191,7 +186,7 @@ impl AgentTool for MemoryRecent {
                     ))
                 }
             }
-            Err(e) => Err(format!("Failed to get recent memories: {}", e).into()),
+            Err(e) => Err(e).context("Failed to get recent memories"),
         }
     }
 }
@@ -263,10 +258,7 @@ impl AgentTool for MemoryTimeline {
         })
     }
 
-    async fn call(
-        &self,
-        args_json: &str,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn call(&self, args_json: &str) -> anyhow::Result<String> {
         let args: MemoryTimelineArgs = serde_json::from_str(args_json)?;
 
         match self
@@ -301,7 +293,7 @@ impl AgentTool for MemoryTimeline {
                     ))
                 }
             }
-            Err(e) => Err(format!("Failed to get memories in timeline: {}", e).into()),
+            Err(e) => Err(e).context("Failed to get memories in timeline"),
         }
     }
 }
@@ -359,10 +351,7 @@ impl AgentTool for MemoryPin {
         })
     }
 
-    async fn call(
-        &self,
-        args_json: &str,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn call(&self, args_json: &str) -> anyhow::Result<String> {
         let args: MemoryPinArgs = serde_json::from_str(args_json)?;
 
         // Pre-check: validate constraints before calling Loom API
@@ -377,15 +366,14 @@ impl AgentTool for MemoryPin {
             let current_count = context.list_pinned().len();
 
             if already_pinned {
-                return Err(format!("Memory {} is already pinned", args.memory_id).into());
+                return Ok(format!("Memory {} is already pinned", args.memory_id));
             }
 
             if current_count >= max_count {
-                return Err(format!(
+                return Ok(format!(
                     "Maximum pinned count ({}) reached, please unpin some content first",
                     max_count
-                )
-                .into());
+                ));
             }
 
             max_count
@@ -396,9 +384,7 @@ impl AgentTool for MemoryPin {
             .loom_client
             .pin_memory(args.memory_id, Some(args.reason.clone()))
             .await
-            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-                format!("Failed to pin memory: {:?}", e).into()
-            })?;
+            .context("Failed to pin memory")?;
 
         // Update local context and get new count in single lock
         let current_count = {
@@ -461,19 +447,14 @@ impl AgentTool for MemoryUnpin {
         })
     }
 
-    async fn call(
-        &self,
-        args_json: &str,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn call(&self, args_json: &str) -> anyhow::Result<String> {
         let args: MemoryUnpinArgs = serde_json::from_str(args_json)?;
 
         // Call Loom API to unpin the memory
         self.loom_client
             .unpin_memory(args.memory_id)
             .await
-            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-                format!("Failed to unpin memory: {:?}", e).into()
-            })?;
+            .context("Failed to unpin memory")?;
 
         // Update local context synchronously
         let removed = {
