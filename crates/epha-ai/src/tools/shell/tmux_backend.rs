@@ -178,22 +178,14 @@ impl ShellBackend for TmuxBackend {
             Err(e) => return Err(e),
         };
 
-        // Get exit code from last command
-        let _ = Command::new("tmux")
-            .args(["send-keys", "-t", &session, "echo __EXIT_CODE__$?__EXIT_CODE__"])
+        // Get exit code from last command via tmux
+        let exit_output = Command::new("tmux")
+            .args(["display-message", "-p", "-t", &session, "#{last_exit_status}"])
             .output()
-            .await;
+            .await
+            .map_err(|e| ShellError::backend(format!("display-message failed: {}", e)))?;
 
-        let _ = Command::new("tmux").args(["send-keys", "-t", &session, "Enter"]).output().await;
-
-        sleep(Duration::from_millis(200)).await;
-
-        let exit_output = self.capture_output_internal(&session, 50).await?;
-
-        // Parse exit code
-        let exit_re =
-            regex::Regex::new(r"__EXIT_CODE__(\d+)__EXIT_CODE__").expect("Invalid exit code regex");
-        let exit_code = exit_re.captures(&exit_output).and_then(|caps| caps[1].parse::<i32>().ok());
+        let exit_code = String::from_utf8_lossy(&exit_output.stdout).trim().parse::<i32>().ok();
 
         Ok(ShellOutput { output, exit_code, timed_out: false })
     }
