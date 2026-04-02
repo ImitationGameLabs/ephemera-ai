@@ -6,8 +6,8 @@
 
 use async_trait::async_trait;
 use std::path::Path;
-use std::process::Command;
 use std::time::Duration;
+use tokio::process::Command;
 use tokio::time::sleep;
 
 use tmux_interface::{KillSession, NewSession, Tmux};
@@ -122,6 +122,7 @@ impl TmuxBackend {
         let output = Command::new("tmux")
             .args(["capture-pane", "-t", session, "-p", "-S", &format!("-{}", lines)])
             .output()
+            .await
             .map_err(|e| ShellError::backend(format!("capture-pane failed: {}", e)))?;
 
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
@@ -146,6 +147,7 @@ impl ShellBackend for TmuxBackend {
         let output = Command::new("tmux")
             .args(["send-keys", "-t", &session, command])
             .output()
+            .await
             .map_err(|e| ShellError::execution_failed(format!("send-keys failed: {}", e)))?;
 
         if !output.status.success() {
@@ -156,6 +158,7 @@ impl ShellBackend for TmuxBackend {
         let output = Command::new("tmux")
             .args(["send-keys", "-t", &session, "Enter"])
             .output()
+            .await
             .map_err(|e| ShellError::execution_failed(format!("send-keys failed: {}", e)))?;
 
         if !output.status.success() {
@@ -178,9 +181,10 @@ impl ShellBackend for TmuxBackend {
         // Get exit code from last command
         let _ = Command::new("tmux")
             .args(["send-keys", "-t", &session, "echo __EXIT_CODE__$?__EXIT_CODE__"])
-            .output();
+            .output()
+            .await;
 
-        let _ = Command::new("tmux").args(["send-keys", "-t", &session, "Enter"]).output();
+        let _ = Command::new("tmux").args(["send-keys", "-t", &session, "Enter"]).output().await;
 
         sleep(Duration::from_millis(200)).await;
 
@@ -204,12 +208,14 @@ impl ShellBackend for TmuxBackend {
         let _ = Command::new("tmux")
             .args(["send-keys", "-t", &session, input])
             .output()
+            .await
             .map_err(|e| ShellError::backend(format!("send-keys failed: {}", e)))?;
 
         if press_enter {
             let _ = Command::new("tmux")
                 .args(["send-keys", "-t", &session, "Enter"])
                 .output()
+                .await
                 .map_err(|e| ShellError::backend(format!("send-keys failed: {}", e)))?;
         }
 
@@ -230,6 +236,7 @@ impl ShellBackend for TmuxBackend {
                 "#{session_name}\t#{session_path}\t#{?session_attached,1,0}\t#{window_count}",
             ])
             .output()
+            .await
             .map_err(|e| ShellError::backend(e.to_string()))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
