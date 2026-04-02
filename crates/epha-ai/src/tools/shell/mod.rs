@@ -53,29 +53,19 @@ mod backend;
 mod bash;
 mod capture_output;
 mod error;
-mod mock_backend;
 mod send_input;
 mod session;
 mod tmux_backend;
 
-// Re-export public types
-pub use backend::{SessionInfo, ShellBackend, ShellOutput};
-pub use error::ShellError;
-pub use mock_backend::MockShellBackend;
+#[cfg(test)]
+mod mock_backend;
+
+// Re-export backend and factory
+pub use backend::ShellBackend;
 pub use tmux_backend::TmuxBackend;
 
-// Execution tools
-pub use bash::{BashArgs, BashOutput, BashTool};
-pub use capture_output::{CaptureOutputArgs, CaptureOutputOutput, CaptureOutputTool};
-pub use send_input::{SendInputArgs, SendInputOutput, SendInputTool};
-
-// Session management tools
-pub use session::{
-    CreateSessionArgs, CreateSessionOutput, CreateSessionTool, KillSessionArgs, KillSessionOutput,
-    KillSessionTool, ListSessionsArgs, ListSessionsOutput, ListSessionsTool, RestartSessionArgs,
-    RestartSessionOutput, RestartSessionTool, SwitchSessionArgs, SwitchSessionOutput,
-    SwitchSessionTool,
-};
+#[cfg(test)]
+pub use mock_backend::MockShellBackend;
 
 use crate::tools::AgentTool;
 use std::sync::Arc;
@@ -94,14 +84,14 @@ pub fn shell_tool_set<B: ShellBackend + Send + Sync + 'static>(
     backend: Arc<Mutex<B>>,
 ) -> Vec<Box<dyn AgentTool>> {
     vec![
-        Box::new(BashTool::new(backend.clone())),
-        Box::new(SendInputTool::new(backend.clone())),
-        Box::new(CaptureOutputTool::new(backend.clone())),
-        Box::new(ListSessionsTool::new(backend.clone())),
-        Box::new(CreateSessionTool::new(backend.clone())),
-        Box::new(SwitchSessionTool::new(backend.clone())),
-        Box::new(KillSessionTool::new(backend.clone())),
-        Box::new(RestartSessionTool::new(backend)),
+        Box::new(bash::BashTool::new(backend.clone())),
+        Box::new(send_input::SendInputTool::new(backend.clone())),
+        Box::new(capture_output::CaptureOutputTool::new(backend.clone())),
+        Box::new(session::ListSessionsTool::new(backend.clone())),
+        Box::new(session::CreateSessionTool::new(backend.clone())),
+        Box::new(session::SwitchSessionTool::new(backend.clone())),
+        Box::new(session::KillSessionTool::new(backend.clone())),
+        Box::new(session::RestartSessionTool::new(backend)),
     ]
 }
 

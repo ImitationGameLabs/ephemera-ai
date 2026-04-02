@@ -18,9 +18,6 @@ pub enum ShellError {
     #[error("Session '{name}' already exists")]
     SessionExists { name: String },
 
-    #[error("No sessions available")]
-    NoSessions,
-
     #[error("Command execution failed: {reason}")]
     ExecutionFailed { reason: String },
 
@@ -64,11 +61,6 @@ impl ShellError {
     pub fn session_create_failed(name: impl Into<String>, reason: impl Into<String>) -> Self {
         ShellError::SessionCreateFailed { name: name.into(), reason: reason.into() }
     }
-
-    /// Create an IO error (hides implementation details)
-    pub fn io(reason: impl Into<String>) -> Self {
-        ShellError::Io(reason.into())
-    }
 }
 
 impl From<std::io::Error> for ShellError {
@@ -92,9 +84,6 @@ mod tests {
 
         let err = ShellError::session_exists("main");
         assert_eq!(err.to_string(), "Session 'main' already exists");
-
-        let err = ShellError::NoSessions;
-        assert_eq!(err.to_string(), "No sessions available");
 
         let err = ShellError::execution_failed("command not found");
         assert_eq!(err.to_string(), "Command execution failed: command not found");
@@ -143,9 +132,6 @@ mod tests {
             err,
             ShellError::SessionCreateFailed { name, reason } if name == "sess" && reason == "reason"
         ));
-
-        let err = ShellError::io("io issue");
-        assert!(matches!(err, ShellError::Io(msg) if msg == "io issue"));
     }
 
     #[test]

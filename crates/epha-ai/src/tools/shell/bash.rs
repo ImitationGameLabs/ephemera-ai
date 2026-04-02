@@ -60,11 +60,6 @@ impl<B: ShellBackend> BashTool<B> {
     pub fn new(backend: Arc<Mutex<B>>) -> Self {
         Self { backend }
     }
-
-    /// Get a reference to the backend
-    pub fn backend(&self) -> Arc<Mutex<B>> {
-        self.backend.clone()
-    }
 }
 
 #[async_trait]

@@ -125,12 +125,6 @@ impl MockShellBackend {
         self
     }
 
-    /// Add a session with a specific cwd
-    pub fn add_session_with_cwd(&mut self, name: &str, cwd: &str) -> &mut Self {
-        self.sessions.insert(name.to_string(), MockSession::new(name, cwd));
-        self
-    }
-
     /// Set the current session
     pub fn set_current(&mut self, name: &str) -> &mut Self {
         self.current = name.to_string();
@@ -153,11 +147,6 @@ impl MockShellBackend {
     /// Get all inputs received via send_input
     pub fn get_inputs_received(&self) -> Vec<String> {
         self.inputs_received.lock().unwrap().clone()
-    }
-
-    /// Clear all received inputs
-    pub fn clear_inputs(&self) {
-        self.inputs_received.lock().unwrap().clear();
     }
 
     /// Check if a session exists

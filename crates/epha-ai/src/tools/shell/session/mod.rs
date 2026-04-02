@@ -13,8 +13,8 @@ mod list;
 mod restart;
 mod switch;
 
-pub use create::{CreateSessionArgs, CreateSessionOutput, CreateSessionTool};
-pub use kill::{KillSessionArgs, KillSessionOutput, KillSessionTool};
-pub use list::{ListSessionsArgs, ListSessionsOutput, ListSessionsTool};
-pub use restart::{RestartSessionArgs, RestartSessionOutput, RestartSessionTool};
-pub use switch::{SwitchSessionArgs, SwitchSessionOutput, SwitchSessionTool};
+pub use create::CreateSessionTool;
+pub use kill::KillSessionTool;
+pub use list::ListSessionsTool;
+pub use restart::RestartSessionTool;
+pub use switch::SwitchSessionTool;

@@ -43,12 +43,6 @@ impl TmuxBackend {
         Ok(backend)
     }
 
-    /// Create a new tmux backend with custom prompt pattern
-    pub fn with_prompt_pattern(mut self, pattern: &str) -> Self {
-        self.prompt_pattern = pattern.to_string();
-        self
-    }
-
     /// Check if a tmux session exists
     async fn session_exists(&self, name: &str) -> Result<bool, ShellError> {
         let sessions = self.list_sessions().await?;
@@ -131,24 +125,6 @@ impl TmuxBackend {
             .map_err(|e| ShellError::backend(format!("capture-pane failed: {}", e)))?;
 
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-    }
-
-    /// Clean up test sessions (for integration tests)
-    pub fn cleanup_test_sessions() -> Result<(), ShellError> {
-        let output = Command::new("tmux")
-            .args(["list-sessions", "-F", "#{session_name}"])
-            .output()
-            .map_err(|e| ShellError::backend(e.to_string()))?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let sessions: Vec<String> =
-            stdout.lines().filter(|s| s.starts_with("test_")).map(String::from).collect();
-
-        for session in sessions {
-            let _ = Command::new("tmux").args(["kill-session", "-t", &session]).output();
-        }
-
-        Ok(())
     }
 }
 
