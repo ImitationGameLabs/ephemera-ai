@@ -25,7 +25,10 @@ async fn main() -> anyhow::Result<()> {
     let config_path = args.config_dir.join("kairos.json");
     let config = Config::load(&config_path);
 
-    info!("Starting Kairos Time Management Service on {}", config.bind_address());
+    info!(
+        "Starting Kairos Time Management Service on {}",
+        config.bind_address()
+    );
 
     let server = KairosServer::new(config).await?;
     server.run().await?;

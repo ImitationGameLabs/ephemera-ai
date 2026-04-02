@@ -6,30 +6,25 @@ use axum::{
 use serde_json::json;
 
 use crate::db::{
-    user_manager::{UserManager, UserError},
-    message_manager::{MessageManager, CreateMessageDto, MessageError},
+    message_manager::{CreateMessageDto, MessageError, MessageManager},
+    user_manager::{UserError, UserManager},
 };
-use crate::models::{
-    CreateMessageRequest, Message, Messages,
-    GetMessagesQuery
-};
+use crate::models::{CreateMessageRequest, GetMessagesQuery, Message, Messages};
 
 pub async fn create_message(
     State((message_manager, user_manager)): State<(MessageManager, UserManager)>,
     Json(request): Json<CreateMessageRequest>,
 ) -> Result<(StatusCode, Json<Message>), (StatusCode, Json<serde_json::Value>)> {
     // First authenticate user
-    match user_manager.authenticate_by_credentials(&request.username, &request.password).await {
+    match user_manager
+        .authenticate_by_credentials(&request.username, &request.password)
+        .await
+    {
         Ok(user) => {
-            let create_dto = CreateMessageDto {
-                content: request.content,
-                sender: user.name,
-            };
+            let create_dto = CreateMessageDto { content: request.content, sender: user.name };
 
             match message_manager.create_message(&create_dto).await {
-                Ok(message) => {
-                    Ok((StatusCode::CREATED, Json(message)))
-                }
+                Ok(message) => Ok((StatusCode::CREATED, Json(message))),
                 Err(e) => {
                     tracing::error!("Failed to create message: {:?}", e);
                     Err((
@@ -39,21 +34,19 @@ pub async fn create_message(
                 }
             }
         }
-        Err(e) => {
-            match e {
-                UserError::InvalidPassword(_) => Err((
-                    StatusCode::UNAUTHORIZED,
-                    Json(json!({ "error": "Invalid password" })),
-                )),
-                _ => {
-                    tracing::error!("Failed to authenticate user for message creation: {:?}", e);
-                    Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({ "error": "Authentication failed" })),
-                    ))
-                }
+        Err(e) => match e {
+            UserError::InvalidPassword(_) => Err((
+                StatusCode::UNAUTHORIZED,
+                Json(json!({ "error": "Invalid password" })),
+            )),
+            _ => {
+                tracing::error!("Failed to authenticate user for message creation: {:?}", e);
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "Authentication failed" })),
+                ))
             }
-        }
+        },
     }
 }
 
@@ -74,11 +67,7 @@ pub async fn get_messages(
     };
 
     match result {
-        Ok(messages) => {
-            Ok(Json(Messages {
-                messages,
-            }))
-        }
+        Ok(messages) => Ok(Json(Messages { messages })),
         Err(e) => {
             tracing::error!("Failed to get messages: {:?}", e);
             Err((
@@ -94,24 +83,20 @@ pub async fn get_message(
     Path(id): Path<i32>,
 ) -> Result<Json<Message>, (StatusCode, Json<serde_json::Value>)> {
     match manager.get_message(id).await {
-        Ok(message) => {
-            Ok(Json(message))
-        }
-        Err(e) => {
-            match e {
-                MessageError::MessageNotFound(_) => Err((
-                    StatusCode::NOT_FOUND,
-                    Json(json!({ "error": "Message not found" })),
-                )),
-                _ => {
-                    tracing::error!("Failed to get message: {:?}", e);
-                    Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({ "error": "Failed to retrieve message" })),
-                    ))
-                }
+        Ok(message) => Ok(Json(message)),
+        Err(e) => match e {
+            MessageError::MessageNotFound(_) => Err((
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Message not found" })),
+            )),
+            _ => {
+                tracing::error!("Failed to get message: {:?}", e);
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "Failed to retrieve message" })),
+                ))
             }
-        }
+        },
     }
 }
 
@@ -121,20 +106,18 @@ pub async fn delete_message(
 ) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
     match manager.delete_message(id).await {
         Ok(()) => Ok(StatusCode::NO_CONTENT),
-        Err(e) => {
-            match e {
-                MessageError::MessageNotFound(_) => Err((
-                    StatusCode::NOT_FOUND,
-                    Json(json!({ "error": "Message not found" })),
-                )),
-                _ => {
-                    tracing::error!("Failed to delete message: {:?}", e);
-                    Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({ "error": "Failed to delete message" })),
-                    ))
-                }
+        Err(e) => match e {
+            MessageError::MessageNotFound(_) => Err((
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Message not found" })),
+            )),
+            _ => {
+                tracing::error!("Failed to delete message: {:?}", e);
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "Failed to delete message" })),
+                ))
             }
-        }
+        },
     }
 }

@@ -26,11 +26,7 @@ impl EventQueue {
         let pending = store.load_all().await?;
         cache.load_pending(pending).await;
 
-        Ok(Self {
-            store,
-            cache,
-            retry_config,
-        })
+        Ok(Self { store, cache, retry_config })
     }
 
     /// Create new event.
@@ -84,11 +80,11 @@ impl EventQueue {
 
     /// Batch update event status (for compatibility).
     /// Only supports Acked status.
-    pub async fn batch_update_status(&self, ids: Vec<EventId>, status: EventStatus) -> Result<Vec<EventId>> {
-        if status == EventStatus::Acked {
-            self.batch_ack(ids).await
-        } else {
-            Ok(Vec::new())
-        }
+    pub async fn batch_update_status(
+        &self,
+        ids: Vec<EventId>,
+        status: EventStatus,
+    ) -> Result<Vec<EventId>> {
+        if status == EventStatus::Acked { self.batch_ack(ids).await } else { Ok(Vec::new()) }
     }
 }

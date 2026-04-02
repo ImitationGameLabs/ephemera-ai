@@ -1,8 +1,11 @@
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, NotSet, QueryOrder, QuerySelect};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, NotSet, QueryFilter,
+    QueryOrder, QuerySelect, Set,
+};
 use thiserror::Error;
 use time::OffsetDateTime;
 
-use crate::entity::{MessageEntity};
+use crate::entity::MessageEntity;
 use crate::entity::message;
 use crate::models::Message;
 
@@ -17,7 +20,6 @@ pub enum MessageError {
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 }
-
 
 impl From<message::Model> for Message {
     fn from(model: message::Model) -> Self {
@@ -46,7 +48,10 @@ impl MessageManager {
         Self { conn }
     }
 
-    pub async fn create_message(&self, message_dto: &CreateMessageDto) -> Result<Message, MessageError> {
+    pub async fn create_message(
+        &self,
+        message_dto: &CreateMessageDto,
+    ) -> Result<Message, MessageError> {
         let now = OffsetDateTime::now_utc();
         let active_model = message::ActiveModel {
             id: NotSet,

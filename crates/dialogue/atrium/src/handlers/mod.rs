@@ -1,7 +1,7 @@
+pub mod heartbeat;
 pub mod message;
 pub mod user;
-pub mod heartbeat;
 
+pub use heartbeat::*;
 pub use message::*;
 pub use user::*;
-pub use heartbeat::*;

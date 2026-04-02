@@ -115,8 +115,10 @@ mod tests {
     use crate::tools::shell::error::ShellError;
     use crate::tools::shell::mock_backend::MockShellBackend;
 
-    fn create_tool_with_mock() -> (CaptureOutputTool<MockShellBackend>, Arc<Mutex<MockShellBackend>>)
-    {
+    fn create_tool_with_mock() -> (
+        CaptureOutputTool<MockShellBackend>,
+        Arc<Mutex<MockShellBackend>>,
+    ) {
         let mock = Arc::new(Mutex::new(MockShellBackend::new()));
         let tool = CaptureOutputTool::new(mock.clone());
         (tool, mock)
@@ -131,9 +133,13 @@ mod tests {
         }
 
         let args = CaptureOutputArgs { session: None, lines: None };
-        let result: CaptureOutputOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: CaptureOutputOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.session, "main");
         assert!(result.output.contains("line3"));
@@ -151,9 +157,13 @@ mod tests {
         }
 
         let args = CaptureOutputArgs { session: None, lines: Some(10) };
-        let result: CaptureOutputOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: CaptureOutputOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         // Mock backend returns lines in reverse order with take, so it takes the last 10
         assert!(result.lines <= 10);
@@ -169,9 +179,13 @@ mod tests {
         }
 
         let args = CaptureOutputArgs { session: Some("worker".into()), lines: None };
-        let result: CaptureOutputOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: CaptureOutputOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.session, "worker");
     }
@@ -193,9 +207,13 @@ mod tests {
         let (tool, _) = create_tool_with_mock();
 
         let args = CaptureOutputArgs { session: None, lines: None };
-        let result: CaptureOutputOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: CaptureOutputOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.session, "main");
     }
@@ -209,9 +227,13 @@ mod tests {
         }
 
         let args = CaptureOutputArgs { session: None, lines: Some(0) };
-        let result: CaptureOutputOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: CaptureOutputOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.output, "");
         assert_eq!(result.lines, 0);
@@ -226,9 +248,13 @@ mod tests {
         }
 
         let args = CaptureOutputArgs { session: None, lines: Some(1000) };
-        let result: CaptureOutputOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: CaptureOutputOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert!(result.lines <= 3);
     }

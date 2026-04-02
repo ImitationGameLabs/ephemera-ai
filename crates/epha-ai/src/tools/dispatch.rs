@@ -19,7 +19,11 @@ impl ToolDispatch {
     /// Register a single tool. Panics if a tool with the same name is already registered.
     pub fn add_tool(&mut self, tool: Box<dyn AgentTool>) {
         let name = tool.name().to_string();
-        assert!(!self.tools.contains_key(&name), "Duplicate tool name: '{}'", name);
+        assert!(
+            !self.tools.contains_key(&name),
+            "Duplicate tool name: '{}'",
+            name
+        );
         self.tools.insert(name, Arc::from(tool));
     }
 
@@ -40,7 +44,9 @@ impl ToolDispatch {
             )
         })?;
 
-        tool.call(args_json).await.map_err(|e| format!("Tool '{}' execution failed: {}", name, e))
+        tool.call(args_json)
+            .await
+            .map_err(|e| format!("Tool '{}' execution failed: {}", name, e))
     }
 
     /// Convert all registered tools to llm crate Tool structs for the API.

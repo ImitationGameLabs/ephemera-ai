@@ -4,8 +4,8 @@
 //! the Agora event hub.
 
 mod client;
-mod trait_def;
 pub mod mock;
+mod trait_def;
 
 pub use client::{AgoraClient, AgoraClientError};
 pub use trait_def::AgoraClientTrait;

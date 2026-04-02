@@ -1,7 +1,7 @@
 mod fixtures;
 
-use fixtures::{create_user_manager, setup_test_db};
 use atrium::db::user_manager::CreateUserDto;
+use fixtures::{create_user_manager, setup_test_db};
 
 /// 测试单用户在线状态
 #[tokio::test]
@@ -44,11 +44,14 @@ async fn test_online_status_multiple_users() {
 
     // 创建三个用户
     for name in ["alice", "bob", "charlie"] {
-        manager.create_user(&CreateUserDto {
-            name: name.to_string(),
-            bio: format!("{}'s bio", name),
-            password: "pass".to_string(),
-        }).await.unwrap();
+        manager
+            .create_user(&CreateUserDto {
+                name: name.to_string(),
+                bio: format!("{}'s bio", name),
+                password: "pass".to_string(),
+            })
+            .await
+            .unwrap();
     }
 
     // 只有 alice 发送 heartbeat

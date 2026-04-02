@@ -39,15 +39,11 @@ impl AgoraServer {
 
         info!("Initializing Agora event hub");
 
-        let event_queue = Arc::new(
-            EventQueue::new(&config.database_path, config.retry.clone()).await?,
-        );
+        let event_queue =
+            Arc::new(EventQueue::new(&config.database_path, config.retry.clone()).await?);
         let herald_registry = Arc::new(HeraldRegistry::new());
 
-        let state = Arc::new(AppState {
-            event_queue,
-            herald_registry,
-        });
+        let state = Arc::new(AppState { event_queue, herald_registry });
 
         Ok(Self { config, state })
     }

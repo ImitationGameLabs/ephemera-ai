@@ -55,20 +55,38 @@ impl Config {
             .unwrap_or_else(|e| panic!("Failed to parse config '{}': {}", path.display(), e));
 
         // Validate required fields
-        assert!(!config.llm.base_url.trim().is_empty(), "llm.base_url cannot be empty");
-        assert!(!config.llm.model.trim().is_empty(), "llm.model cannot be empty");
-        assert!(!config.llm.api_key.trim().is_empty(), "llm.api_key cannot be empty");
-        assert!(!config.services.loom_url.trim().is_empty(), "services.loom_url cannot be empty");
+        assert!(
+            !config.llm.base_url.trim().is_empty(),
+            "llm.base_url cannot be empty"
+        );
+        assert!(
+            !config.llm.model.trim().is_empty(),
+            "llm.model cannot be empty"
+        );
+        assert!(
+            !config.llm.api_key.trim().is_empty(),
+            "llm.api_key cannot be empty"
+        );
+        assert!(
+            !config.services.loom_url.trim().is_empty(),
+            "services.loom_url cannot be empty"
+        );
         assert!(
             config.dormant_tick_interval_ms > 0,
             "dormant_tick_interval_ms cannot be empty or 0"
         );
-        assert!(!config.agora.url.trim().is_empty(), "agora.url cannot be empty");
+        assert!(
+            !config.agora.url.trim().is_empty(),
+            "agora.url cannot be empty"
+        );
         assert!(
             config.context.max_pinned_tokens > 0,
             "context.max_pinned_tokens must be greater than 0"
         );
-        assert!(config.llm.max_turns > 0, "llm.max_turns must be greater than 0");
+        assert!(
+            config.llm.max_turns > 0,
+            "llm.max_turns must be greater than 0"
+        );
 
         // Validate token limits
         let ctx = &config.context;
@@ -78,7 +96,10 @@ impl Config {
             ctx.total_token_floor,
             ctx.total_token_ceiling
         );
-        assert!(ctx.min_activities > 0, "context.min_activities must be greater than 0");
+        assert!(
+            ctx.min_activities > 0,
+            "context.min_activities must be greater than 0"
+        );
 
         config
     }

@@ -40,7 +40,9 @@ pub(crate) fn xml_escape_attr(s: &str) -> String {
 /// Quotes must NOT be escaped inside element content — this keeps JSON payloads
 /// inside `<payload>`, `<args>`, etc. readable by the LLM.
 pub(crate) fn xml_escape_content(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 /// Trait for serializing types into structured XML for LLM context consumption.
@@ -89,7 +91,10 @@ impl SerializeContext for ActionMemoryContent {
                 "    <args>{}</args>\n",
                 xml_escape_content(&serde_json::to_string(&tc.args).unwrap_or_default())
             ));
-            xml.push_str(&format!("    <result>{}</result>\n", xml_escape_content(&tc.result)));
+            xml.push_str(&format!(
+                "    <result>{}</result>\n",
+                xml_escape_content(&tc.result)
+            ));
             xml.push_str("  </tool_call>\n");
         }
         xml.push_str("</action>");
@@ -157,7 +162,9 @@ impl ThoughtContent {
 
 impl EventContent {
     pub fn to_chat_message(&self) -> ChatMessage {
-        ChatMessage::user().content(self.serialize_context()).build()
+        ChatMessage::user()
+            .content(self.serialize_context())
+            .build()
     }
 }
 
@@ -188,8 +195,14 @@ impl ActionMemoryContent {
             .collect();
 
         vec![
-            ChatMessage::assistant().tool_use(tool_use_calls).content("").build(),
-            ChatMessage::user().tool_result(tool_result_calls).content("").build(),
+            ChatMessage::assistant()
+                .tool_use(tool_use_calls)
+                .content("")
+                .build(),
+            ChatMessage::user()
+                .tool_result(tool_result_calls)
+                .content("")
+                .build(),
         ]
     }
 }
@@ -453,8 +466,10 @@ mod tests {
 
     #[test]
     fn old_json_action_fallback() {
-        let fragment =
-            make_fragment(MemoryKind::Action, r#"{"type":"execution","action":"did something"}"#);
+        let fragment = make_fragment(
+            MemoryKind::Action,
+            r#"{"type":"execution","action":"did something"}"#,
+        );
         let msgs = fragment.to_chat_messages();
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].role, llm::chat::ChatRole::Assistant);

@@ -65,6 +65,9 @@ impl AgentTool for StateTransition {
         let current = *state;
         *state = args.mode;
 
-        Ok(format!("State changed from {:?} to {:?}. Reason: {}", current, args.mode, args.reason))
+        Ok(format!(
+            "State changed from {:?} to {:?}. Reason: {}",
+            current, args.mode, args.reason
+        ))
     }
 }

@@ -22,7 +22,12 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Users::Name).string().not_null())
                     .col(ColumnDef::new(Users::Bio).text().not_null())
                     .col(ColumnDef::new(Users::Password).text().not_null())
-                    .col(ColumnDef::new(Users::MessageHeight).integer().not_null().default(0))
+                    .col(
+                        ColumnDef::new(Users::MessageHeight)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
                     .col(ColumnDef::new(Users::LastSeen).date_time().null())
                     .col(ColumnDef::new(Users::CreatedAt).date_time().not_null())
                     .to_owned(),

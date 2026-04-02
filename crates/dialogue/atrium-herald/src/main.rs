@@ -53,8 +53,14 @@ async fn main() -> anyhow::Result<()> {
     info!("Agora URL: {}", config.agora_url);
     info!("Username: {}", config.username);
     info!("Poll interval: {}ms", config.poll_interval_ms);
-    info!("Agora heartbeat interval: {}ms", config.heartbeat_interval_ms);
-    info!("Atrium heartbeat interval: {}ms", config.atrium_heartbeat_interval_ms);
+    info!(
+        "Agora heartbeat interval: {}ms",
+        config.heartbeat_interval_ms
+    );
+    info!(
+        "Atrium heartbeat interval: {}ms",
+        config.atrium_heartbeat_interval_ms
+    );
 
     let http_client = build_http_client();
 

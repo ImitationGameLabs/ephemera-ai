@@ -6,8 +6,8 @@ use std::fmt;
 use tracing::{debug, instrument};
 
 use kairos_common::schedule::{
-    AckTriggeredRequest, CreateScheduleRequest, Schedule, ScheduleStatus,
-    SchedulesListResponse, StatusResponse, TriggeredSchedule, UpdateScheduleRequest,
+    AckTriggeredRequest, CreateScheduleRequest, Schedule, ScheduleStatus, SchedulesListResponse,
+    StatusResponse, TriggeredSchedule, UpdateScheduleRequest,
 };
 
 /// Client error types.
@@ -52,10 +52,7 @@ pub struct KairosClient {
 impl KairosClient {
     /// Creates a new Kairos client with the given base URL and HTTP client.
     pub fn new(base_url: &str, client: Client) -> Self {
-        Self {
-            client,
-            base_url: base_url.to_string(),
-        }
+        Self { client, base_url: base_url.to_string() }
     }
 
     /// Handles HTTP response and converts to expected type.
@@ -220,7 +217,11 @@ impl KairosClient {
     #[instrument(skip(self))]
     pub async fn ack_triggered(&self, ids: Vec<String>) -> Result<usize, KairosClientError> {
         let url = format!("{}/schedules/triggered/ack", self.base_url);
-        debug!("Acknowledging {} triggered schedules at: {}", ids.len(), url);
+        debug!(
+            "Acknowledging {} triggered schedules at: {}",
+            ids.len(),
+            url
+        );
 
         let request = AckTriggeredRequest { ids };
         let response = self.client.post(&url).json(&request).send().await?;

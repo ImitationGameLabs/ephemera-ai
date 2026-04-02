@@ -93,8 +93,10 @@ mod tests {
     use crate::tools::shell::error::ShellError;
     use crate::tools::shell::mock_backend::MockShellBackend;
 
-    fn create_tool_with_mock() -> (KillSessionTool<MockShellBackend>, Arc<Mutex<MockShellBackend>>)
-    {
+    fn create_tool_with_mock() -> (
+        KillSessionTool<MockShellBackend>,
+        Arc<Mutex<MockShellBackend>>,
+    ) {
         let mock = Arc::new(Mutex::new(MockShellBackend::new()));
         let tool = KillSessionTool::new(mock.clone());
         (tool, mock)
@@ -130,9 +132,13 @@ mod tests {
         }
 
         let args = KillSessionArgs { name: "main".into() };
-        let result: KillSessionOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: KillSessionOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert!(result.was_current);
         assert!(result.new_current.is_some());
@@ -163,7 +169,9 @@ mod tests {
         }
 
         let args = KillSessionArgs { name: "worker".into() };
-        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        tool.call(&serde_json::to_string(&args).unwrap())
+            .await
+            .unwrap();
 
         let backend = mock.lock().await;
         assert!(!backend.has_session("worker"));

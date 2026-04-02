@@ -11,7 +11,12 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(Pinned::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(Pinned::MemoryId).big_integer().primary_key().not_null())
+                    .col(
+                        ColumnDef::new(Pinned::MemoryId)
+                            .big_integer()
+                            .primary_key()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Pinned::Reason).text())
                     .col(ColumnDef::new(Pinned::PinnedAt).date_time().not_null())
                     .foreign_key(
@@ -27,7 +32,9 @@ impl MigrationTrait for Migration {
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager.drop_table(Table::drop().table(Pinned::Table).to_owned()).await
+        manager
+            .drop_table(Table::drop().table(Pinned::Table).to_owned())
+            .await
     }
 }
 

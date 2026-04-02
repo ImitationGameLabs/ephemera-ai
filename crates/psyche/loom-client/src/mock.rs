@@ -85,37 +85,61 @@ impl MockLoomClient {
 
     /// Add a health check response to the queue
     pub fn push_health_check(&mut self, value: serde_json::Value) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Ok(MockResponse::HealthCheck(value)));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Ok(MockResponse::HealthCheck(value)));
         self
     }
 
     /// Add a memory response to the queue
     pub fn push_memory(&mut self, response: MemoryResponse) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Ok(MockResponse::Memory(response)));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Ok(MockResponse::Memory(response)));
         self
     }
 
     /// Add a pinned memories response to the queue
     pub fn push_pinned_memories(&mut self, response: PinnedMemoriesResponse) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Ok(MockResponse::PinnedMemories(response)));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Ok(MockResponse::PinnedMemories(response)));
         self
     }
 
     /// Add a pinned memory response to the queue
     pub fn push_pinned_memory(&mut self, pinned: PinnedMemory) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Ok(MockResponse::PinnedMemory(pinned)));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Ok(MockResponse::PinnedMemory(pinned)));
         self
     }
 
     /// Add an empty success response to the queue
     pub fn push_empty(&mut self) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Ok(MockResponse::Empty));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Ok(MockResponse::Empty));
         self
     }
 
     /// Add an error response to the queue
     pub fn push_error(&mut self, error: impl Into<String>) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Err(error.into()));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Err(error.into()));
         self
     }
 
@@ -143,7 +167,13 @@ impl MockLoomClient {
 
     /// Get the count of calls matching a predicate
     pub fn call_count(&self, check: impl Fn(&MockCall) -> bool) -> usize {
-        self.state.lock().unwrap().calls.iter().filter(|c| check(c)).count()
+        self.state
+            .lock()
+            .unwrap()
+            .calls
+            .iter()
+            .filter(|c| check(c))
+            .count()
     }
 
     /// Clear all recorded calls
@@ -414,7 +444,10 @@ mod tests {
             pinned_at: time::OffsetDateTime::now_utc(),
         });
 
-        let result = mock.pin_memory(100, Some("test reason".to_string())).await.unwrap();
+        let result = mock
+            .pin_memory(100, Some("test reason".to_string()))
+            .await
+            .unwrap();
         assert_eq!(result.fragment.id, 100);
         assert_eq!(result.reason, Some("test reason".to_string()));
     }

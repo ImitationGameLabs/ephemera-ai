@@ -78,11 +78,7 @@ impl Poller {
             "description": "Atrium Herald - produces chat.message events"
         });
 
-        let response = self.http_client
-            .post(&url)
-            .json(&body)
-            .send()
-            .await?;
+        let response = self.http_client.post(&url).json(&body).send().await?;
 
         if response.status().is_success() {
             info!("Herald registered successfully");
@@ -91,22 +87,18 @@ impl Poller {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
             error!("Failed to register herald: HTTP {} - {}", status, text);
-            Err(anyhow::anyhow!("Failed to register herald: HTTP {}", status))
+            Err(anyhow::anyhow!(
+                "Failed to register herald: HTTP {}",
+                status
+            ))
         }
     }
 
     async fn send_agora_heartbeat(&self) -> anyhow::Result<()> {
         debug!("Sending heartbeat to Agora");
 
-        let url = format!(
-            "{}/heralds/{}/heartbeat",
-            self.agora_url,
-            self.herald_id
-        );
-        let response = self.http_client
-            .put(&url)
-            .send()
-            .await?;
+        let url = format!("{}/heralds/{}/heartbeat", self.agora_url, self.herald_id);
+        let response = self.http_client.put(&url).send().await?;
 
         if response.status().is_success() {
             debug!("Agora heartbeat sent successfully");
@@ -130,9 +122,7 @@ impl Poller {
 
     async fn poll_and_push(&self) -> anyhow::Result<()> {
         // Get unread messages from atrium
-        let unread = self.atrium_client
-            .get_unread_messages(Some(100))
-            .await?;
+        let unread = self.atrium_client.get_unread_messages(Some(100)).await?;
 
         if unread.messages.is_empty() {
             debug!("No new messages");
@@ -154,7 +144,7 @@ impl Poller {
     async fn push_message_event(&self, msg: Message) -> anyhow::Result<()> {
         let url = format!("{}/events", self.agora_url);
         let timestamp = msg.created_at;
-        
+
         let body = json!({
             "event_type": "chat.message",
             "herald_id": self.herald_id,
@@ -168,13 +158,12 @@ impl Poller {
             }
         });
 
-        debug!("Pushing chat.message event: id={}, sender={}", msg.id, msg.sender);
+        debug!(
+            "Pushing chat.message event: id={}, sender={}",
+            msg.id, msg.sender
+        );
 
-        let response = self.http_client
-            .post(&url)
-            .json(&body)
-            .send()
-            .await?;
+        let response = self.http_client.post(&url).json(&body).send().await?;
 
         if response.status().is_success() {
             debug!("Event pushed successfully for message {}", msg.id);

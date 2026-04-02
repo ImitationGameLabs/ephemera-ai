@@ -105,7 +105,11 @@ async fn register_herald(client: &Client, agora_url: &str) -> Result<()> {
     } else {
         let status = response.status();
         let text = response.text().await.unwrap_or_default();
-        Err(anyhow::anyhow!("Failed to register herald: HTTP {} - {}", status, text))
+        Err(anyhow::anyhow!(
+            "Failed to register herald: HTTP {} - {}",
+            status,
+            text
+        ))
     }
 }
 
@@ -163,7 +167,11 @@ async fn process_triggered_schedules(
         });
 
         let events_url = format!("{}/events", agora_url);
-        let response = http_client.post(&events_url).json(&event_body).send().await?;
+        let response = http_client
+            .post(&events_url)
+            .json(&event_body)
+            .send()
+            .await?;
 
         if response.status().is_success() {
             debug!("Event pushed successfully for schedule {}", schedule.id);

@@ -6,17 +6,26 @@ use sea_orm_migration::MigratorTrait;
 use testcontainers_modules::{mysql::Mysql, testcontainers::runners::AsyncRunner};
 use time::OffsetDateTime;
 
-async fn setup_test_db() -> (testcontainers::ContainerAsync<Mysql>, sea_orm::DatabaseConnection) {
-    let container = Mysql::default().start().await.expect("Failed to start MySQL container");
+async fn setup_test_db() -> (
+    testcontainers::ContainerAsync<Mysql>,
+    sea_orm::DatabaseConnection,
+) {
+    let container = Mysql::default()
+        .start()
+        .await
+        .expect("Failed to start MySQL container");
 
     let host_port = container.get_host_port_ipv4(3306).await.unwrap();
     let connection_string = format!("mysql://root@127.0.0.1:{}/test", host_port);
 
-    let db =
-        Database::connect(&connection_string).await.expect("Failed to connect to test database");
+    let db = Database::connect(&connection_string)
+        .await
+        .expect("Failed to connect to test database");
 
     // Run migrations
-    Migrator::up(&db, None).await.expect("Failed to run migrations");
+    Migrator::up(&db, None)
+        .await
+        .expect("Failed to run migrations");
 
     (container, db)
 }
@@ -138,8 +147,9 @@ async fn test_get_range_with_pagination() {
     let end = now + time::Duration::hours(1);
 
     // Create 5 memories
-    let mut fragments: Vec<MemoryFragment> =
-        (0..5).map(|i| create_test_fragment(&format!("Memory {}", i), MemoryKind::Event)).collect();
+    let mut fragments: Vec<MemoryFragment> = (0..5)
+        .map(|i| create_test_fragment(&format!("Memory {}", i), MemoryKind::Event))
+        .collect();
 
     manager.append(&mut fragments).await.unwrap();
 
@@ -148,7 +158,10 @@ async fn test_get_range_with_pagination() {
     assert_eq!(results.len(), 2);
 
     // Get with offset
-    let results_offset = manager.get_range(start, end, Some(2), Some(2)).await.unwrap();
+    let results_offset = manager
+        .get_range(start, end, Some(2), Some(2))
+        .await
+        .unwrap();
     assert_eq!(results_offset.len(), 2);
 }
 
@@ -175,7 +188,9 @@ async fn test_pin_operations() {
     assert!(!manager.is_pinned(ids[0]).await.unwrap());
 
     // pin 成功
-    let result = manager.pin(ids[0], Some("Important context".to_string())).await;
+    let result = manager
+        .pin(ids[0], Some("Important context".to_string()))
+        .await;
     assert!(result.is_ok());
 
     // pin 后: is_pinned 应为 true
@@ -203,7 +218,10 @@ async fn test_unpin_operations() {
     let mut fragments = vec![create_test_fragment("To be unpinned", MemoryKind::Thought)];
     let ids = manager.append(&mut fragments).await.unwrap();
 
-    manager.pin(ids[0], Some("Will unpin".to_string())).await.unwrap();
+    manager
+        .pin(ids[0], Some("Will unpin".to_string()))
+        .await
+        .unwrap();
     assert!(manager.is_pinned(ids[0]).await.unwrap());
 
     // unpin 成功
@@ -231,8 +249,14 @@ async fn test_pinned_queries_and_protection() {
     ];
     let ids = manager.append(&mut fragments).await.unwrap();
 
-    manager.pin(ids[0], Some("Reason 1".to_string())).await.unwrap();
-    manager.pin(ids[1], Some("Reason 2".to_string())).await.unwrap();
+    manager
+        .pin(ids[0], Some("Reason 1".to_string()))
+        .await
+        .unwrap();
+    manager
+        .pin(ids[1], Some("Reason 2".to_string()))
+        .await
+        .unwrap();
     // ids[2] 不 pin
 
     // 3. get_pinned 应返回正确的数据
@@ -246,8 +270,16 @@ async fn test_pinned_queries_and_protection() {
 
     // 4. 验证 JOIN 数据完整性 (data integrity)
     let reasons: Vec<Option<&String>> = pinned.iter().map(|p| p.reason.as_ref()).collect();
-    assert!(reasons.iter().any(|r| r.map(|s| s.as_str()) == Some("Reason 1")));
-    assert!(reasons.iter().any(|r| r.map(|s| s.as_str()) == Some("Reason 2")));
+    assert!(
+        reasons
+            .iter()
+            .any(|r| r.map(|s| s.as_str()) == Some("Reason 1"))
+    );
+    assert!(
+        reasons
+            .iter()
+            .any(|r| r.map(|s| s.as_str()) == Some("Reason 2"))
+    );
 
     // 验证 kind 正确关联
     for p in &pinned {

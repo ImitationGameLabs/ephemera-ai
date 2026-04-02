@@ -6,9 +6,9 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
-use async_trait::async_trait;
 use agora_common::event::Event;
 use agora_common::herald::HeraldInfo;
+use async_trait::async_trait;
 
 use crate::{AgoraClientError, AgoraClientTrait};
 
@@ -80,49 +80,81 @@ impl MockAgoraClient {
 
     /// Add a health check response to the queue
     pub fn push_health_check(&mut self, response: impl Into<String>) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Ok(MockResponse::HealthCheck(response.into())));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Ok(MockResponse::HealthCheck(response.into())));
         self
     }
 
     /// Add an events response to the queue
     pub fn push_events(&mut self, events: Vec<Event>) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Ok(MockResponse::Events(events)));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Ok(MockResponse::Events(events)));
         self
     }
 
     /// Add a single event response to the queue
     pub fn push_event(&mut self, event: Event) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Ok(MockResponse::Event(event)));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Ok(MockResponse::Event(event)));
         self
     }
 
     /// Add an ack count response to the queue
     pub fn push_ack_count(&mut self, count: usize) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Ok(MockResponse::AckCount(count)));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Ok(MockResponse::AckCount(count)));
         self
     }
 
     /// Add a heralds response to the queue
     pub fn push_heralds(&mut self, heralds: Vec<HeraldInfo>) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Ok(MockResponse::Heralds(heralds)));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Ok(MockResponse::Heralds(heralds)));
         self
     }
 
     /// Add a herald response to the queue
     pub fn push_herald(&mut self, herald: HeraldInfo) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Ok(MockResponse::Herald(herald)));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Ok(MockResponse::Herald(herald)));
         self
     }
 
     /// Add an empty success response to the queue
     pub fn push_empty(&mut self) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Ok(MockResponse::Empty));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Ok(MockResponse::Empty));
         self
     }
 
     /// Add an error response to the queue
     pub fn push_error(&mut self, error: impl Into<String>) -> &mut Self {
-        self.state.lock().unwrap().responses.push_back(Err(error.into()));
+        self.state
+            .lock()
+            .unwrap()
+            .responses
+            .push_back(Err(error.into()));
         self
     }
 
@@ -144,7 +176,13 @@ impl MockAgoraClient {
 
     /// Get the count of calls matching a predicate
     pub fn call_count(&self, check: impl Fn(&MockCall) -> bool) -> usize {
-        self.state.lock().unwrap().calls.iter().filter(|c| check(c)).count()
+        self.state
+            .lock()
+            .unwrap()
+            .calls
+            .iter()
+            .filter(|c| check(c))
+            .count()
     }
 
     /// Clear all recorded calls
@@ -193,7 +231,9 @@ impl AgoraClientTrait for MockAgoraClient {
         match self.pop_response() {
             Some(Ok(MockResponse::Event(event))) => Ok(event),
             Some(Err(e)) => Err(AgoraClientError::ApiError(e)),
-            _ => Err(AgoraClientError::ApiError("No response configured for ack_event".to_string())),
+            _ => Err(AgoraClientError::ApiError(
+                "No response configured for ack_event".to_string(),
+            )),
         }
     }
 
@@ -226,7 +266,9 @@ impl AgoraClientTrait for MockAgoraClient {
         match self.pop_response() {
             Some(Ok(MockResponse::Herald(herald))) => Ok(herald),
             Some(Err(e)) => Err(AgoraClientError::ApiError(e)),
-            _ => Err(AgoraClientError::ApiError("No response configured for get_herald".to_string())),
+            _ => Err(AgoraClientError::ApiError(
+                "No response configured for get_herald".to_string(),
+            )),
         }
     }
 
@@ -427,8 +469,7 @@ mod tests {
     #[tokio::test]
     async fn test_mock_multiple_ack_calls() {
         let mut mock = MockAgoraClient::new();
-        mock.push_ack_count(1)
-            .push_ack_count(3);
+        mock.push_ack_count(1).push_ack_count(3);
 
         // Ack single event
         let result1 = mock.ack_events(vec![1]).await.unwrap();

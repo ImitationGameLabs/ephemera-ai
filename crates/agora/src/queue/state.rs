@@ -32,12 +32,8 @@ impl DeliveryCache {
 
     /// Add event as pending (delivered_at = None).
     pub async fn add_pending(&self, event: Event) {
-        let state = DeliveryState {
-            event,
-            delivered_at: None,
-            retry_count: 0,
-            next_retry_at: None,
-        };
+        let state =
+            DeliveryState { event, delivered_at: None, retry_count: 0, next_retry_at: None };
         self.events.write().await.insert(state.event.id, state);
     }
 
@@ -45,12 +41,8 @@ impl DeliveryCache {
     pub async fn load_pending(&self, events: Vec<Event>) {
         let mut cache = self.events.write().await;
         for event in events {
-            let state = DeliveryState {
-                event,
-                delivered_at: None,
-                retry_count: 0,
-                next_retry_at: None,
-            };
+            let state =
+                DeliveryState { event, delivered_at: None, retry_count: 0, next_retry_at: None };
             cache.insert(state.event.id, state);
         }
     }
@@ -126,11 +118,7 @@ mod tests {
     use crate::event::{EventPriority, EventStatus};
 
     fn default_config() -> RetryConfig {
-        RetryConfig {
-            base_interval_ms: 5000,
-            multiplier: 2,
-            max_interval_ms: 300000,
-        }
+        RetryConfig { base_interval_ms: 5000, multiplier: 2, max_interval_ms: 300000 }
     }
 
     fn test_event(id: u64) -> Event {
@@ -207,11 +195,7 @@ mod tests {
 
     #[test]
     fn test_retry_interval_multiplier_one() {
-        let config = RetryConfig {
-            base_interval_ms: 5000,
-            multiplier: 1,
-            max_interval_ms: 300000,
-        };
+        let config = RetryConfig { base_interval_ms: 5000, multiplier: 1, max_interval_ms: 300000 };
         // With multiplier = 1, no exponential growth
         assert_eq!(
             retry_interval(0, &config),
@@ -225,11 +209,7 @@ mod tests {
 
     #[test]
     fn test_retry_interval_multiplier_zero() {
-        let config = RetryConfig {
-            base_interval_ms: 5000,
-            multiplier: 0,
-            max_interval_ms: 300000,
-        };
+        let config = RetryConfig { base_interval_ms: 5000, multiplier: 0, max_interval_ms: 300000 };
         // With multiplier = 0, should return min(base, max)
         assert_eq!(
             retry_interval(0, &config),
@@ -243,11 +223,7 @@ mod tests {
 
     #[test]
     fn test_retry_interval_large_multiplier() {
-        let config = RetryConfig {
-            base_interval_ms: 1000,
-            multiplier: 10,
-            max_interval_ms: 60000,
-        };
+        let config = RetryConfig { base_interval_ms: 1000, multiplier: 10, max_interval_ms: 60000 };
         // 1000 * 10^0 = 1000
         assert_eq!(
             retry_interval(0, &config),

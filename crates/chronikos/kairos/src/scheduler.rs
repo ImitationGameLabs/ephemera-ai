@@ -6,7 +6,7 @@ use time::OffsetDateTime;
 use tracing::{debug, error, info};
 
 use crate::schedule::{ScheduleStatus, TriggerSpec};
-use crate::store::{calculate_initial_next_fire, calculate_next_fire, ScheduleStore};
+use crate::store::{ScheduleStore, calculate_initial_next_fire, calculate_next_fire};
 
 /// Scheduler engine that checks for due schedules.
 pub struct Scheduler {
@@ -17,17 +17,17 @@ pub struct Scheduler {
 impl Scheduler {
     /// Creates a new scheduler.
     pub fn new(store: Arc<ScheduleStore>, tick_interval_ms: u64) -> Self {
-        Self {
-            store,
-            tick_interval: Duration::from_millis(tick_interval_ms),
-        }
+        Self { store, tick_interval: Duration::from_millis(tick_interval_ms) }
     }
 
     /// Starts the scheduler loop.
     pub async fn run(self) {
         let mut interval = tokio::time::interval(self.tick_interval);
 
-        info!("Scheduler started with tick interval {:?}", self.tick_interval);
+        info!(
+            "Scheduler started with tick interval {:?}",
+            self.tick_interval
+        );
 
         loop {
             interval.tick().await;
@@ -65,14 +65,20 @@ impl Scheduler {
                 self.store
                     .update_fire_times(&schedule.id, Some(next), None, ScheduleStatus::Active)
                     .await?;
-                debug!("Calculated initial next_fire for schedule {}: {:?}", schedule.id, next);
+                debug!(
+                    "Calculated initial next_fire for schedule {}: {:?}",
+                    schedule.id, next
+                );
             }
 
             // Check if schedule is due
             if let Some(next_fire) = schedule.next_fire
                 && next_fire <= now
             {
-                info!("Schedule {} '{}' is due, marking as triggered", schedule.id, schedule.name);
+                info!(
+                    "Schedule {} '{}' is due, marking as triggered",
+                    schedule.id, schedule.name
+                );
 
                 // Calculate new next_fire immediately:
                 // - For recurring: next occurrence
@@ -87,7 +93,12 @@ impl Scheduler {
 
                 // Mark as triggered with updated next_fire
                 self.store
-                    .update_fire_times(&schedule.id, new_next_fire, Some(next_fire), ScheduleStatus::Triggered)
+                    .update_fire_times(
+                        &schedule.id,
+                        new_next_fire,
+                        Some(next_fire),
+                        ScheduleStatus::Triggered,
+                    )
                     .await?;
             }
         }
@@ -142,9 +153,7 @@ mod tests {
     #[test]
     fn test_calculate_initial_next_fire_in() {
         let now = OffsetDateTime::now_utc();
-        let trigger = TriggerSpec::In {
-            duration_seconds: 3600,
-        };
+        let trigger = TriggerSpec::In { duration_seconds: 3600 };
 
         let next = calculate_initial_next_fire(&trigger, now).unwrap();
 
@@ -315,7 +324,10 @@ mod tests {
         store.create(&schedule).await.unwrap();
 
         // Trigger at 09:00:05
-        scheduler.tick_at(datetime!(2025-03-12 09:00:05 UTC)).await.unwrap();
+        scheduler
+            .tick_at(datetime!(2025-03-12 09:00:05 UTC))
+            .await
+            .unwrap();
 
         let triggered = store.get("hourly").await.unwrap().unwrap();
         assert_eq!(triggered.status, ScheduleStatus::Triggered);
@@ -350,13 +362,22 @@ mod tests {
         store.create(&schedule).await.unwrap();
 
         // First trigger
-        scheduler.tick_at(datetime!(2025-03-12 09:00:05 UTC)).await.unwrap();
+        scheduler
+            .tick_at(datetime!(2025-03-12 09:00:05 UTC))
+            .await
+            .unwrap();
 
         // Simulate error: manually change status back to Active (without updating next_fire)
-        store.update_status("hourly", ScheduleStatus::Active).await.unwrap();
+        store
+            .update_status("hourly", ScheduleStatus::Active)
+            .await
+            .unwrap();
 
         // Second tick: should NOT re-trigger because next_fire is already future
-        scheduler.tick_at(datetime!(2025-03-12 09:00:10 UTC)).await.unwrap();
+        scheduler
+            .tick_at(datetime!(2025-03-12 09:00:10 UTC))
+            .await
+            .unwrap();
 
         let result = store.get("hourly").await.unwrap().unwrap();
         // If bug not fixed, status would be Triggered
@@ -385,7 +406,10 @@ mod tests {
         };
         store.create(&schedule).await.unwrap();
 
-        scheduler.tick_at(datetime!(2025-03-12 09:00:05 UTC)).await.unwrap();
+        scheduler
+            .tick_at(datetime!(2025-03-12 09:00:05 UTC))
+            .await
+            .unwrap();
 
         let triggered = store.get("once").await.unwrap().unwrap();
         assert_eq!(triggered.status, ScheduleStatus::Triggered);
@@ -416,26 +440,47 @@ mod tests {
         store.create(&schedule).await.unwrap();
 
         // 09:00:05 trigger -> next_fire immediately updated to 09:01:05
-        scheduler.tick_at(datetime!(2025-03-12 09:00:05 UTC)).await.unwrap();
+        scheduler
+            .tick_at(datetime!(2025-03-12 09:00:05 UTC))
+            .await
+            .unwrap();
         let after_trigger = store.get("minutely").await.unwrap().unwrap();
         assert_eq!(after_trigger.status, ScheduleStatus::Triggered);
-        assert_eq!(after_trigger.next_fire, Some(datetime!(2025-03-12 09:01:05 UTC)));
+        assert_eq!(
+            after_trigger.next_fire,
+            Some(datetime!(2025-03-12 09:01:05 UTC))
+        );
 
         // 09:00:30 Ack -> status restored to Active, next_fire unchanged
-        store.ack_triggered_at(&["minutely".into()], datetime!(2025-03-12 09:00:30 UTC)).await.unwrap();
+        store
+            .ack_triggered_at(&["minutely".into()], datetime!(2025-03-12 09:00:30 UTC))
+            .await
+            .unwrap();
         let after_ack = store.get("minutely").await.unwrap().unwrap();
         assert_eq!(after_ack.status, ScheduleStatus::Active);
-        assert_eq!(after_ack.next_fire, Some(datetime!(2025-03-12 09:01:05 UTC)));
+        assert_eq!(
+            after_ack.next_fire,
+            Some(datetime!(2025-03-12 09:01:05 UTC))
+        );
 
         // 09:01:00 should NOT trigger (next_fire = 09:01:05 > 09:01:00)
-        scheduler.tick_at(datetime!(2025-03-12 09:01:00 UTC)).await.unwrap();
+        scheduler
+            .tick_at(datetime!(2025-03-12 09:01:00 UTC))
+            .await
+            .unwrap();
         let before_second = store.get("minutely").await.unwrap().unwrap();
         assert_eq!(before_second.status, ScheduleStatus::Active);
 
         // 09:01:05 second trigger -> next_fire updated to 09:02:05
-        scheduler.tick_at(datetime!(2025-03-12 09:01:05 UTC)).await.unwrap();
+        scheduler
+            .tick_at(datetime!(2025-03-12 09:01:05 UTC))
+            .await
+            .unwrap();
         let second_trigger = store.get("minutely").await.unwrap().unwrap();
         assert_eq!(second_trigger.status, ScheduleStatus::Triggered);
-        assert_eq!(second_trigger.next_fire, Some(datetime!(2025-03-12 09:02:05 UTC)));
+        assert_eq!(
+            second_trigger.next_fire,
+            Some(datetime!(2025-03-12 09:02:05 UTC))
+        );
     }
 }

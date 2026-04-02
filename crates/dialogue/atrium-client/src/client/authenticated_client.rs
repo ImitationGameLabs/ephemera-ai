@@ -1,8 +1,8 @@
+use super::raw_client::{ClientError, RawClient};
+use atrium_common::*;
+use reqwest::Client;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use atrium_common::*;
-use super::raw_client::{RawClient, ClientError};
-use reqwest::Client;
 
 #[derive(Clone)]
 pub struct AuthenticatedClient {
@@ -13,11 +13,7 @@ pub struct AuthenticatedClient {
 
 impl AuthenticatedClient {
     pub fn new(raw_client: RawClient, credentials: UserCredentials) -> Self {
-        Self {
-            raw_client,
-            credentials,
-            last_read_message_id: Arc::new(Mutex::new(None)),
-        }
+        Self { raw_client, credentials, last_read_message_id: Arc::new(Mutex::new(None)) }
     }
 
     pub fn credentials(&self) -> &UserCredentials {
@@ -25,7 +21,12 @@ impl AuthenticatedClient {
     }
 
     // Login with existing user
-    pub async fn connect_and_login(server_url: &str, username: String, password: String, http_client: Client) -> Result<Self, ClientError> {
+    pub async fn connect_and_login(
+        server_url: &str,
+        username: String,
+        password: String,
+        http_client: Client,
+    ) -> Result<Self, ClientError> {
         let credentials = UserCredentials { username, password };
         let client = Self::new_with_url(server_url, credentials, http_client);
         client.login().await?;
@@ -33,7 +34,13 @@ impl AuthenticatedClient {
     }
 
     // Login or register with bio
-    pub async fn connect_and_login_or_register(server_url: &str, username: String, password: String, bio: String, http_client: Client) -> Result<Self, ClientError> {
+    pub async fn connect_and_login_or_register(
+        server_url: &str,
+        username: String,
+        password: String,
+        bio: String,
+        http_client: Client,
+    ) -> Result<Self, ClientError> {
         let credentials = UserCredentials { username, password };
         let client = Self::new_with_url(server_url, credentials, http_client);
         client.login_or_register(bio).await?;
@@ -42,10 +49,15 @@ impl AuthenticatedClient {
 
     pub async fn login(&self) -> Result<User, ClientError> {
         // First try to get user profile to verify user exists
-        let user = self.raw_client.get_user_profile(&self.credentials.username).await?;
+        let user = self
+            .raw_client
+            .get_user_profile(&self.credentials.username)
+            .await?;
 
         // Then verify credentials by sending heartbeat
-        self.raw_client.send_heartbeat(self.credentials.clone()).await?;
+        self.raw_client
+            .send_heartbeat(self.credentials.clone())
+            .await?;
 
         Ok(user)
     }
@@ -71,26 +83,29 @@ impl AuthenticatedClient {
     }
 
     // New constructor that takes URL directly
-    pub fn new_with_url(server_url: &str, credentials: UserCredentials, http_client: Client) -> Self {
+    pub fn new_with_url(
+        server_url: &str,
+        credentials: UserCredentials,
+        http_client: Client,
+    ) -> Self {
         let raw_client = RawClient::new(server_url, http_client);
-        Self {
-            raw_client,
-            credentials,
-            last_read_message_id: Arc::new(Mutex::new(None)),
-        }
+        Self { raw_client, credentials, last_read_message_id: Arc::new(Mutex::new(None)) }
     }
 
-    
     pub async fn send_message(&self, content: String) -> Result<Message, ClientError> {
-        self.raw_client.send_message(
-            &self.credentials.username,
-            &self.credentials.password,
-            content
-        ).await
+        self.raw_client
+            .send_message(
+                &self.credentials.username,
+                &self.credentials.password,
+                content,
+            )
+            .await
     }
 
     pub async fn send_heartbeat(&self) -> Result<(), ClientError> {
-        self.raw_client.send_heartbeat(self.credentials.clone()).await
+        self.raw_client
+            .send_heartbeat(self.credentials.clone())
+            .await
     }
 
     pub async fn get_messages(&self, query: GetMessagesQuery) -> Result<Messages, ClientError> {
@@ -106,29 +121,34 @@ impl AuthenticatedClient {
     }
 
     // Get unread messages for the current user
-    pub async fn get_unread_messages(&self, limit: Option<u64>) -> Result<UnreadMessages, ClientError> {
+    pub async fn get_unread_messages(
+        &self,
+        limit: Option<u64>,
+    ) -> Result<UnreadMessages, ClientError> {
         // First, check if we need to initialize last_read_message_id
         let initialization_needed = self.last_read_message_id.lock().await.is_none();
 
         if initialization_needed {
             // Fetch user profile directly from server to get message_height
-            let user = self.raw_client.get_user_profile(&self.credentials.username).await?;
+            let user = self
+                .raw_client
+                .get_user_profile(&self.credentials.username)
+                .await?;
             let message_height = user.message_height;
 
             // Set the last_read_message_id
-            let _ = self.last_read_message_id.lock().await.insert(message_height);
+            let _ = self
+                .last_read_message_id
+                .lock()
+                .await
+                .insert(message_height);
         }
 
         // Get the current since_id
         let since_id = *self.last_read_message_id.lock().await;
 
         // Fetch messages using since_id
-        let query = GetMessagesQuery {
-            sender: None,
-            limit,
-            offset: None,
-            since_id,
-        };
+        let query = GetMessagesQuery { sender: None, limit, offset: None, since_id };
 
         let messages_response = self.raw_client.get_messages(query).await?;
 
@@ -140,27 +160,27 @@ impl AuthenticatedClient {
         // Calculate remaining unread messages
         let remaining_unread = self.calculate_remaining_unread().await?;
 
-        Ok(UnreadMessages {
-            messages: messages_response.messages,
-            remaining_unread,
-        })
+        Ok(UnreadMessages { messages: messages_response.messages, remaining_unread })
     }
 
     // Helper method to calculate remaining unread messages
     async fn calculate_remaining_unread(&self) -> Result<i64, ClientError> {
         // Get the latest message ID in the system
-        let latest_messages = self.raw_client.get_messages(GetMessagesQuery {
-            sender: None,
-            limit: Some(1),
-            offset: None,
-            since_id: None,
-        }).await?;
+        let latest_messages = self
+            .raw_client
+            .get_messages(GetMessagesQuery {
+                sender: None,
+                limit: Some(1),
+                offset: None,
+                since_id: None,
+            })
+            .await?;
 
         // Get the last_read_id after the HTTP call
         let last_read_id = *self.last_read_message_id.lock().await;
 
         if latest_messages.messages.is_empty() {
-            return Ok(0)
+            return Ok(0);
         }
 
         let latest_message = latest_messages.messages.first().unwrap();

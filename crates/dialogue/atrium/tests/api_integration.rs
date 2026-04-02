@@ -22,7 +22,12 @@ impl TestClient {
         }
     }
 
-    async fn create_user(&self, username: &str, bio: &str, password: &str) -> reqwest::Result<reqwest::Response> {
+    async fn create_user(
+        &self,
+        username: &str,
+        bio: &str,
+        password: &str,
+    ) -> reqwest::Result<reqwest::Response> {
         let user_data = json!({
             "name": username,
             "bio": bio,
@@ -50,7 +55,12 @@ impl TestClient {
             .await
     }
 
-    async fn create_message(&self, content: &str, username: &str, password: &str) -> reqwest::Result<reqwest::Response> {
+    async fn create_message(
+        &self,
+        content: &str,
+        username: &str,
+        password: &str,
+    ) -> reqwest::Result<reqwest::Response> {
         let message_data = json!({
             "content": content,
             "username": username,
@@ -85,7 +95,11 @@ impl TestClient {
             .await
     }
 
-    async fn update_heartbeat(&self, username: &str, password: &str) -> reqwest::Result<reqwest::Response> {
+    async fn update_heartbeat(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> reqwest::Result<reqwest::Response> {
         let heartbeat_data = json!({
             "username": username,
             "password": password
@@ -112,7 +126,10 @@ async fn test_user_lifecycle() {
 
     // 1. Create user
     println!("Creating user: {}", test_username);
-    let create_response = client.create_user(test_username, test_bio, test_password).await.unwrap();
+    let create_response = client
+        .create_user(test_username, test_bio, test_password)
+        .await
+        .unwrap();
     assert_eq!(create_response.status(), 201);
 
     // 2. Get user profile
@@ -126,12 +143,19 @@ async fn test_user_lifecycle() {
 
     // Verify timestamp is in ISO 8601 format (string, not array)
     let created_at = &user_data["created_at"];
-    assert!(created_at.is_string(), "created_at should be a string in ISO 8601 format, got: {:?}", created_at);
+    assert!(
+        created_at.is_string(),
+        "created_at should be a string in ISO 8601 format, got: {:?}",
+        created_at
+    );
 
     // Try to parse as ISO 8601 datetime
     let timestamp_str = created_at.as_str().unwrap();
-    assert!(timestamp_str.contains('T') && timestamp_str.contains('Z'),
-           "Timestamp should be in ISO 8601 format, got: {}", timestamp_str);
+    assert!(
+        timestamp_str.contains('T') && timestamp_str.contains('Z'),
+        "Timestamp should be in ISO 8601 format, got: {}",
+        timestamp_str
+    );
 
     // 3. Get all users (should include our test user)
     println!("Getting all users");
@@ -143,7 +167,10 @@ async fn test_user_lifecycle() {
 
     // 4. Update heartbeat
     println!("Updating heartbeat for: {}", test_username);
-    let heartbeat_response = client.update_heartbeat(test_username, test_password).await.unwrap();
+    let heartbeat_response = client
+        .update_heartbeat(test_username, test_password)
+        .await
+        .unwrap();
     assert_eq!(heartbeat_response.status(), 200);
 }
 
@@ -159,11 +186,17 @@ async fn test_message_lifecycle() {
     let test_password = &format!("sender_password_{}", timestamp);
 
     // First create a user to send messages
-    client.create_user(test_sender, "Test sender", test_password).await.unwrap();
+    client
+        .create_user(test_sender, "Test sender", test_password)
+        .await
+        .unwrap();
 
     // 1. Create message
     println!("Creating message from: {}", test_sender);
-    let create_response = client.create_message(test_content, test_sender, test_password).await.unwrap();
+    let create_response = client
+        .create_message(test_content, test_sender, test_password)
+        .await
+        .unwrap();
     assert_eq!(create_response.status(), 201);
 
     let message_data: serde_json::Value = create_response.json().await.unwrap();
@@ -182,12 +215,19 @@ async fn test_message_lifecycle() {
 
     // Verify timestamp is in ISO 8601 format (string, not array)
     let created_at = &retrieved_message["created_at"];
-    assert!(created_at.is_string(), "created_at should be a string in ISO 8601 format, got: {:?}", created_at);
+    assert!(
+        created_at.is_string(),
+        "created_at should be a string in ISO 8601 format, got: {:?}",
+        created_at
+    );
 
     // Try to parse as ISO 8601 datetime
     let timestamp_str = created_at.as_str().unwrap();
-    assert!(timestamp_str.contains('T') && timestamp_str.contains('Z'),
-           "Timestamp should be in ISO 8601 format, got: {}", timestamp_str);
+    assert!(
+        timestamp_str.contains('T') && timestamp_str.contains('Z'),
+        "Timestamp should be in ISO 8601 format, got: {}",
+        timestamp_str
+    );
 
     // 3. Get all messages
     println!("Getting all messages");
@@ -254,13 +294,20 @@ async fn test_multiple_users_and_messages() {
     let usernames = vec![
         format!("alice_{}", timestamp),
         format!("bob_{}", timestamp),
-        format!("charlie_{}", timestamp)
+        format!("charlie_{}", timestamp),
     ];
 
     // Create multiple users
     for username in &usernames {
         println!("Creating user: {}", username);
-        let response = client.create_user(username, &format!("Bio for {}", username), &format!("password_{}", username)).await.unwrap();
+        let response = client
+            .create_user(
+                username,
+                &format!("Bio for {}", username),
+                &format!("password_{}", username),
+            )
+            .await
+            .unwrap();
         assert_eq!(response.status(), 201);
     }
 
@@ -268,7 +315,14 @@ async fn test_multiple_users_and_messages() {
     for username in &usernames {
         let message_content = format!("Message from {}", username);
         println!("Creating message: {}", message_content);
-        let response = client.create_message(&message_content, username, &format!("password_{}", username)).await.unwrap();
+        let response = client
+            .create_message(
+                &message_content,
+                username,
+                &format!("password_{}", username),
+            )
+            .await
+            .unwrap();
         assert_eq!(response.status(), 201);
     }
 

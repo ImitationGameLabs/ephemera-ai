@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -41,10 +41,7 @@ impl MissingConfig {
     }
 
     pub fn to_error_message(&self) -> String {
-        let mut lines = vec![
-            "error: missing required configuration".to_string(),
-            String::new(),
-        ];
+        let mut lines = vec!["error: missing required configuration".to_string(), String::new()];
 
         if self.server_url {
             lines.push("  server-url is not configured".to_string());
@@ -196,19 +193,13 @@ pub fn resolve_config_from(path: &Path) -> Result<ResolvedConfig, MissingConfig>
         })
     };
 
-    let missing = MissingConfig {
-        server_url: server_url.is_none(),
-        auth: auth.is_none(),
-    };
+    let missing = MissingConfig { server_url: server_url.is_none(), auth: auth.is_none() };
 
     if !missing.is_empty() {
         return Err(missing);
     }
 
-    Ok(ResolvedConfig {
-        server_url: server_url.unwrap(),
-        auth: auth.unwrap(),
-    })
+    Ok(ResolvedConfig { server_url: server_url.unwrap(), auth: auth.unwrap() })
 }
 
 /// Resolve configuration from the default path
@@ -221,11 +212,9 @@ pub fn get_config_value_from(path: &Path, key: &str) -> Result<Option<String>> {
     let config = load_config_from(path)?;
 
     match key {
-        "server-url" => Ok(if config.server_url.is_empty() {
-            None
-        } else {
-            Some(config.server_url)
-        }),
+        "server-url" => {
+            Ok(if config.server_url.is_empty() { None } else { Some(config.server_url) })
+        }
         "auth.username" => Ok(config.auth.as_ref().map(|a| a.username.clone())),
         "auth.password" => Ok(config.auth.as_ref().map(|a| a.password.clone())),
         "auth.bio" => Ok(config.auth.as_ref().and_then(|a| a.bio.clone())),
@@ -466,10 +455,12 @@ mod tests {
         let result = get_config_value_from(&config_path, "invalid.key");
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Unknown config key"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unknown config key")
+        );
     }
 
     #[test]
@@ -479,10 +470,12 @@ mod tests {
         let result = set_config_value_to(&config_path, "invalid.key", "value");
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Unknown config key"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unknown config key")
+        );
     }
 
     #[test]
@@ -708,10 +701,7 @@ mod tests {
 
     #[test]
     fn test_missing_config_error_message_server_url() {
-        let missing = MissingConfig {
-            server_url: true,
-            auth: false,
-        };
+        let missing = MissingConfig { server_url: true, auth: false };
 
         let msg = missing.to_error_message();
 
@@ -722,10 +712,7 @@ mod tests {
 
     #[test]
     fn test_missing_config_error_message_auth() {
-        let missing = MissingConfig {
-            server_url: false,
-            auth: true,
-        };
+        let missing = MissingConfig { server_url: false, auth: true };
 
         let msg = missing.to_error_message();
 
@@ -737,10 +724,7 @@ mod tests {
 
     #[test]
     fn test_missing_config_error_message_both() {
-        let missing = MissingConfig {
-            server_url: true,
-            auth: true,
-        };
+        let missing = MissingConfig { server_url: true, auth: true };
 
         let msg = missing.to_error_message();
 
@@ -754,21 +738,9 @@ mod tests {
     #[test]
     fn test_missing_config_is_empty() {
         assert!(MissingConfig::default().is_empty());
-        assert!(!MissingConfig {
-            server_url: true,
-            auth: false
-        }
-        .is_empty());
-        assert!(!MissingConfig {
-            server_url: false,
-            auth: true
-        }
-        .is_empty());
-        assert!(!MissingConfig {
-            server_url: true,
-            auth: true
-        }
-        .is_empty());
+        assert!(!MissingConfig { server_url: true, auth: false }.is_empty());
+        assert!(!MissingConfig { server_url: false, auth: true }.is_empty());
+        assert!(!MissingConfig { server_url: true, auth: true }.is_empty());
     }
 
     // ==================== Edge Cases Tests ====================

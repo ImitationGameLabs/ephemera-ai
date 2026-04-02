@@ -85,7 +85,11 @@ impl AgentTool for MemoryGet {
         if fragments.is_empty() {
             Ok(format!(
                 "No memories found with IDs: {}",
-                args.ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(", ")
+                args.ids
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ))
         } else {
             let ids: Vec<String> = fragments.iter().map(|f| f.id.to_string()).collect();
@@ -170,8 +174,11 @@ impl AgentTool for MemoryRecent {
                     Ok("No recent memories found.".to_string())
                 } else {
                     let count = response.fragments.len();
-                    let ids: Vec<String> =
-                        response.fragments.iter().map(|f| f.id.to_string()).collect();
+                    let ids: Vec<String> = response
+                        .fragments
+                        .iter()
+                        .map(|f| f.id.to_string())
+                        .collect();
                     let fragments = response.fragments.clone();
                     {
                         let mut context = self.context.lock().await;
@@ -269,11 +276,17 @@ impl AgentTool for MemoryTimeline {
         {
             Ok(response) => {
                 if response.fragments.is_empty() {
-                    Ok(format!("No memories found between {} and {}.", args.from, args.to))
+                    Ok(format!(
+                        "No memories found between {} and {}.",
+                        args.from, args.to
+                    ))
                 } else {
                     let count = response.fragments.len();
-                    let ids: Vec<String> =
-                        response.fragments.iter().map(|f| f.id.to_string()).collect();
+                    let ids: Vec<String> = response
+                        .fragments
+                        .iter()
+                        .map(|f| f.id.to_string())
+                        .collect();
                     let fragments = response.fragments.clone();
                     {
                         let mut context = self.context.lock().await;
@@ -356,8 +369,10 @@ impl AgentTool for MemoryPin {
         let max_count = {
             let context = self.context.lock().await;
 
-            let already_pinned =
-                context.list_pinned().iter().any(|p| p.fragment.id == args.memory_id);
+            let already_pinned = context
+                .list_pinned()
+                .iter()
+                .any(|p| p.fragment.id == args.memory_id);
             let max_count = context.max_pinned_tokens();
             let current_count = context.list_pinned().len();
 
@@ -377,12 +392,13 @@ impl AgentTool for MemoryPin {
         };
 
         // Call Loom API to pin the memory
-        let pinned =
-            self.loom_client.pin_memory(args.memory_id, Some(args.reason.clone())).await.map_err(
-                |e| -> Box<dyn std::error::Error + Send + Sync> {
-                    format!("Failed to pin memory: {:?}", e).into()
-                },
-            )?;
+        let pinned = self
+            .loom_client
+            .pin_memory(args.memory_id, Some(args.reason.clone()))
+            .await
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+                format!("Failed to pin memory: {:?}", e).into()
+            })?;
 
         // Update local context and get new count in single lock
         let current_count = {
@@ -452,11 +468,12 @@ impl AgentTool for MemoryUnpin {
         let args: MemoryUnpinArgs = serde_json::from_str(args_json)?;
 
         // Call Loom API to unpin the memory
-        self.loom_client.unpin_memory(args.memory_id).await.map_err(
-            |e| -> Box<dyn std::error::Error + Send + Sync> {
+        self.loom_client
+            .unpin_memory(args.memory_id)
+            .await
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
                 format!("Failed to unpin memory: {:?}", e).into()
-            },
-        )?;
+            })?;
 
         // Update local context synchronously
         let removed = {

@@ -1,7 +1,7 @@
 mod fixtures;
 
-use fixtures::{create_user_manager, setup_test_db};
 use atrium::db::user_manager::{CreateUserDto, UpdateUserDto, UserError};
+use fixtures::{create_user_manager, setup_test_db};
 
 /// 测试用户创建和认证场景
 #[tokio::test]
@@ -26,7 +26,10 @@ async fn test_user_creation_and_auth() {
     assert!(matches!(result, Err(UserError::UserAlreadyExists(_))));
 
     // 认证 - 正确密码
-    let auth_user = manager.authenticate_user("alice", "secret123").await.unwrap();
+    let auth_user = manager
+        .authenticate_user("alice", "secret123")
+        .await
+        .unwrap();
     assert_eq!(auth_user.name, "alice");
 
     // 认证 - 错误密码
@@ -53,27 +56,45 @@ async fn test_user_update() {
     manager.create_user(&dto).await.unwrap();
 
     // 更新 bio
-    let updated = manager.update_user("bob", &UpdateUserDto {
-        bio: Some("New bio".to_string()),
-        new_password: None,
-    }).await.unwrap();
+    let updated = manager
+        .update_user(
+            "bob",
+            &UpdateUserDto { bio: Some("New bio".to_string()), new_password: None },
+        )
+        .await
+        .unwrap();
     assert_eq!(updated.bio, "New bio");
 
     // 更新密码
-    manager.update_user("bob", &UpdateUserDto {
-        bio: None,
-        new_password: Some("new_password".to_string()),
-    }).await.unwrap();
+    manager
+        .update_user(
+            "bob",
+            &UpdateUserDto { bio: None, new_password: Some("new_password".to_string()) },
+        )
+        .await
+        .unwrap();
 
     // 旧密码失效，新密码有效
-    assert!(manager.authenticate_user("bob", "old_password").await.is_err());
-    assert!(manager.authenticate_user("bob", "new_password").await.is_ok());
+    assert!(
+        manager
+            .authenticate_user("bob", "old_password")
+            .await
+            .is_err()
+    );
+    assert!(
+        manager
+            .authenticate_user("bob", "new_password")
+            .await
+            .is_ok()
+    );
 
     // 更新不存在的用户失败
-    let result = manager.update_user("nonexistent", &UpdateUserDto {
-        bio: Some("bio".to_string()),
-        new_password: None,
-    }).await;
+    let result = manager
+        .update_user(
+            "nonexistent",
+            &UpdateUserDto { bio: Some("bio".to_string()), new_password: None },
+        )
+        .await;
     assert!(matches!(result, Err(UserError::UserNotFound(_))));
 }
 
@@ -89,11 +110,14 @@ async fn test_user_list_and_heartbeat() {
 
     // 创建多个用户（非字母序）
     for name in ["charlie", "alice", "bob"] {
-        manager.create_user(&CreateUserDto {
-            name: name.to_string(),
-            bio: format!("{}'s bio", name),
-            password: "pass".to_string(),
-        }).await.unwrap();
+        manager
+            .create_user(&CreateUserDto {
+                name: name.to_string(),
+                bio: format!("{}'s bio", name),
+                password: "pass".to_string(),
+            })
+            .await
+            .unwrap();
     }
 
     // 列表按名字排序

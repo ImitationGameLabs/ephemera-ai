@@ -44,7 +44,9 @@ impl SqliteEventStore {
 
     /// Insert new event. Returns the created event with ID.
     pub async fn insert(&self, req: CreateEventRequest) -> Result<Event> {
-        let timestamp = req.timestamp.format(&time::format_description::well_known::Rfc3339)?;
+        let timestamp = req
+            .timestamp
+            .format(&time::format_description::well_known::Rfc3339)?;
 
         let result = sqlx::query(
             r#"
@@ -96,8 +98,10 @@ impl SqliteEventStore {
 
 fn row_to_event(row: sqlx::sqlite::SqliteRow) -> Result<Event> {
     let timestamp_str: String = row.get("timestamp");
-    let timestamp =
-        OffsetDateTime::parse(&timestamp_str, &time::format_description::well_known::Rfc3339)?;
+    let timestamp = OffsetDateTime::parse(
+        &timestamp_str,
+        &time::format_description::well_known::Rfc3339,
+    )?;
 
     let payload_str: String = row.get("payload");
     let payload = serde_json::from_str(&payload_str)?;

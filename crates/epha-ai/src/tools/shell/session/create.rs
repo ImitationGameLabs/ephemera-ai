@@ -82,10 +82,14 @@ impl<B: ShellBackend + Send + Sync + 'static> AgentTool for CreateSessionTool<B>
         let mut backend = self.backend.lock().await;
 
         // Create the session
-        backend.create_session(&args.name, args.cwd.as_deref()).await?;
+        backend
+            .create_session(&args.name, args.cwd.as_deref())
+            .await?;
 
-        let cwd =
-            args.cwd.map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| "/tmp".to_string());
+        let cwd = args
+            .cwd
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| "/tmp".to_string());
 
         let output = CreateSessionOutput { name: args.name, cwd };
 
@@ -99,8 +103,10 @@ mod tests {
     use crate::tools::shell::error::ShellError;
     use crate::tools::shell::mock_backend::MockShellBackend;
 
-    fn create_tool_with_mock() -> (CreateSessionTool<MockShellBackend>, Arc<Mutex<MockShellBackend>>)
-    {
+    fn create_tool_with_mock() -> (
+        CreateSessionTool<MockShellBackend>,
+        Arc<Mutex<MockShellBackend>>,
+    ) {
         let mock = Arc::new(Mutex::new(MockShellBackend::new()));
         let tool = CreateSessionTool::new(mock.clone());
         (tool, mock)
@@ -149,10 +155,14 @@ mod tests {
         let (tool, mock) = create_tool_with_mock();
 
         let args1 = CreateSessionArgs { name: "build".into(), cwd: None };
-        tool.call(&serde_json::to_string(&args1).unwrap()).await.unwrap();
+        tool.call(&serde_json::to_string(&args1).unwrap())
+            .await
+            .unwrap();
 
         let args2 = CreateSessionArgs { name: "test".into(), cwd: None };
-        tool.call(&serde_json::to_string(&args2).unwrap()).await.unwrap();
+        tool.call(&serde_json::to_string(&args2).unwrap())
+            .await
+            .unwrap();
 
         let backend = mock.lock().await;
         assert_eq!(backend.session_count(), 3); // main + build + test

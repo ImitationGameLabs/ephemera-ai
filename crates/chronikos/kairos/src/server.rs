@@ -1,11 +1,11 @@
 //! HTTP server for Kairos time management service.
 
 use axum::{
+    Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, patch, post},
-    Json, Router,
 };
 use serde::Deserialize;
 use std::net::SocketAddr;
@@ -17,7 +17,7 @@ use uuid::Uuid;
 use crate::config::Config;
 use crate::schedule::*;
 use crate::scheduler::Scheduler;
-use crate::store::{calculate_initial_next_fire, ScheduleStore};
+use crate::store::{ScheduleStore, calculate_initial_next_fire};
 
 /// Application state shared across handlers.
 #[derive(Clone)]
@@ -167,7 +167,10 @@ async fn create_schedule(
     };
 
     match state.store.create(&schedule).await {
-        Ok(_) => (StatusCode::CREATED, Json(serde_json::to_value(schedule).unwrap())),
+        Ok(_) => (
+            StatusCode::CREATED,
+            Json(serde_json::to_value(schedule).unwrap()),
+        ),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e.to_string() })),
@@ -193,10 +196,7 @@ async fn list_schedules(
             let total = schedules.len();
             Json(SchedulesListResponse { schedules, total })
         }
-        Err(_e) => Json(SchedulesListResponse {
-            schedules: vec![],
-            total: 0,
-        }),
+        Err(_e) => Json(SchedulesListResponse { schedules: vec![], total: 0 }),
     }
 }
 
@@ -241,10 +241,7 @@ async fn ack_triggered(
 }
 
 /// Get a specific schedule.
-async fn get_schedule(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
+async fn get_schedule(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
     match state.store.get(&id).await {
         Ok(Some(schedule)) => (StatusCode::OK, Json(Some(schedule))),
         Ok(None) => (StatusCode::NOT_FOUND, Json(None)),
@@ -260,7 +257,10 @@ async fn delete_schedule(
     match state.store.delete(&id).await {
         Ok(true) => (StatusCode::NO_CONTENT, Json(serde_json::json!({}))),
         Ok(false) => (StatusCode::NOT_FOUND, Json(serde_json::json!({}))),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({}))),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({})),
+        ),
     }
 }
 
@@ -276,7 +276,10 @@ async fn update_schedule(
                 // Return updated schedule
                 match state.store.get(&id).await {
                     Ok(Some(schedule)) => {
-                        return (StatusCode::OK, Json(serde_json::to_value(schedule).unwrap()));
+                        return (
+                            StatusCode::OK,
+                            Json(serde_json::to_value(schedule).unwrap()),
+                        );
                     }
                     _ => {
                         return (
@@ -295,5 +298,8 @@ async fn update_schedule(
         }
     }
 
-    (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "no update specified" })))
+    (
+        StatusCode::BAD_REQUEST,
+        Json(serde_json::json!({ "error": "no update specified" })),
+    )
 }

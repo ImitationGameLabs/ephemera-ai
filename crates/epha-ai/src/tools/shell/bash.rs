@@ -119,7 +119,9 @@ impl<B: ShellBackend + Send + Sync + 'static> AgentTool for BashTool<B> {
         let session = backend.current_session().to_string();
 
         // Execute the command
-        let result = backend.execute(&args.command, timeout, args.background).await?;
+        let result = backend
+            .execute(&args.command, timeout, args.background)
+            .await?;
 
         let output = BashOutput {
             output: result.output,
@@ -159,9 +161,13 @@ mod tests {
             timeout: None,
             background: false,
         };
-        let result: BashOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: BashOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.output.trim(), "hello world");
         assert_eq!(result.exit_code, Some(0));
@@ -183,9 +189,13 @@ mod tests {
             timeout: Some(1),
             background: false,
         };
-        let result: BashOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: BashOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert!(result.timed_out);
         assert!(result.exit_code.is_none());
@@ -201,9 +211,13 @@ mod tests {
             timeout: None,
             background: true,
         };
-        let result: BashOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: BashOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert!(result.exit_code.is_none());
         assert!(!result.timed_out);
@@ -225,9 +239,13 @@ mod tests {
             timeout: None,
             background: false,
         };
-        let result: BashOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: BashOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.session, "worker");
     }
@@ -260,9 +278,13 @@ mod tests {
 
         let args =
             BashArgs { command: "false".into(), session: None, timeout: None, background: false };
-        let result: BashOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: BashOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.exit_code, Some(1));
         assert!(result.output.contains("error"));
@@ -278,9 +300,13 @@ mod tests {
         }
 
         let args = BashArgs { command: "".into(), session: None, timeout: None, background: false };
-        let result: BashOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: BashOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.session, "main");
     }
@@ -296,9 +322,13 @@ mod tests {
 
         let args =
             BashArgs { command: "true".into(), session: None, timeout: None, background: false };
-        let result: BashOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: BashOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.output, "");
         assert_eq!(result.exit_code, Some(0));
@@ -319,9 +349,13 @@ mod tests {
             timeout: None,
             background: false,
         };
-        let result: BashOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: BashOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert!(result.output.contains("hello"));
         assert_eq!(result.exit_code, Some(0));
@@ -343,9 +377,13 @@ mod tests {
             timeout: None,
             background: false,
         };
-        let result: BashOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: BashOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert!(result.output.contains("你好世界"));
         assert_eq!(result.exit_code, Some(0));
@@ -366,9 +404,13 @@ mod tests {
             timeout: Some(300),
             background: false,
         };
-        let result: BashOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: BashOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.output, "done");
         assert_eq!(result.exit_code, Some(0));

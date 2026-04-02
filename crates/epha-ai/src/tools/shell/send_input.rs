@@ -121,7 +121,10 @@ mod tests {
     use crate::tools::shell::error::ShellError;
     use crate::tools::shell::mock_backend::MockShellBackend;
 
-    fn create_tool_with_mock() -> (SendInputTool<MockShellBackend>, Arc<Mutex<MockShellBackend>>) {
+    fn create_tool_with_mock() -> (
+        SendInputTool<MockShellBackend>,
+        Arc<Mutex<MockShellBackend>>,
+    ) {
         let mock = Arc::new(Mutex::new(MockShellBackend::new()));
         let tool = SendInputTool::new(mock.clone());
         (tool, mock)
@@ -132,9 +135,13 @@ mod tests {
         let (tool, mock) = create_tool_with_mock();
 
         let args = SendInputArgs { input: "y".into(), session: None, press_enter: true };
-        let result: SendInputOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: SendInputOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.input, "y");
         assert!(result.press_enter);
@@ -152,9 +159,13 @@ mod tests {
 
         let args =
             SendInputArgs { input: "secret_password".into(), session: None, press_enter: false };
-        let result: SendInputOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: SendInputOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert!(!result.press_enter);
 
@@ -169,7 +180,9 @@ mod tests {
 
         let args =
             SendInputArgs { input: "line1\nline2\nline3".into(), session: None, press_enter: true };
-        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        tool.call(&serde_json::to_string(&args).unwrap())
+            .await
+            .unwrap();
 
         let backend = mock.lock().await;
         let inputs = backend.get_inputs_received();
@@ -189,9 +202,13 @@ mod tests {
             session: Some("worker".into()),
             press_enter: true,
         };
-        let result: SendInputOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: SendInputOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.session, "worker");
     }
@@ -217,7 +234,9 @@ mod tests {
         let (tool, mock) = create_tool_with_mock();
 
         let args = SendInputArgs { input: "".into(), session: None, press_enter: true };
-        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        tool.call(&serde_json::to_string(&args).unwrap())
+            .await
+            .unwrap();
 
         let backend = mock.lock().await;
         let inputs = backend.get_inputs_received();
@@ -231,7 +250,9 @@ mod tests {
 
         let args =
             SendInputArgs { input: "你好世界 🌍".into(), session: None, press_enter: false };
-        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        tool.call(&serde_json::to_string(&args).unwrap())
+            .await
+            .unwrap();
 
         let backend = mock.lock().await;
         let inputs = backend.get_inputs_received();
@@ -246,7 +267,9 @@ mod tests {
         let expected = format!("{}\n", long_input);
 
         let args = SendInputArgs { input: long_input.clone(), session: None, press_enter: true };
-        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        tool.call(&serde_json::to_string(&args).unwrap())
+            .await
+            .unwrap();
 
         let backend = mock.lock().await;
         let inputs = backend.get_inputs_received();
@@ -258,7 +281,9 @@ mod tests {
         let (tool, mock) = create_tool_with_mock();
 
         let args = SendInputArgs { input: "\x03".into(), session: None, press_enter: false };
-        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        tool.call(&serde_json::to_string(&args).unwrap())
+            .await
+            .unwrap();
 
         let backend = mock.lock().await;
         let inputs = backend.get_inputs_received();

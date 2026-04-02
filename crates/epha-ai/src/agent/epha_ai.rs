@@ -83,7 +83,10 @@ impl EphemeraAI {
         {
             let mut ctx = context_data.lock().await;
             if let Err(e) = ctx.restore_from_loom(50).await {
-                tracing::warn!("Failed to restore from Loom: {}. Starting with empty context.", e);
+                tracing::warn!(
+                    "Failed to restore from Loom: {}. Starting with empty context.",
+                    e
+                );
             }
             if let Err(e) = ctx.restore_pinned_from_loom().await {
                 tracing::warn!("Failed to restore pinned memories from Loom: {}", e);
@@ -119,14 +122,26 @@ impl EphemeraAI {
         let mut tool_dispatch = ToolDispatch::new();
 
         // Memory and state tools
-        tool_dispatch.add_tool(Box::new(MemoryGet::new(loom_client.clone(), context_data.clone())));
-        tool_dispatch
-            .add_tool(Box::new(MemoryRecent::new(loom_client.clone(), context_data.clone())));
-        tool_dispatch
-            .add_tool(Box::new(MemoryTimeline::new(loom_client.clone(), context_data.clone())));
-        tool_dispatch.add_tool(Box::new(MemoryPin::new(loom_client.clone(), context_data.clone())));
-        tool_dispatch
-            .add_tool(Box::new(MemoryUnpin::new(loom_client.clone(), context_data.clone())));
+        tool_dispatch.add_tool(Box::new(MemoryGet::new(
+            loom_client.clone(),
+            context_data.clone(),
+        )));
+        tool_dispatch.add_tool(Box::new(MemoryRecent::new(
+            loom_client.clone(),
+            context_data.clone(),
+        )));
+        tool_dispatch.add_tool(Box::new(MemoryTimeline::new(
+            loom_client.clone(),
+            context_data.clone(),
+        )));
+        tool_dispatch.add_tool(Box::new(MemoryPin::new(
+            loom_client.clone(),
+            context_data.clone(),
+        )));
+        tool_dispatch.add_tool(Box::new(MemoryUnpin::new(
+            loom_client.clone(),
+            context_data.clone(),
+        )));
         tool_dispatch.add_tool(Box::new(StateTransition::new(state.clone())));
 
         // Shell tools
@@ -291,8 +306,12 @@ impl EphemeraAI {
 
             // 3.7 Update chat history for next iteration
             // Add assistant message with tool calls
-            chat_history
-                .push(ChatMessage::assistant().tool_use(tool_calls.clone()).content("").build());
+            chat_history.push(
+                ChatMessage::assistant()
+                    .tool_use(tool_calls.clone())
+                    .content("")
+                    .build(),
+            );
 
             // Add tool result message
             // The llm crate's OpenAI compatible provider expands ToolResult into
@@ -307,8 +326,12 @@ impl EphemeraAI {
                 })
                 .collect();
 
-            chat_history
-                .push(ChatMessage::user().tool_result(result_tool_calls).content("").build());
+            chat_history.push(
+                ChatMessage::user()
+                    .tool_result(result_tool_calls)
+                    .content("")
+                    .build(),
+            );
 
             // 3.7.1 Inject recalled memories if any tool populated them
             {

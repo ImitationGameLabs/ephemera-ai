@@ -115,9 +115,7 @@ pub enum TriggerSpec {
         at: OffsetDateTime,
     },
     /// Relative delay from now (in seconds).
-    In {
-        duration_seconds: u64,
-    },
+    In { duration_seconds: u64 },
     /// Recurring event.
     Every {
         period: Period,
@@ -126,9 +124,7 @@ pub enum TriggerSpec {
     },
     /// Cron expression (v2).
     #[allow(dead_code)]
-    Cron {
-        expression: String,
-    },
+    Cron { expression: String },
 }
 
 /// A scheduled event.

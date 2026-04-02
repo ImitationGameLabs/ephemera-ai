@@ -28,8 +28,14 @@ impl Config {
 
         // Validate required fields
         assert!(config.port != 0, "port cannot be 0");
-        assert!(!config.database_path.is_empty(), "database_path cannot be empty");
-        assert!(config.tick_interval_ms > 0, "tick_interval_ms must be greater than 0");
+        assert!(
+            !config.database_path.is_empty(),
+            "database_path cannot be empty"
+        );
+        assert!(
+            config.tick_interval_ms > 0,
+            "tick_interval_ms must be greater than 0"
+        );
 
         config
     }

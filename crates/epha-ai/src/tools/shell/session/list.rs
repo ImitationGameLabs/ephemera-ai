@@ -76,8 +76,10 @@ mod tests {
     use super::*;
     use crate::tools::shell::mock_backend::MockShellBackend;
 
-    fn create_tool_with_mock() -> (ListSessionsTool<MockShellBackend>, Arc<Mutex<MockShellBackend>>)
-    {
+    fn create_tool_with_mock() -> (
+        ListSessionsTool<MockShellBackend>,
+        Arc<Mutex<MockShellBackend>>,
+    ) {
         let mock = Arc::new(Mutex::new(MockShellBackend::new()));
         let tool = ListSessionsTool::new(mock.clone());
         (tool, mock)
@@ -88,9 +90,13 @@ mod tests {
         let (tool, _) = create_tool_with_mock();
 
         let args = ListSessionsArgs::default();
-        let result: ListSessionsOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: ListSessionsOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.sessions.len(), 1);
         assert_eq!(result.current_session, "main");
@@ -107,9 +113,13 @@ mod tests {
         }
 
         let args = ListSessionsArgs::default();
-        let result: ListSessionsOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: ListSessionsOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(result.sessions.len(), 3);
         assert_eq!(result.current_session, "main");
@@ -125,7 +135,10 @@ mod tests {
         }
 
         let args = ListSessionsArgs::default();
-        let _result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let _result = tool
+            .call(&serde_json::to_string(&args).unwrap())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -133,7 +146,10 @@ mod tests {
         let (tool, _) = create_tool_with_mock();
 
         let args = ListSessionsArgs::default();
-        let result = tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        let result = tool
+            .call(&serde_json::to_string(&args).unwrap())
+            .await
+            .unwrap();
 
         // Verify output is valid JSON
         let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();

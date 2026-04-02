@@ -5,3 +5,5 @@ merge_derives = false
 group_imports = "StdExternalCrate"
 imports_granularity = "Module"
 use_field_init_shorthand = true
+chain_width = 60
+fn_call_width = 60

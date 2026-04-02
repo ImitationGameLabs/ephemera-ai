@@ -53,10 +53,7 @@ pub struct AgoraClient {
 impl AgoraClient {
     /// Creates a new Agora client with the given base URL and HTTP client.
     pub fn new(base_url: &str, client: Client) -> Self {
-        Self {
-            client,
-            base_url: base_url.to_string(),
-        }
+        Self { client, base_url: base_url.to_string() }
     }
 
     /// Handles HTTP response and converts to expected type.

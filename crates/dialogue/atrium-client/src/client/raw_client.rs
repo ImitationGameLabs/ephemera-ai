@@ -1,7 +1,7 @@
-use reqwest::{Client, Response, Error as ReqwestError};
+use atrium_common::*;
+use reqwest::{Client, Error as ReqwestError, Response};
 use serde::de::DeserializeOwned;
 use std::fmt;
-use atrium_common::*;
 
 #[derive(Debug)]
 pub enum ClientError {
@@ -50,10 +50,7 @@ pub struct RawClient {
 
 impl RawClient {
     pub fn new(base_url: &str, client: Client) -> Self {
-        Self {
-            client,
-            base_url: base_url.to_string(),
-        }
+        Self { client, base_url: base_url.to_string() }
     }
 
     async fn handle_response<T: DeserializeOwned>(response: Response) -> Result<T, ClientError> {
@@ -63,13 +60,17 @@ impl RawClient {
             let text = response.text().await?;
             serde_json::from_str(&text).map_err(Into::into)
         } else {
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
             Err(ClientError::ApiError(format!("{}: {}", status, error_text)))
         }
     }
 
     pub async fn register_user(&self, request: CreateUserRequest) -> Result<User, ClientError> {
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/api/v1/users", self.base_url))
             .json(&request)
             .send()
@@ -83,10 +84,14 @@ impl RawClient {
         match self.get_user_profile(username).await {
             Ok(user) => {
                 // User exists, now verify password with heartbeat
-                if self.send_heartbeat(UserCredentials {
-                    username: username.to_string(),
-                    password: password.to_string()
-                }).await.is_ok() {
+                if self
+                    .send_heartbeat(UserCredentials {
+                        username: username.to_string(),
+                        password: password.to_string(),
+                    })
+                    .await
+                    .is_ok()
+                {
                     Ok(user)
                 } else {
                     Err(ClientError::ApiError("Invalid password".to_string()))
@@ -100,7 +105,8 @@ impl RawClient {
     }
 
     pub async fn get_all_users(&self) -> Result<UsersList, ClientError> {
-        let response = self.client
+        let response = self
+            .client
             .get(format!("{}/api/v1/users", self.base_url))
             .send()
             .await?;
@@ -109,7 +115,8 @@ impl RawClient {
     }
 
     pub async fn get_user_profile(&self, username: &str) -> Result<User, ClientError> {
-        let response = self.client
+        let response = self
+            .client
             .get(format!("{}/api/v1/users/{}", self.base_url, username))
             .send()
             .await?;
@@ -118,7 +125,8 @@ impl RawClient {
     }
 
     pub async fn send_heartbeat(&self, credentials: UserCredentials) -> Result<(), ClientError> {
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/api/v1/heartbeat", self.base_url))
             .json(&credentials)
             .send()
@@ -128,19 +136,28 @@ impl RawClient {
         if status.is_success() {
             Ok(())
         } else {
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
             Err(ClientError::ApiError(format!("{}: {}", status, error_text)))
         }
     }
 
-    pub async fn send_message(&self, username: &str, password: &str, content: String) -> Result<Message, ClientError> {
+    pub async fn send_message(
+        &self,
+        username: &str,
+        password: &str,
+        content: String,
+    ) -> Result<Message, ClientError> {
         let request = CreateMessageRequest {
             content,
             username: username.to_string(),
             password: password.to_string(),
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/api/v1/messages", self.base_url))
             .json(&request)
             .send()
@@ -171,13 +188,14 @@ impl RawClient {
         let url = if query_params.is_empty() {
             format!("{}/api/v1/messages", self.base_url)
         } else {
-            format!("{}/api/v1/messages?{}", self.base_url, query_params.join("&"))
+            format!(
+                "{}/api/v1/messages?{}",
+                self.base_url,
+                query_params.join("&")
+            )
         };
 
-        let response = self.client
-            .get(&url)
-            .send()
-            .await?;
+        let response = self.client.get(&url).send().await?;
 
         Self::handle_response(response).await
     }

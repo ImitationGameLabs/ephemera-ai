@@ -1,16 +1,10 @@
 //! Herald HTTP handlers.
 
-use axum::{
-    extract::Path,
-    http::StatusCode,
-    response::Json,
-};
 use axum::extract::State;
+use axum::{extract::Path, http::StatusCode, response::Json};
 use tracing::{info, instrument};
 
-use crate::herald::{
-    HeartbeatResponse, HeraldsListResponse, HeraldInfo, RegisterHeraldRequest,
-};
+use crate::herald::{HeartbeatResponse, HeraldInfo, HeraldsListResponse, RegisterHeraldRequest};
 use crate::server::AppState;
 
 /// HTTP handler for herald operations.

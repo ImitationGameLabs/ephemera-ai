@@ -86,13 +86,19 @@ mod tests {
         assert_eq!(err.to_string(), "Session 'main' already exists");
 
         let err = ShellError::execution_failed("command not found");
-        assert_eq!(err.to_string(), "Command execution failed: command not found");
+        assert_eq!(
+            err.to_string(),
+            "Command execution failed: command not found"
+        );
 
         let err = ShellError::backend("tmux not installed");
         assert_eq!(err.to_string(), "Backend error: tmux not installed");
 
         let err = ShellError::session_create_failed("test", "permission denied");
-        assert_eq!(err.to_string(), "Failed to create session 'test': permission denied");
+        assert_eq!(
+            err.to_string(),
+            "Failed to create session 'test': permission denied"
+        );
 
         let err = ShellError::Io("file not found".into());
         assert_eq!(err.to_string(), "IO error: file not found");

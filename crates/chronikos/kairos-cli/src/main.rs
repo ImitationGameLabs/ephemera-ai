@@ -1,10 +1,12 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::{Parser, Subcommand};
-use kairos_client::{CreateScheduleRequest, KairosClient, Period, Priority, Schedule, ScheduleStatus, TriggerSpec};
+use kairos_client::{
+    CreateScheduleRequest, KairosClient, Period, Priority, Schedule, ScheduleStatus, TriggerSpec,
+};
 use reqwest::Client;
 use std::env;
 use std::time::Duration;
-use time::{format_description, OffsetDateTime};
+use time::{OffsetDateTime, format_description};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 const ENV_KAIROS_URL: &str = "KAIROS_URL";
@@ -131,7 +133,10 @@ enum Commands {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "kairos-cli=warn".into()))
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "kairos-cli=warn".into()),
+        )
         .with(tracing_subscriber::fmt::layer())
         .init();
 
@@ -139,33 +144,18 @@ async fn main() {
     let client = get_client();
 
     let result = match cli.command {
-        Commands::Schedule {
-            name,
-            when,
-            repeat,
-            payload,
-            tags,
-            priority,
-        } => handle_schedule(name, when, repeat, payload, tags, priority, &client).await,
-        Commands::At {
-            time,
-            name,
-            payload,
-            priority,
-        } => handle_at(time, name, payload, priority, &client).await,
-        Commands::In {
-            duration,
-            name,
-            payload,
-            priority,
-        } => handle_in(duration, name, payload, priority, &client).await,
-        Commands::Every {
-            period,
-            name,
-            at,
-            payload,
-            priority,
-        } => handle_every(period, name, at, payload, priority, &client).await,
+        Commands::Schedule { name, when, repeat, payload, tags, priority } => {
+            handle_schedule(name, when, repeat, payload, tags, priority, &client).await
+        }
+        Commands::At { time, name, payload, priority } => {
+            handle_at(time, name, payload, priority, &client).await
+        }
+        Commands::In { duration, name, payload, priority } => {
+            handle_in(duration, name, payload, priority, &client).await
+        }
+        Commands::Every { period, name, at, payload, priority } => {
+            handle_every(period, name, at, payload, priority, &client).await
+        }
         Commands::List { status, tag } => handle_list(status, tag, &client).await,
         Commands::Next => handle_next(&client).await,
         Commands::Cancel { id } => handle_cancel(id, &client).await,
@@ -190,14 +180,9 @@ async fn handle_schedule(
     client: &KairosClient,
 ) -> Result<()> {
     let trigger = if let Some(period) = repeat {
-        TriggerSpec::Every {
-            period,
-            at_time: parse_at_time(&when)?,
-        }
+        TriggerSpec::Every { period, at_time: parse_at_time(&when)? }
     } else {
-        TriggerSpec::Once {
-            at: parse_datetime(&when)?,
-        }
+        TriggerSpec::Once { at: parse_datetime(&when)? }
     };
 
     let request = CreateScheduleRequest {
@@ -265,10 +250,7 @@ async fn handle_every(
 ) -> Result<()> {
     let request = CreateScheduleRequest {
         name,
-        trigger: TriggerSpec::Every {
-            period,
-            at_time: at.clone(),
-        },
+        trigger: TriggerSpec::Every { period, at_time: at.clone() },
         payload: parse_payload(payload.as_deref())?,
         tags: vec![],
         priority,
@@ -319,7 +301,8 @@ async fn handle_status(client: &KairosClient) -> Result<()> {
     println!("Active schedules: {}", status.active_schedules);
     println!("Pending triggered: {}", status.pending_triggered);
     if let Some(next) = status.next_fire {
-        let fmt = format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+        let fmt =
+            format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
         let next_str = next.format(&fmt).unwrap();
         println!("Next fire: {}", next_str);
     } else {
@@ -412,7 +395,10 @@ fn parse_at_time(s: &str) -> Result<Option<String>> {
     } else if s.is_empty() {
         Ok(None)
     } else {
-        Err(anyhow!("Invalid time format: {}. Use HH:MM format (e.g., 09:00)", s))
+        Err(anyhow!(
+            "Invalid time format: {}. Use HH:MM format (e.g., 09:00)",
+            s
+        ))
     }
 }
 
@@ -422,8 +408,7 @@ fn parse_payload(s: Option<&str>) -> Result<serde_json::Value> {
             if json.is_empty() {
                 Ok(serde_json::Value::Null)
             } else {
-                serde_json::from_str(json)
-                    .map_err(|e| anyhow!("Invalid JSON payload: {}", e))
+                serde_json::from_str(json).map_err(|e| anyhow!("Invalid JSON payload: {}", e))
             }
         }
         None => Ok(serde_json::Value::Null),
@@ -449,7 +434,12 @@ fn parse_status(s: Option<&str>) -> Result<Option<ScheduleStatus>> {
                 "paused" => ScheduleStatus::Paused,
                 "completed" => ScheduleStatus::Completed,
                 "triggered" => ScheduleStatus::Triggered,
-                _ => return Err(anyhow!("Invalid status: {}. Use active, paused, completed, or triggered", status)),
+                _ => {
+                    return Err(anyhow!(
+                        "Invalid status: {}. Use active, paused, completed, or triggered",
+                        status
+                    ));
+                }
             };
             Ok(Some(parsed))
         }
@@ -512,8 +502,8 @@ mod cli_tests {
     fn test_parse_relative_time_invalid() {
         assert!(parse_relative_time("").is_err());
         assert!(parse_relative_time("abc").is_err());
-        assert!(parse_relative_time("30").is_err());  // Missing unit
-        assert!(parse_relative_time("s").is_err());   // Missing number
+        assert!(parse_relative_time("30").is_err()); // Missing unit
+        assert!(parse_relative_time("s").is_err()); // Missing number
     }
 
     // === parse_datetime tests ===
@@ -531,7 +521,7 @@ mod cli_tests {
         let dt = result.unwrap();
         let now = OffsetDateTime::now_utc();
         let diff = (dt - now).whole_seconds();
-        assert!(diff >= 3599 && diff <= 3601);  // ~1 hour
+        assert!(diff >= 3599 && diff <= 3601); // ~1 hour
     }
 
     #[test]
@@ -544,7 +534,7 @@ mod cli_tests {
     #[test]
     fn test_parse_datetime_invalid() {
         assert!(parse_datetime("invalid").is_err());
-        assert!(parse_datetime("2026-13-01T00:00:00Z").is_err());  // Invalid month
+        assert!(parse_datetime("2026-13-01T00:00:00Z").is_err()); // Invalid month
     }
 
     // === parse_payload tests ===
@@ -552,7 +542,10 @@ mod cli_tests {
     #[test]
     fn test_parse_payload_null() {
         assert!(matches!(parse_payload(None), Ok(serde_json::Value::Null)));
-        assert!(matches!(parse_payload(Some("")), Ok(serde_json::Value::Null)));
+        assert!(matches!(
+            parse_payload(Some("")),
+            Ok(serde_json::Value::Null)
+        ));
     }
 
     #[test]
@@ -597,10 +590,22 @@ mod cli_tests {
 
     #[test]
     fn test_cli_parse_status_valid() {
-        assert!(matches!(parse_status(Some("active")), Ok(Some(ScheduleStatus::Active))));
-        assert!(matches!(parse_status(Some("paused")), Ok(Some(ScheduleStatus::Paused))));
-        assert!(matches!(parse_status(Some("completed")), Ok(Some(ScheduleStatus::Completed))));
-        assert!(matches!(parse_status(Some("triggered")), Ok(Some(ScheduleStatus::Triggered))));
+        assert!(matches!(
+            parse_status(Some("active")),
+            Ok(Some(ScheduleStatus::Active))
+        ));
+        assert!(matches!(
+            parse_status(Some("paused")),
+            Ok(Some(ScheduleStatus::Paused))
+        ));
+        assert!(matches!(
+            parse_status(Some("completed")),
+            Ok(Some(ScheduleStatus::Completed))
+        ));
+        assert!(matches!(
+            parse_status(Some("triggered")),
+            Ok(Some(ScheduleStatus::Triggered))
+        ));
     }
 
     #[test]
@@ -610,7 +615,7 @@ mod cli_tests {
 
     #[test]
     fn test_cli_parse_status_invalid() {
-        assert!(parse_status(Some("ACTIVE")).is_err());  // Case-sensitive
+        assert!(parse_status(Some("ACTIVE")).is_err()); // Case-sensitive
         assert!(parse_status(Some("invalid")).is_err());
     }
 }

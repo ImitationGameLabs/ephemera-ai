@@ -39,7 +39,9 @@ async fn main() -> anyhow::Result<()> {
         .expect("Failed to init loom client");
 
     // Validate LLM credentials before starting
-    validate_llm_config(&config.llm).await.expect("LLM validation failed");
+    validate_llm_config(&config.llm)
+        .await
+        .expect("LLM validation failed");
 
     let loom_client = Arc::new(loom_client);
 

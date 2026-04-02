@@ -55,11 +55,13 @@ impl TmuxBackend {
         name: &str,
         cwd: Option<&Path>,
     ) -> Result<(), ShellError> {
-        let cwd_str = cwd.map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| {
-            std::env::current_dir()
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|_| "/tmp".to_string())
-        });
+        let cwd_str = cwd
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| {
+                std::env::current_dir()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| "/tmp".to_string())
+            });
 
         let new_session = NewSession::new()
             .session_name(name)
@@ -162,7 +164,9 @@ impl ShellBackend for TmuxBackend {
             .map_err(|e| ShellError::execution_failed(format!("send-keys failed: {}", e)))?;
 
         if !output.status.success() {
-            return Err(ShellError::execution_failed("send-keys Enter returned non-zero"));
+            return Err(ShellError::execution_failed(
+                "send-keys Enter returned non-zero",
+            ));
         }
 
         if background {
@@ -185,7 +189,10 @@ impl ShellBackend for TmuxBackend {
             .await
             .map_err(|e| ShellError::backend(format!("display-message failed: {}", e)))?;
 
-        let exit_code = String::from_utf8_lossy(&exit_output.stdout).trim().parse::<i32>().ok();
+        let exit_code = String::from_utf8_lossy(&exit_output.stdout)
+            .trim()
+            .parse::<i32>()
+            .ok();
 
         Ok(ShellOutput { output, exit_code, timed_out: false })
     }
@@ -284,8 +291,10 @@ impl ShellBackend for TmuxBackend {
         // If we killed the current session, switch to another
         if self.current_session == name {
             let sessions = self.list_sessions().await?;
-            self.current_session =
-                sessions.first().map(|s| s.name.clone()).unwrap_or_else(|| "main".to_string());
+            self.current_session = sessions
+                .first()
+                .map(|s| s.name.clone())
+                .unwrap_or_else(|| "main".to_string());
         }
 
         Ok(())

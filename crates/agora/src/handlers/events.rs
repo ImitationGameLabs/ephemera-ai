@@ -9,8 +9,8 @@ use serde::Deserialize;
 use tracing::{error, info, instrument, warn};
 
 use crate::event::{
-    BatchUpdateEventsRequest, BatchUpdateEventsResponse, CreateEventRequest, Event,
-    EventsListResponse, EventStatus, UpdateEventRequest,
+    BatchUpdateEventsRequest, BatchUpdateEventsResponse, CreateEventRequest, Event, EventStatus,
+    EventsListResponse, UpdateEventRequest,
 };
 use crate::server::AppState;
 

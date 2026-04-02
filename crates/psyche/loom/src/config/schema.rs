@@ -24,7 +24,10 @@ impl Config {
             .unwrap_or_else(|e| panic!("Failed to parse config '{}': {}", path.display(), e));
 
         // Validate required fields
-        assert!(!config.mysql.url.trim().is_empty(), "mysql.url cannot be empty");
+        assert!(
+            !config.mysql.url.trim().is_empty(),
+            "mysql.url cannot be empty"
+        );
         assert!(config.port != 0, "port cannot be 0");
 
         config

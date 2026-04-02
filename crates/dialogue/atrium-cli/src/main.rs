@@ -1,9 +1,9 @@
 mod config;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use atrium_client::{AuthenticatedClient, GetMessagesQuery};
 use clap::{Parser, Subcommand};
-use config::{resolve_config, MissingConfig};
+use config::{MissingConfig, resolve_config};
 use reqwest::Client;
 use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -92,9 +92,7 @@ fn build_http_client() -> Client {
 }
 
 fn require_config() -> Result<config::ResolvedConfig> {
-    resolve_config().map_err(|missing: MissingConfig| {
-        anyhow!("{}", missing.to_error_message())
-    })
+    resolve_config().map_err(|missing: MissingConfig| anyhow!("{}", missing.to_error_message()))
 }
 
 async fn create_client() -> Result<AuthenticatedClient> {
@@ -125,7 +123,9 @@ async fn create_client() -> Result<AuthenticatedClient> {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn".into()))
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn".into()),
+        )
         .with(tracing_subscriber::fmt::layer())
         .init();
 
@@ -150,12 +150,10 @@ fn handle_config(action: ConfigCommands) -> Result<()> {
             config::set_config_value(&key, &value)?;
             println!("Set {} = {}", key, value);
         }
-        ConfigCommands::Get { key } => {
-            match config::get_config_value(&key)? {
-                Some(value) => println!("{}", value),
-                None => println!("<not set>"),
-            }
-        }
+        ConfigCommands::Get { key } => match config::get_config_value(&key)? {
+            Some(value) => println!("{}", value),
+            None => println!("<not set>"),
+        },
         ConfigCommands::List => {
             println!("{}", config::list_config()?);
         }
@@ -183,7 +181,11 @@ async fn handle_ping() -> Result<()> {
             return Err(anyhow!("Server returned status: {}", resp.status()));
         }
         Err(e) => {
-            return Err(anyhow!("Failed to connect to {}: {}", resolved.server_url, e));
+            return Err(anyhow!(
+                "Failed to connect to {}: {}",
+                resolved.server_url,
+                e
+            ));
         }
     }
 
@@ -210,12 +212,7 @@ async fn handle_messages(
 ) -> Result<()> {
     let client = create_client().await?;
 
-    let query = GetMessagesQuery {
-        sender,
-        limit: Some(limit),
-        offset: None,
-        since_id,
-    };
+    let query = GetMessagesQuery { sender, limit: Some(limit), offset: None, since_id };
 
     let response = client
         .get_messages(query)
@@ -226,7 +223,9 @@ async fn handle_messages(
         OutputFormat::Json => {
             println!(
                 "{}",
-                serde_json::to_string_pretty(&serde_json::json!({ "messages": response.messages }))?
+                serde_json::to_string_pretty(
+                    &serde_json::json!({ "messages": response.messages })
+                )?
             );
         }
         OutputFormat::Text => {
@@ -270,10 +269,7 @@ async fn handle_users(online: bool, format: OutputFormat) -> Result<()> {
         }
         OutputFormat::Text => {
             if users.is_empty() {
-                println!(
-                    "No {}users found.",
-                    if online { "online " } else { "" }
-                );
+                println!("No {}users found.", if online { "online " } else { "" });
             } else {
                 for user in &users {
                     let status = if user.status.online {

@@ -1,8 +1,11 @@
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, NotSet, QueryOrder};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, NotSet, QueryFilter,
+    QueryOrder, Set,
+};
 use thiserror::Error;
 use time::OffsetDateTime;
 
-use crate::entity::{UserEntity};
+use crate::entity::UserEntity;
 use crate::entity::user;
 use crate::models::{User, UserStatus};
 
@@ -27,7 +30,8 @@ pub enum UserError {
 impl From<user::Model> for User {
     fn from(model: user::Model) -> Self {
         let now = OffsetDateTime::now_utc();
-        let online = model.last_seen
+        let online = model
+            .last_seen
             .map(|last_seen| {
                 let duration = now - last_seen;
                 duration.whole_seconds() < 60 // 1 minute timeout
@@ -38,10 +42,7 @@ impl From<user::Model> for User {
             id: model.id,
             name: model.name,
             bio: model.bio,
-            status: UserStatus {
-                online,
-                last_seen: model.last_seen,
-            },
+            status: UserStatus { online, last_seen: model.last_seen },
             message_height: model.message_height,
             created_at: model.created_at,
         }
@@ -118,11 +119,19 @@ impl UserManager {
         Ok(model.into())
     }
 
-    pub async fn authenticate_by_credentials(&self, username: &str, password: &str) -> Result<User, UserError> {
+    pub async fn authenticate_by_credentials(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<User, UserError> {
         self.authenticate_user(username, password).await
     }
 
-    pub async fn update_user(&self, name: &str, update_dto: &UpdateUserDto) -> Result<User, UserError> {
+    pub async fn update_user(
+        &self,
+        name: &str,
+        update_dto: &UpdateUserDto,
+    ) -> Result<User, UserError> {
         let model = UserEntity::find()
             .filter(user::Column::Name.eq(name))
             .one(&self.conn)
@@ -158,7 +167,11 @@ impl UserManager {
         Ok(updated_model.into())
     }
 
-    pub async fn update_message_height(&self, name: &str, message_height: i32) -> Result<User, UserError> {
+    pub async fn update_message_height(
+        &self,
+        name: &str,
+        message_height: i32,
+    ) -> Result<User, UserError> {
         let model = UserEntity::find()
             .filter(user::Column::Name.eq(name))
             .one(&self.conn)

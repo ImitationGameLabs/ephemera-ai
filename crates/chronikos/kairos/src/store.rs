@@ -2,8 +2,8 @@
 
 use anyhow::Result;
 use sqlx::SqlitePool;
-use time::{OffsetDateTime, Month};
 use time::util::is_leap_year;
+use time::{Month, OffsetDateTime};
 
 use crate::schedule::*;
 
@@ -87,9 +87,23 @@ impl ScheduleStore {
         .bind(serde_json::to_string(&schedule.tags)?)
         .bind(schedule.priority.to_string())
         .bind(schedule.status.to_string())
-        .bind(schedule.created_at.format(&time::format_description::well_known::Rfc3339)?)
-        .bind(schedule.next_fire.map(|t| t.format(&time::format_description::well_known::Rfc3339)).transpose()?)
-        .bind(schedule.last_fire.map(|t| t.format(&time::format_description::well_known::Rfc3339)).transpose()?)
+        .bind(
+            schedule
+                .created_at
+                .format(&time::format_description::well_known::Rfc3339)?,
+        )
+        .bind(
+            schedule
+                .next_fire
+                .map(|t| t.format(&time::format_description::well_known::Rfc3339))
+                .transpose()?,
+        )
+        .bind(
+            schedule
+                .last_fire
+                .map(|t| t.format(&time::format_description::well_known::Rfc3339))
+                .transpose()?,
+        )
         .execute(&self.pool)
         .await?;
 
@@ -110,7 +124,11 @@ impl ScheduleStore {
     }
 
     /// Lists schedules with optional filtering.
-    pub async fn list(&self, status: Option<ScheduleStatus>, tag: Option<&str>) -> Result<Vec<Schedule>> {
+    pub async fn list(
+        &self,
+        status: Option<ScheduleStatus>,
+        tag: Option<&str>,
+    ) -> Result<Vec<Schedule>> {
         let mut query = String::from("SELECT * FROM schedules WHERE 1=1");
 
         if status.is_some() {
@@ -202,18 +220,20 @@ impl ScheduleStore {
         last_fire: Option<OffsetDateTime>,
         status: ScheduleStatus,
     ) -> Result<()> {
-        let next_str = next_fire.map(|t| t.format(&time::format_description::well_known::Rfc3339)).transpose()?;
-        let last_str = last_fire.map(|t| t.format(&time::format_description::well_known::Rfc3339)).transpose()?;
+        let next_str = next_fire
+            .map(|t| t.format(&time::format_description::well_known::Rfc3339))
+            .transpose()?;
+        let last_str = last_fire
+            .map(|t| t.format(&time::format_description::well_known::Rfc3339))
+            .transpose()?;
 
-        sqlx::query(
-            "UPDATE schedules SET next_fire = ?, last_fire = ?, status = ? WHERE id = ?",
-        )
-        .bind(next_str)
-        .bind(last_str)
-        .bind(status.to_string())
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("UPDATE schedules SET next_fire = ?, last_fire = ?, status = ? WHERE id = ?")
+            .bind(next_str)
+            .bind(last_str)
+            .bind(status.to_string())
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
@@ -252,8 +272,13 @@ impl ScheduleStore {
                     } else {
                         calculate_next_fire(period, at_time, now)?
                     };
-                    self.update_fire_times(id, Some(next), schedule.next_fire, ScheduleStatus::Active)
-                        .await?;
+                    self.update_fire_times(
+                        id,
+                        Some(next),
+                        schedule.next_fire,
+                        ScheduleStatus::Active,
+                    )
+                    .await?;
                 } else {
                     // One-time schedules are completed
                     self.update_status(id, ScheduleStatus::Completed).await?;
@@ -271,13 +296,15 @@ impl ScheduleStore {
 
     /// Gets service statistics.
     pub async fn get_stats(&self) -> Result<(usize, usize, Option<OffsetDateTime>)> {
-        let active: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM schedules WHERE status = 'active'")
-            .fetch_one(&self.pool)
-            .await?;
+        let active: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM schedules WHERE status = 'active'")
+                .fetch_one(&self.pool)
+                .await?;
 
-        let pending: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM schedules WHERE status = 'triggered'")
-            .fetch_one(&self.pool)
-            .await?;
+        let pending: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM schedules WHERE status = 'triggered'")
+                .fetch_one(&self.pool)
+                .await?;
 
         let next_fire: Option<String> = sqlx::query_scalar(
             "SELECT MIN(next_fire) FROM schedules WHERE status = 'active' AND next_fire IS NOT NULL",
@@ -286,7 +313,10 @@ impl ScheduleStore {
         .await?;
 
         let next_fire_time = match next_fire {
-            Some(s) => Some(OffsetDateTime::parse(&s, &time::format_description::well_known::Rfc3339)?),
+            Some(s) => Some(OffsetDateTime::parse(
+                &s,
+                &time::format_description::well_known::Rfc3339,
+            )?),
             None => None,
         };
 
@@ -297,7 +327,10 @@ impl ScheduleStore {
         match trigger {
             TriggerSpec::Once { at } => TriggerRow {
                 trigger_type: "once".to_string(),
-                trigger_at: Some(at.format(&time::format_description::well_known::Rfc3339).unwrap()),
+                trigger_at: Some(
+                    at.format(&time::format_description::well_known::Rfc3339)
+                        .unwrap(),
+                ),
                 trigger_duration_seconds: None,
                 trigger_period: None,
                 trigger_at_time: None,
@@ -356,16 +389,15 @@ impl ScheduleStore {
                     &time::format_description::well_known::Rfc3339,
                 )?,
             },
-            "in" => TriggerSpec::In {
-                duration_seconds: trigger_duration_seconds.unwrap() as u64,
-            },
+            "in" => TriggerSpec::In { duration_seconds: trigger_duration_seconds.unwrap() as u64 },
             "every" => TriggerSpec::Every {
-                period: trigger_period.unwrap().parse().map_err(|e: String| anyhow::anyhow!("{}", e))?,
+                period: trigger_period
+                    .unwrap()
+                    .parse()
+                    .map_err(|e: String| anyhow::anyhow!("{}", e))?,
                 at_time: trigger_at_time,
             },
-            "cron" => TriggerSpec::Cron {
-                expression: trigger_cron_expression.unwrap(),
-            },
+            "cron" => TriggerSpec::Cron { expression: trigger_cron_expression.unwrap() },
             _ => return Err(anyhow::anyhow!("Unknown trigger type: {}", trigger_type)),
         };
 
@@ -373,7 +405,10 @@ impl ScheduleStore {
         let tags: Vec<String> = serde_json::from_str(&tags_str)?;
         let priority: Priority = parse_priority(&priority_str)?;
         let status: ScheduleStatus = parse_status(&status_str)?;
-        let created_at = OffsetDateTime::parse(&created_at_str, &time::format_description::well_known::Rfc3339)?;
+        let created_at = OffsetDateTime::parse(
+            &created_at_str,
+            &time::format_description::well_known::Rfc3339,
+        )?;
         let next_fire = next_fire_str
             .map(|s| OffsetDateTime::parse(&s, &time::format_description::well_known::Rfc3339))
             .transpose()?;
@@ -431,8 +466,8 @@ mod store_tests {
 
     #[test]
     fn test_parse_priority_invalid() {
-        assert!(parse_priority("LOW").is_err());      // Case-sensitive
-        assert!(parse_priority("Normal").is_err());   // Case-sensitive
+        assert!(parse_priority("LOW").is_err()); // Case-sensitive
+        assert!(parse_priority("Normal").is_err()); // Case-sensitive
         assert!(parse_priority("invalid").is_err());
         assert!(parse_priority("").is_err());
     }
@@ -441,14 +476,20 @@ mod store_tests {
     fn test_parse_status_valid() {
         assert!(matches!(parse_status("active"), Ok(ScheduleStatus::Active)));
         assert!(matches!(parse_status("paused"), Ok(ScheduleStatus::Paused)));
-        assert!(matches!(parse_status("completed"), Ok(ScheduleStatus::Completed)));
-        assert!(matches!(parse_status("triggered"), Ok(ScheduleStatus::Triggered)));
+        assert!(matches!(
+            parse_status("completed"),
+            Ok(ScheduleStatus::Completed)
+        ));
+        assert!(matches!(
+            parse_status("triggered"),
+            Ok(ScheduleStatus::Triggered)
+        ));
     }
 
     #[test]
     fn test_parse_status_invalid() {
-        assert!(parse_status("ACTIVE").is_err());     // Case-sensitive
-        assert!(parse_status("Active").is_err());     // Case-sensitive
+        assert!(parse_status("ACTIVE").is_err()); // Case-sensitive
+        assert!(parse_status("Active").is_err()); // Case-sensitive
         assert!(parse_status("invalid").is_err());
         assert!(parse_status("").is_err());
     }
@@ -518,7 +559,10 @@ mod store_tests {
 
         // Ack at 09:05:30
         let ack_time = datetime!(2025-03-12 09:05:30 UTC);
-        store.ack_triggered_at(&["hourly".into()], ack_time).await.unwrap();
+        store
+            .ack_triggered_at(&["hourly".into()], ack_time)
+            .await
+            .unwrap();
 
         let updated = store.get("hourly").await.unwrap().unwrap();
         assert_eq!(updated.status, ScheduleStatus::Active);
@@ -530,11 +574,7 @@ mod store_tests {
 /// Adds one month to the given datetime, clamping day if next month is shorter.
 fn add_one_month(dt: OffsetDateTime) -> OffsetDateTime {
     let next_month = dt.month().next();
-    let next_year = if dt.month() == Month::December {
-        dt.year() + 1
-    } else {
-        dt.year()
-    };
+    let next_year = if dt.month() == Month::December { dt.year() + 1 } else { dt.year() };
 
     // Clamp day to max days in next month BEFORE changing month
     // (e.g., Jan 31 -> Feb 28/29)
@@ -596,37 +636,33 @@ pub fn calculate_next_fire(
         }
         Period::Daily => {
             // Next day at the specified time
-            let candidate = from.replace_hour(hour)?.replace_minute(minute)?.replace_second(second)?;
-            if candidate > from {
-                candidate
-            } else {
-                candidate + time::Duration::days(1)
-            }
+            let candidate = from
+                .replace_hour(hour)?
+                .replace_minute(minute)?
+                .replace_second(second)?;
+            if candidate > from { candidate } else { candidate + time::Duration::days(1) }
         }
         Period::Weekly => {
             // Next week at the specified time
-            let candidate = from.replace_hour(hour)?.replace_minute(minute)?.replace_second(second)?;
-            if candidate > from {
-                candidate
-            } else {
-                candidate + time::Duration::weeks(1)
-            }
+            let candidate = from
+                .replace_hour(hour)?
+                .replace_minute(minute)?
+                .replace_second(second)?;
+            if candidate > from { candidate } else { candidate + time::Duration::weeks(1) }
         }
         Period::Monthly => {
-            let candidate = from.replace_hour(hour)?.replace_minute(minute)?.replace_second(second)?;
-            if candidate > from {
-                candidate
-            } else {
-                add_one_month(candidate)
-            }
+            let candidate = from
+                .replace_hour(hour)?
+                .replace_minute(minute)?
+                .replace_second(second)?;
+            if candidate > from { candidate } else { add_one_month(candidate) }
         }
         Period::Yearly => {
-            let candidate = from.replace_hour(hour)?.replace_minute(minute)?.replace_second(second)?;
-            if candidate > from {
-                candidate
-            } else {
-                add_one_year(candidate)
-            }
+            let candidate = from
+                .replace_hour(hour)?
+                .replace_minute(minute)?
+                .replace_second(second)?;
+            if candidate > from { candidate } else { add_one_year(candidate) }
         }
     };
 
@@ -634,15 +670,16 @@ pub fn calculate_next_fire(
 }
 
 /// Calculates the initial next_fire time for a new schedule.
-pub fn calculate_initial_next_fire(trigger: &TriggerSpec, now: OffsetDateTime) -> Result<OffsetDateTime> {
+pub fn calculate_initial_next_fire(
+    trigger: &TriggerSpec,
+    now: OffsetDateTime,
+) -> Result<OffsetDateTime> {
     match trigger {
         TriggerSpec::Once { at } => Ok(*at),
         TriggerSpec::In { duration_seconds } => {
             Ok(now + time::Duration::seconds(*duration_seconds as i64))
         }
-        TriggerSpec::Every { period, at_time } => {
-            calculate_next_fire(period, at_time, now)
-        }
+        TriggerSpec::Every { period, at_time } => calculate_next_fire(period, at_time, now),
         TriggerSpec::Cron { .. } => {
             // v2: implement cron parsing
             Err(anyhow::anyhow!("Cron expressions not yet supported"))

@@ -80,7 +80,11 @@ impl EphemeraContext {
         }
 
         // Check if already pinned
-        if self.pinned_memories.iter().any(|p| p.fragment.id == memory_id) {
+        if self
+            .pinned_memories
+            .iter()
+            .any(|p| p.fragment.id == memory_id)
+        {
             return Err(format!("Memory {} is already pinned", memory_id));
         }
 
@@ -196,7 +200,10 @@ impl EphemeraContext {
         self.pinned_memories = response.items;
         self.recalculate_token_usage();
 
-        info!("Restored {} pinned memories from Loom", self.pinned_memories.len());
+        info!(
+            "Restored {} pinned memories from Loom",
+            self.pinned_memories.len()
+        );
 
         Ok(())
     }
@@ -353,7 +360,10 @@ impl EphemeraContext {
             }
         }
 
-        info!("Restored {} memories from Loom", self.recent_activities.len());
+        info!(
+            "Restored {} memories from Loom",
+            self.recent_activities.len()
+        );
 
         // Maintain token limit after restoration
         self.maintain_token_limit();
@@ -663,7 +673,10 @@ mod restoration_tests {
             ceiling
         );
         // Should have evicted some activities
-        assert!(status.activity_count < 3, "Some activities should be evicted");
+        assert!(
+            status.activity_count < 3,
+            "Some activities should be evicted"
+        );
     }
 
     /// Test: Runtime token eviction via add_activity()
@@ -701,7 +714,10 @@ mod restoration_tests {
             config.total_token_ceiling
         );
         // Some eviction should have occurred
-        assert!(status.activity_count < 3, "Older activities should be evicted");
+        assert!(
+            status.activity_count < 3,
+            "Older activities should be evicted"
+        );
     }
 
     // =========================================================================
@@ -802,12 +818,19 @@ mod restoration_tests {
         ctx.restore_from_loom(50).await.unwrap();
 
         // Pinned should be preserved (never evicted)
-        assert_eq!(ctx.list_pinned().len(), 1, "Pinned content should never be evicted");
+        assert_eq!(
+            ctx.list_pinned().len(),
+            1,
+            "Pinned content should never be evicted"
+        );
 
         // Recent should be evicted to fit under ceiling
         // Started with 3 recent activities, at least one should be evicted
         let status = ctx.get_queue_status();
-        assert!(status.activity_count < 3, "At least one recent activity should be evicted");
+        assert!(
+            status.activity_count < 3,
+            "At least one recent activity should be evicted"
+        );
         assert!(
             status.current_token_usage <= config.total_token_ceiling,
             "Token usage should be under ceiling"
@@ -1139,7 +1162,11 @@ mod restoration_tests {
         // === Phase 2: Pin memory 1 (first pin) ===
         ctx.pin(1, "First pin".to_string()).await.unwrap();
         expected_pinned_ids.insert(1);
-        assert_eq!(ctx.list_pinned().len(), 1, "Should have 1 pinned after Phase 2");
+        assert_eq!(
+            ctx.list_pinned().len(),
+            1,
+            "Should have 1 pinned after Phase 2"
+        );
 
         // === Phase 3: Add more activities (triggers more eviction) ===
         for i in 11..=20 {
@@ -1152,17 +1179,29 @@ mod restoration_tests {
         ctx.pin(3, "Third pin".to_string()).await.unwrap();
         expected_pinned_ids.insert(2);
         expected_pinned_ids.insert(3);
-        assert_eq!(ctx.list_pinned().len(), 3, "Should have 3 pinned after Phase 4");
+        assert_eq!(
+            ctx.list_pinned().len(),
+            3,
+            "Should have 3 pinned after Phase 4"
+        );
 
         // === Phase 5: Unpin memory 1 (remove first pin) ===
         ctx.unpin(1).await;
         expected_pinned_ids.remove(&1);
-        assert_eq!(ctx.list_pinned().len(), 2, "Should have 2 pinned after unpin");
+        assert_eq!(
+            ctx.list_pinned().len(),
+            2,
+            "Should have 2 pinned after unpin"
+        );
 
         // === Phase 6: Re-pin memory 1 (same fragment, new pin) ===
         ctx.pin(1, "Re-pinned".to_string()).await.unwrap();
         expected_pinned_ids.insert(1);
-        assert_eq!(ctx.list_pinned().len(), 3, "Should have 3 pinned after re-pin");
+        assert_eq!(
+            ctx.list_pinned().len(),
+            3,
+            "Should have 3 pinned after re-pin"
+        );
 
         // === Phase 7: Add more activities with eviction ===
         for i in 21..=30 {
@@ -1262,8 +1301,11 @@ mod restoration_tests {
         // Initial state from Loom: 20 activities, 3 pinned
         let initial_fragments: Vec<MemoryFragment> = (1..=20)
             .map(|i| {
-                let content =
-                    format!("Initial activity {} - {}", i, "data".repeat(i as usize % 5 + 3));
+                let content = format!(
+                    "Initial activity {} - {}",
+                    i,
+                    "data".repeat(i as usize % 5 + 3)
+                );
                 create_fragment(i, &content)
             })
             .collect();
@@ -1286,8 +1328,11 @@ mod restoration_tests {
 
         // Add 10 more activities during runtime (simulating AI operations)
         for i in 21..=30 {
-            let content =
-                format!("Runtime activity {} - {}", i, "runtime".repeat(i as usize % 8 + 2));
+            let content = format!(
+                "Runtime activity {} - {}",
+                i,
+                "runtime".repeat(i as usize % 8 + 2)
+            );
             ctx_initial.add_activity(create_fragment(i, &content));
         }
 
@@ -1305,9 +1350,17 @@ mod restoration_tests {
             .iter()
             .map(|&id| {
                 let content = if id <= 20 {
-                    format!("Initial activity {} - {}", id, "data".repeat(id as usize % 5 + 3))
+                    format!(
+                        "Initial activity {} - {}",
+                        id,
+                        "data".repeat(id as usize % 5 + 3)
+                    )
                 } else {
-                    format!("Runtime activity {} - {}", id, "runtime".repeat(id as usize % 8 + 2))
+                    format!(
+                        "Runtime activity {} - {}",
+                        id,
+                        "runtime".repeat(id as usize % 8 + 2)
+                    )
                 };
                 create_fragment(id, &content)
             })
@@ -1439,7 +1492,10 @@ mod restoration_tests {
 
         assert_eq!(ctx.list_pinned().len(), 1);
         assert_eq!(ctx.list_pinned()[0].fragment.id, 42);
-        assert_eq!(ctx.list_pinned()[0].reason, Some("Just pinned before crash".to_string()));
+        assert_eq!(
+            ctx.list_pinned()[0].reason,
+            Some("Just pinned before crash".to_string())
+        );
     }
 
     // =========================================================================
@@ -1501,8 +1557,9 @@ mod restoration_tests {
         let mut mock = MockLoomClient::new();
 
         // Loom has 5 pinned, but max_pinned_count = 3
-        let pinned_items: Vec<PinnedMemory> =
-            (1..=5).map(|i| create_pinned(i, &format!("Pinned {}", i), None)).collect();
+        let pinned_items: Vec<PinnedMemory> = (1..=5)
+            .map(|i| create_pinned(i, &format!("Pinned {}", i), None))
+            .collect();
         mock.set_default_pinned(PinnedMemoriesResponse { items: pinned_items });
         mock.set_default_memory(MemoryResponse { fragments: vec![], total: 0 });
 
@@ -1537,11 +1594,17 @@ mod restoration_tests {
         let status = ctx.get_queue_status();
 
         // Token usage should be positive
-        assert!(status.current_token_usage > 0, "Token usage should be positive");
+        assert!(
+            status.current_token_usage > 0,
+            "Token usage should be positive"
+        );
 
         // Token usage should account for all content (pinned + 2 recent)
         // Minimum expected: at least 10 tokens for 3 items with serialization overhead
-        assert!(status.current_token_usage >= 10, "Token usage should account for all content");
+        assert!(
+            status.current_token_usage >= 10,
+            "Token usage should account for all content"
+        );
 
         // Token usage should be reasonable (not exceeding 10x char count)
         let total_chars = "Pinned".len() + short_content.len() + medium_content.len();
@@ -1590,7 +1653,9 @@ mod restoration_tests {
         synced_fragments.push(sync_receiver.try_recv().unwrap());
 
         // Verify third item exists and receive it (simulating it will be lost in crash)
-        let _lost_item = sync_receiver.try_recv().expect("Third item should exist in queue");
+        let _lost_item = sync_receiver
+            .try_recv()
+            .expect("Third item should exist in queue");
 
         // Simulate crash: drop context without processing remaining sync queue
         // The unsynced activity 3 is now lost
@@ -1604,8 +1669,11 @@ mod restoration_tests {
 
         // Restart: create new context
         let (new_sync_sender, _) = SyncSender::channel();
-        let mut ctx_restarted =
-            EphemeraContext::new(Arc::new(mock_restart), new_sync_sender, test_context_config());
+        let mut ctx_restarted = EphemeraContext::new(
+            Arc::new(mock_restart),
+            new_sync_sender,
+            test_context_config(),
+        );
 
         ctx_restarted.restore_from_loom(50).await.unwrap();
 
@@ -1649,8 +1717,11 @@ mod restoration_tests {
         });
 
         let (new_sync_sender, _) = SyncSender::channel();
-        let mut ctx_restarted =
-            EphemeraContext::new(Arc::new(mock_restart), new_sync_sender, test_context_config());
+        let mut ctx_restarted = EphemeraContext::new(
+            Arc::new(mock_restart),
+            new_sync_sender,
+            test_context_config(),
+        );
 
         ctx_restarted.restore_pinned_from_loom().await.unwrap();
 
@@ -1693,8 +1764,11 @@ mod restoration_tests {
         mock_restart.set_default_pinned(PinnedMemoriesResponse { items: vec![] });
 
         let (new_sync_sender, _) = SyncSender::channel();
-        let mut ctx_restarted =
-            EphemeraContext::new(Arc::new(mock_restart), new_sync_sender, test_context_config());
+        let mut ctx_restarted = EphemeraContext::new(
+            Arc::new(mock_restart),
+            new_sync_sender,
+            test_context_config(),
+        );
 
         ctx_restarted.restore_pinned_from_loom().await.unwrap();
 
@@ -1765,7 +1839,10 @@ mod interval_window_tests {
             config.total_token_ceiling
         );
         // Should have evicted at least one activity
-        assert!(status.activity_count >= 1, "At least one activity should remain");
+        assert!(
+            status.activity_count >= 1,
+            "At least one activity should remain"
+        );
     }
 
     /// Test: Evicts down to floor

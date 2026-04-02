@@ -43,6 +43,9 @@ mod tests {
         assert_eq!(restored_event.id, 1);
         assert_eq!(restored_event.event_type, "message");
         assert_eq!(restored_event.herald_id, "herald_1");
-        assert_eq!(restored_event.payload, serde_json::json!("hello from herald"));
+        assert_eq!(
+            restored_event.payload,
+            serde_json::json!("hello from herald")
+        );
     }
 }

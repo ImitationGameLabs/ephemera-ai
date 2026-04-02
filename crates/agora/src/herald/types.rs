@@ -51,10 +51,7 @@ impl HeraldRegistry {
             let now = OffsetDateTime::now_utc();
             info.last_heartbeat = now;
             info.status = HeraldStatus::Active;
-            Some(HeartbeatResponse {
-                status: info.status,
-                last_heartbeat: info.last_heartbeat,
-            })
+            Some(HeartbeatResponse { status: info.status, last_heartbeat: info.last_heartbeat })
         } else {
             None
         }

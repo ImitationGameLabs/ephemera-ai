@@ -97,8 +97,10 @@ mod tests {
     use crate::tools::shell::mock_backend::MockShellBackend;
     use std::time::Duration;
 
-    fn create_tool_with_mock()
-    -> (RestartSessionTool<MockShellBackend>, Arc<Mutex<MockShellBackend>>) {
+    fn create_tool_with_mock() -> (
+        RestartSessionTool<MockShellBackend>,
+        Arc<Mutex<MockShellBackend>>,
+    ) {
         let mock = Arc::new(Mutex::new(MockShellBackend::new()));
         let tool = RestartSessionTool::new(mock.clone());
         (tool, mock)
@@ -132,9 +134,13 @@ mod tests {
         }
 
         let args = RestartSessionArgs { name: "main".into(), clean_env: true };
-        let result: RestartSessionOutput =
-            serde_json::from_str(&tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap())
-                .unwrap();
+        let result: RestartSessionOutput = serde_json::from_str(
+            &tool
+                .call(&serde_json::to_string(&args).unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
 
         assert!(result.clean_env);
 
@@ -165,7 +171,9 @@ mod tests {
         }
 
         let args = RestartSessionArgs { name: "main".into(), clean_env: false };
-        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        tool.call(&serde_json::to_string(&args).unwrap())
+            .await
+            .unwrap();
 
         let backend = mock.lock().await;
         assert!(backend.has_session("main"));
@@ -180,7 +188,9 @@ mod tests {
         }
 
         let args = RestartSessionArgs { name: "main".into(), clean_env: false };
-        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        tool.call(&serde_json::to_string(&args).unwrap())
+            .await
+            .unwrap();
 
         let backend = mock.lock().await;
         assert!(backend.has_env("main", "MY_VAR"));

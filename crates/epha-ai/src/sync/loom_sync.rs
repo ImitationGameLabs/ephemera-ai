@@ -107,7 +107,11 @@ async fn sync_batch(loom_client: &dyn LoomClientTrait, fragments: &[MemoryFragme
             debug!("Successfully synced {} memories to Loom", fragments.len());
         }
         Err(e) => {
-            error!("Failed to sync {} memories to Loom: {:?}", fragments.len(), e);
+            error!(
+                "Failed to sync {} memories to Loom: {:?}",
+                fragments.len(),
+                e
+            );
             // Per design: we accept data loss on sync failure
             // Loom is the source of truth, lost fragments will be recovered on restart
         }

@@ -87,8 +87,10 @@ mod tests {
     use crate::tools::shell::error::ShellError;
     use crate::tools::shell::mock_backend::MockShellBackend;
 
-    fn create_tool_with_mock() -> (SwitchSessionTool<MockShellBackend>, Arc<Mutex<MockShellBackend>>)
-    {
+    fn create_tool_with_mock() -> (
+        SwitchSessionTool<MockShellBackend>,
+        Arc<Mutex<MockShellBackend>>,
+    ) {
         let mock = Arc::new(Mutex::new(MockShellBackend::new()));
         let tool = SwitchSessionTool::new(mock.clone());
         (tool, mock)
@@ -150,7 +152,9 @@ mod tests {
         }
 
         let args = SwitchSessionArgs { name: "worker".into() };
-        tool.call(&serde_json::to_string(&args).unwrap()).await.unwrap();
+        tool.call(&serde_json::to_string(&args).unwrap())
+            .await
+            .unwrap();
 
         let backend = mock.lock().await;
         assert_eq!(backend.current_session(), "worker");
