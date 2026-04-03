@@ -1,15 +1,17 @@
 use super::MemoryFragmentList;
 use super::memory_constructors::from_agora_event;
-use super::memory_content::{SerializeContext, format_rfc3339};
+use super::memory_content::{SerializeContext, ToChatMessages, format_rfc3339};
 use crate::config::ContextConfig;
 use crate::sync::SyncSender;
 use agora_common::event::Event;
+use llm::chat::{ChatMessage, ChatRole, MessageType};
 use loom_client::memory::{MemoryFragment, MemoryKind};
 use loom_client::{CreateMemoryRequest, LoomClientTrait};
 use std::collections::VecDeque;
 use std::fmt;
 use std::sync::Arc;
 use time::OffsetDateTime;
+use tokenx_rs::estimate_token_count;
 use tracing::error;
 
 // Re-export PinnedMemory for external use
@@ -34,6 +36,30 @@ impl fmt::Display for QueueStatus {
             self.utilization_ratio * 100.0
         )
     }
+}
+
+/// Mirror of the OpenAI-compatible API message format, used only for serialization.
+///
+/// Two purposes:
+/// 1. Token budget estimation — serialize to JSON and count tokens on the exact
+///    payload the LLM will receive, rather than on an internal format.
+/// 2. Rendering context for inspection — the `render_chat_history` test uses this
+///    to print the final JSON that gets sent to the API.
+///
+/// **Convention**: The `llm` crate reuses `ToolCall.function.arguments` as a
+/// carrier for tool result content in `MessageType::ToolResult`. When building
+/// `"tool"`-role messages, `content` is populated from `tc.function.arguments`,
+/// which actually holds the tool's output string, not its input arguments. This
+/// matches the `llm` crate's `prepare_messages` behavior.
+#[derive(serde::Serialize)]
+pub(crate) struct OpenAIMessage {
+    pub(crate) role: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) tool_calls: Option<Vec<llm::ToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) tool_call_id: Option<String>,
 }
 
 pub struct EphemeraContext {
@@ -209,42 +235,61 @@ impl EphemeraContext {
     }
 
     fn recalculate_token_usage(&mut self) {
-        let mut total = 0;
-
-        // Pinned memories tokens
-        for item in &self.pinned_memories {
-            total += self.estimate_tokens(&item.fragment.content);
-        }
-
-        // Recent activities tokens
-        for activity in &self.recent_activities {
-            total += self.calculate_fragment_tokens(activity);
-        }
-
-        self.current_token_usage = total;
+        self.current_token_usage = estimate_token_count(&self.build_context_json());
     }
 
-    fn estimate_tokens(&self, text: &str) -> usize {
-        // Token estimation using character count
-        // Rough estimate: 1 token ≈ 4 characters (more accurate than byte count for UTF-8)
-        text.chars().count() / 4
-    }
+    /// Build the full OpenAI API JSON for accurate token counting.
+    fn build_context_json(&self) -> String {
+        let mut messages: Vec<ChatMessage> = vec![];
 
-    fn calculate_fragment_tokens(&self, fragment: &MemoryFragment) -> usize {
-        // Use actual serialized content for accurate token calculation
-        // This ensures token count matches what will actually be sent to AI
-        let memory_list = super::MemoryFragmentList::from(vec![fragment.clone()]);
-        let serialized = memory_list.serialize();
-        self.estimate_tokens(&serialized)
+        if let Some(pinned_xml) = self.serialize_pinned() {
+            messages.push(ChatMessage::assistant().content(&pinned_xml).build());
+        }
+        for fragment in &self.recent_activities {
+            messages.extend(fragment.to_chat_messages());
+        }
+
+        let api_messages: Vec<OpenAIMessage> = messages
+            .iter()
+            .flat_map(|msg| match &msg.message_type {
+                MessageType::ToolResult(results) => {
+                    // ToolResult expands into separate "tool" role messages
+                    results
+                        .iter()
+                        .map(|tc| OpenAIMessage {
+                            role: "tool",
+                            tool_call_id: Some(tc.id.clone()),
+                            tool_calls: None,
+                            content: Some(tc.function.arguments.clone()),
+                        })
+                        .collect()
+                }
+                MessageType::ToolUse(calls) => vec![OpenAIMessage {
+                    role: "assistant",
+                    content: None,
+                    tool_calls: Some(calls.clone()),
+                    tool_call_id: None,
+                }],
+                _ => vec![OpenAIMessage {
+                    role: match msg.role {
+                        ChatRole::User => "user",
+                        ChatRole::Assistant => "assistant",
+                    },
+                    content: Some(msg.content.clone()),
+                    tool_calls: None,
+                    tool_call_id: None,
+                }],
+            })
+            .collect();
+
+        serde_json::to_string(&api_messages).unwrap()
     }
 
     pub fn add_activity(&mut self, fragment: MemoryFragment) {
-        let fragment_tokens = self.calculate_fragment_tokens(&fragment);
-
         let mut temp_fragment = fragment.clone();
         temp_fragment.id = 0; // Temporary ID for tracking
         self.recent_activities.push_back(temp_fragment);
-        self.current_token_usage += fragment_tokens;
+        self.recalculate_token_usage();
 
         // Add to sync queue for background sync to Loom
         self.sync_sender.send(fragment);
@@ -291,20 +336,15 @@ impl EphemeraContext {
     }
 
     fn maintain_token_limit(&mut self) {
-        // Only trigger when reaching ceiling
         if self.current_token_usage < self.total_token_ceiling {
             return;
         }
 
-        // Evict until floor OR minimum count reached
         while self.current_token_usage > self.total_token_floor
             && self.recent_activities.len() > self.min_activities
         {
-            if let Some(removed) = self.recent_activities.pop_front() {
-                self.current_token_usage = self
-                    .current_token_usage
-                    .saturating_sub(self.calculate_fragment_tokens(&removed));
-            }
+            self.recent_activities.pop_front();
+            self.recalculate_token_usage();
         }
     }
 
@@ -354,11 +394,11 @@ impl EphemeraContext {
         // Filter out memories already pinned to avoid duplicates.
         for fragment in response.fragments {
             if !pinned_ids.contains(&fragment.id) {
-                let fragment_tokens = self.calculate_fragment_tokens(&fragment);
                 self.recent_activities.push_back(fragment);
-                self.current_token_usage += fragment_tokens;
             }
         }
+
+        self.recalculate_token_usage();
 
         info!(
             "Restored {} memories from Loom",
@@ -1023,12 +1063,12 @@ mod restoration_tests {
         mock.set_default_memory(MemoryResponse { fragments: vec![], total: 0 });
         mock.set_default_pinned(PinnedMemoriesResponse { items: vec![] });
 
-        // Use aggressive eviction: each activity ~300 tokens when serialized
-        // With ceiling 800 and floor 200, eviction should leave 2-3 activities
+        // Use aggressive eviction: each activity ~1200 tokens in OpenAI JSON format
+        // With ceiling 3000 and floor 1000, eviction should leave 2-3 activities
         let config = ContextConfig {
             max_pinned_tokens: 10,
-            total_token_floor: 200,
-            total_token_ceiling: 800,
+            total_token_floor: 1000,
+            total_token_ceiling: 3000,
             min_activities: MIN_ACTIVITIES,
         };
         let mut ctx = create_test_context_with_config(mock, config);
@@ -1057,8 +1097,8 @@ mod restoration_tests {
 
         // Verify: token usage is at or below ceiling
         assert!(
-            status.current_token_usage <= 800,
-            "Token usage {} should be at or below ceiling 800",
+            status.current_token_usage <= 3000,
+            "Token usage {} should be at or below ceiling 3000",
             status.current_token_usage
         );
 
@@ -1148,7 +1188,7 @@ mod restoration_tests {
 
         // === Phase 1: Add initial activities and trigger first eviction ===
         for i in 1..=10 {
-            let content = format!("Activity_{} {}", i, "x".repeat(200));
+            let content = format!("Activity_{} {}", i, "x".repeat(1000));
             ctx.add_activity(create_fragment(i, &content));
             total_activities_added += 1;
         }
@@ -1170,7 +1210,7 @@ mod restoration_tests {
 
         // === Phase 3: Add more activities (triggers more eviction) ===
         for i in 11..=20 {
-            let content = format!("Activity_{} {}", i, "y".repeat(200));
+            let content = format!("Activity_{} {}", i, "y".repeat(1000));
             ctx.add_activity(create_fragment(i, &content));
         }
 

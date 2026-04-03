@@ -90,6 +90,7 @@ urlencoding = "2.1"
 
 # AI/ML
 llm = { version = "1", features = ["groq"] }
+tokenx-rs = "0.1"
 
 # Dev dependencies
 tempfile = "3"

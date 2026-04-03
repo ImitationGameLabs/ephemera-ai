@@ -8,7 +8,7 @@ edition = "2024"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 time = { workspace = true }
-llm = { workspace = true, features = ["groq"] }
+llm = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -28,3 +28,4 @@ agora-client = { path = "../agora-client" }
 agora-common = { path = "../agora-common" }
 clap = { workspace = true }
 uuid = { workspace = true }
+tokenx-rs = { workspace = true }

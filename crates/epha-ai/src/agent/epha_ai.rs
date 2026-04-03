@@ -719,29 +719,13 @@ mod tests {
 
         // --- 6. Render as OpenAI-compatible API JSON ---
 
-        // Replicate llm crate's prepare_messages conversion logic:
-        // - ToolResult expands into multiple "tool" role messages
-        // - ToolUse becomes "assistant" with tool_calls array
-        // - Text becomes "user"/"assistant" with content string
-        // - System message is prepended by the provider (shown as placeholder)
-
-        #[derive(serde::Serialize)]
-        struct OpenAIMessage {
-            role: &'static str,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            content: Option<String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            tool_calls: Option<Vec<llm::ToolCall>>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            tool_call_id: Option<String>,
-        }
+        use crate::context::OpenAIMessage;
 
         let mut api_messages: Vec<OpenAIMessage> = vec![];
 
         for msg in &chat_history {
             match &msg.message_type {
                 llm::chat::MessageType::ToolResult(results) => {
-                    // ToolResult expands into separate "tool" role messages
                     for tc in results {
                         api_messages.push(OpenAIMessage {
                             role: "tool",
