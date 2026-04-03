@@ -33,10 +33,9 @@ impl SyncSender {
                 // Queue is full, log warning and drop the fragment
                 // This is acceptable per the design: Loom is the source of truth
                 warn!(
-                    "Sync queue full, dropping memory fragment. Loom will be source of truth on restart."
+                    "Sync queue full, dropping memory fragment (kind={:?}): {}. Loom will be source of truth on restart.",
+                    fragment.kind, fragment.content,
                 );
-                // Optionally could log the fragment content for debugging
-                let _ = fragment;
             }
             Err(mpsc::error::TrySendError::Closed(_)) => {
                 // Channel closed, this shouldn't happen in normal operation

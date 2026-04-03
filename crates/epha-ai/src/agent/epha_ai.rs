@@ -22,6 +22,15 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 /// Serialize recalled memories as XML for temporary injection into chat_history.
+/// Try to parse a JSON string into a `serde_json::Value`.
+///
+/// If the string is valid JSON (e.g. `{"key": "value"}`), `from_str` produces
+/// the corresponding object/array. If it is malformed, `json!(s)` wraps the raw
+/// string as a JSON string value so that it can still be stored without losing information.
+fn preserve_raw_json(s: &str) -> serde_json::Value {
+    serde_json::from_str(s).unwrap_or(serde_json::json!(s))
+}
+
 fn serialize_recalled_xml(fragments: &[loom_client::memory::MemoryFragment]) -> String {
     let mut xml = format!("<recalled_memories count=\"{}\">\n", fragments.len());
     for fragment in fragments {
@@ -83,13 +92,13 @@ impl EphemeraAI {
         {
             let mut ctx = context_data.lock().await;
             if let Err(e) = ctx.restore_from_loom(50).await {
-                tracing::warn!(
+                warn!(
                     "Failed to restore from Loom: {}. Starting with empty context.",
                     e
                 );
             }
             if let Err(e) = ctx.restore_pinned_from_loom().await {
-                tracing::warn!("Failed to restore pinned memories from Loom: {}", e);
+                warn!("Failed to restore pinned memories from Loom: {}", e);
             }
         }
 
@@ -219,8 +228,8 @@ impl EphemeraAI {
             chat_history.push(ChatMessage::user().content(&recall_text).build());
         }
 
+        // Release the lock before entering the agent loop
         drop(ctx);
-        drop(pinned_text);
 
         // 3. Explicit multi-turn loop
         let mut current_prompt = String::new();
@@ -271,7 +280,7 @@ impl EphemeraAI {
                     tool_results.push(ToolCallRecord {
                         id: tc.id.clone(),
                         tool: tool_name.clone(),
-                        args: serde_json::from_str(args_str).unwrap_or(serde_json::json!(args_str)),
+                        args: preserve_raw_json(args_str),
                         result: format!("Skipped: tool '{}' failed earlier in this batch", failed),
                     });
                     continue;
@@ -288,8 +297,7 @@ impl EphemeraAI {
                         tool_results.push(ToolCallRecord {
                             id: tc.id.clone(),
                             tool: tool_name.clone(),
-                            args: serde_json::from_str(args_str)
-                                .unwrap_or(serde_json::json!(args_str)),
+                            args: preserve_raw_json(args_str),
                             result: format!("Error: {}", e),
                         });
                         failed_tool_name = Some(tool_name.clone());
@@ -413,7 +421,9 @@ mod tests {
     }
 
     // ---------------------------------------------------------------------------
-    // Visual render test: inspect chat_history output with `--ignored`
+    // Visual render test for context serialization output.
+    // Intentionally has no assertions — run with `--ignored` to inspect
+    // the full serialized chat history and verify context rendering.
     // ---------------------------------------------------------------------------
 
     #[test]
