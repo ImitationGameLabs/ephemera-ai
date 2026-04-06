@@ -348,6 +348,25 @@ impl EphemeraContext {
         }
     }
 
+    /// Evict recent activities until token usage drops to floor.
+    /// Same logic as `maintain_token_limit()` but without the ceiling gate,
+    /// allowing the agent to proactively free context at any time.
+    /// Returns (number of evicted activities, tokens freed).
+    pub fn evict_to_floor(&mut self) -> (usize, usize) {
+        let tokens_before = self.current_token_usage;
+        let mut evicted_count = 0;
+
+        while self.current_token_usage > self.total_token_floor
+            && self.recent_activities.len() > self.min_activities
+        {
+            self.recent_activities.pop_front();
+            evicted_count += 1;
+        }
+        self.recalculate_token_usage();
+        let tokens_freed = tokens_before.saturating_sub(self.current_token_usage);
+        (evicted_count, tokens_freed)
+    }
+
     pub fn get_queue_status(&self) -> QueueStatus {
         QueueStatus {
             activity_count: self.recent_activities.len(),
@@ -1987,5 +2006,95 @@ mod interval_window_tests {
 
         let ctx = create_test_context_with_config(mock, custom.clone());
         assert_eq!(ctx.total_token_ceiling(), 2000);
+    }
+}
+
+// ============================================================================
+// evict_to_floor Tests
+// ============================================================================
+
+#[cfg(test)]
+mod evict_to_floor_tests {
+    use super::test_utils::*;
+    use super::*;
+    use crate::config::ContextConfig;
+    use loom_client::mock::MockLoomClient;
+    use loom_client::{MemoryResponse, PinnedMemoriesResponse};
+
+    fn mock_context() -> EphemeraContext {
+        let mut mock = MockLoomClient::new();
+        mock.set_default_memory(MemoryResponse { fragments: vec![], total: 0 });
+        mock.set_default_pinned(PinnedMemoriesResponse { items: vec![] });
+        create_test_context_with_config(
+            mock,
+            ContextConfig {
+                max_pinned_tokens: 10,
+                total_token_floor: 50,
+                total_token_ceiling: 500_000,
+                min_activities: 2,
+            },
+        )
+    }
+
+    #[test]
+    fn below_floor_evicts_nothing() {
+        let mut ctx = mock_context();
+        // One small activity — well below floor
+        ctx.add_activity(create_fragment(1, "short"));
+        let (evicted, freed) = ctx.evict_to_floor();
+        assert_eq!(evicted, 0);
+        assert_eq!(freed, 0);
+        assert!(ctx.recent_activities().len() >= 1);
+    }
+
+    #[test]
+    fn above_floor_evicts_to_floor() {
+        let mut ctx = mock_context();
+        // Add enough large activities to exceed the very low floor (50 tokens)
+        for i in 0..20 {
+            ctx.add_activity(create_fragment(i, &"x".repeat(500)));
+        }
+        let count_before = ctx.recent_activities().len();
+        let _tokens_before = ctx.current_token_usage;
+
+        let (evicted, freed) = ctx.evict_to_floor();
+
+        assert!(evicted > 0, "should have evicted something");
+        assert!(freed > 0, "should have freed tokens");
+        assert!(
+            ctx.recent_activities().len() < count_before,
+            "queue should shrink"
+        );
+        assert!(
+            ctx.current_token_usage <= ctx.total_token_floor || ctx.recent_activities().len() <= 2,
+            "should reach floor or min_activities guard: tokens={}, floor={}, activities={}",
+            ctx.current_token_usage,
+            ctx.total_token_floor,
+            ctx.recent_activities().len(),
+        );
+        assert!(ctx.recent_activities().len() >= 2, "min_activities guard");
+    }
+
+    #[test]
+    fn empty_queue_does_not_panic() {
+        let mut ctx = mock_context();
+        let (evicted, freed) = ctx.evict_to_floor();
+        assert_eq!(evicted, 0);
+        assert_eq!(freed, 0);
+    }
+
+    #[test]
+    fn min_activities_guard_prevents_over_eviction() {
+        let mut ctx = mock_context();
+        // Add many large activities
+        for i in 0..20 {
+            ctx.add_activity(create_fragment(i, &"y".repeat(1000)));
+        }
+
+        let (evicted, _) = ctx.evict_to_floor();
+
+        // min_activities = 2, so at most (20 - 2) = 18 should be evicted
+        assert!(ctx.recent_activities().len() >= 2);
+        assert!(evicted <= 18);
     }
 }

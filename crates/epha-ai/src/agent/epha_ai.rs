@@ -7,7 +7,8 @@ use crate::context::{
 use crate::sync::{SyncSender, start_sync_task};
 use crate::tools::shell::{TmuxBackend, shell_tool_set};
 use crate::tools::{
-    MemoryGet, MemoryPin, MemoryRecent, MemoryTimeline, MemoryUnpin, StateTransition, ToolDispatch,
+    ContextEvict, MemoryGet, MemoryPin, MemoryRecent, MemoryTimeline, MemoryUnpin, StateTransition,
+    ToolDispatch,
 };
 use agora_client::{AgoraClient, AgoraClientTrait};
 use llm::builder::{LLMBackend, LLMBuilder};
@@ -152,6 +153,7 @@ impl EphemeraAI {
             context_data.clone(),
         )));
         tool_dispatch.add_tool(Box::new(StateTransition::new(state.clone())));
+        tool_dispatch.add_tool(Box::new(ContextEvict::new(context_data.clone())));
 
         // Shell tools
         tool_dispatch.add_tools(shell_tool_set(Arc::new(tokio::sync::Mutex::new(backend))));
