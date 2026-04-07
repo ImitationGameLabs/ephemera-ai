@@ -23,7 +23,11 @@
       };
 
       context = {
-        max_pinned_count = 5;
+        max_pinned_tokens = 10000;
+        total_token_floor = 4000;
+        total_token_ceiling = 100000;
+        response_reserve_tokens = 4096;
+        min_activities = 2;
       };
     };
   };

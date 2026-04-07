@@ -90,6 +90,7 @@ mod tests {
             max_pinned_tokens: 10,
             total_token_floor: 5000,
             total_token_ceiling: 10_000,
+            response_reserve_tokens: 1000,
             min_activities: 1,
         };
         let frag = create_fragment(1, "hi");
@@ -106,6 +107,7 @@ mod tests {
             max_pinned_tokens: 10,
             total_token_floor: 10,
             total_token_ceiling: 100_000,
+            response_reserve_tokens: 1000,
             min_activities: 1,
         };
         let frags = vec![

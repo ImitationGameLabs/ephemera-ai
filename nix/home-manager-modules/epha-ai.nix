@@ -63,9 +63,29 @@ in
       };
 
       context = {
-        max_pinned_count = lib.mkOption {
+        max_pinned_tokens = lib.mkOption {
           type = lib.types.ints.positive;
-          description = "Maximum number of pinned content items in context";
+          description = "Maximum token budget for pinned memories";
+        };
+
+        total_token_floor = lib.mkOption {
+          type = lib.types.ints.positive;
+          description = "Total token budget floor - eviction stops at this level (includes all components)";
+        };
+
+        total_token_ceiling = lib.mkOption {
+          type = lib.types.ints.positive;
+          description = "Total token budget ceiling - eviction triggers at this level (includes all components)";
+        };
+
+        response_reserve_tokens = lib.mkOption {
+          type = lib.types.ints.positive;
+          description = "Tokens reserved for LLM response output";
+        };
+
+        min_activities = lib.mkOption {
+          type = lib.types.ints.positive;
+          description = "Minimum number of recent activities to preserve during eviction";
         };
       };
     };

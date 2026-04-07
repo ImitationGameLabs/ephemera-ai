@@ -32,6 +32,15 @@ fn preserve_raw_json(s: &str) -> serde_json::Value {
     serde_json::from_str(s).unwrap_or(serde_json::json!(s))
 }
 
+/// Estimate the static token overhead from system prompt and tool definitions.
+fn compute_static_overhead(system_prompt: &str, tool_definitions: &[llm::chat::Tool]) -> usize {
+    let json = serde_json::json!({
+        "messages": [{"role": "system", "content": system_prompt}],
+        "tools": tool_definitions,
+    });
+    tokenx_rs::estimate_token_count(&serde_json::to_string(&json).unwrap())
+}
+
 fn serialize_recalled_xml(fragments: &[loom_client::memory::MemoryFragment]) -> String {
     let mut xml = format!("<recalled_memories count=\"{}\">\n", fragments.len());
     for fragment in fragments {
@@ -160,6 +169,18 @@ impl EphemeraAI {
 
         // Pre-compute tool definitions for the LLM API
         let tool_definitions = tool_dispatch.to_llm_tools();
+
+        // Compute static token overhead (system prompt + tool definitions)
+        let static_overhead = compute_static_overhead(&common_prompt.content, &tool_definitions);
+        info!(
+            "Static token overhead: {} (system prompt + tool definitions)",
+            static_overhead
+        );
+
+        {
+            let mut ctx = context_data.lock().await;
+            ctx.set_static_overhead(static_overhead);
+        }
 
         Ok(Self {
             state,
@@ -464,6 +485,7 @@ mod tests {
             max_pinned_tokens: 10_000,
             total_token_floor: 4000,
             total_token_ceiling: 50_000,
+            response_reserve_tokens: 1000,
             min_activities: 2,
         };
         let mut ctx = EphemeraContext::new(Arc::new(mock), sync_sender, config);

@@ -18,10 +18,12 @@ pub struct Config {
 pub struct ContextConfig {
     /// Maximum token budget for pinned memories
     pub max_pinned_tokens: usize,
-    /// Total token usage floor - eviction stops at this level
+    /// Total token budget floor - eviction stops at this level (includes all components)
     pub total_token_floor: usize,
-    /// Total token usage ceiling - eviction triggers at this level
+    /// Total token budget ceiling - eviction triggers at this level (includes all components)
     pub total_token_ceiling: usize,
+    /// Tokens reserved for LLM response output
+    pub response_reserve_tokens: usize,
     /// Minimum number of recent activities to preserve during eviction
     pub min_activities: usize,
 }
@@ -99,6 +101,10 @@ impl Config {
         assert!(
             ctx.min_activities > 0,
             "context.min_activities must be greater than 0"
+        );
+        assert!(
+            ctx.response_reserve_tokens > 0,
+            "context.response_reserve_tokens must be greater than 0"
         );
 
         config

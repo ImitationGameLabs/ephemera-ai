@@ -23,17 +23,19 @@ pub struct QueueStatus {
     pub current_token_usage: usize,
     pub token_ceiling: usize,
     pub utilization_ratio: f64,
+    pub available_budget: usize,
 }
 
 impl fmt::Display for QueueStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Activities: {}, Tokens: {}/{} ({:.1}%)",
+            "Activities: {}, Tokens: {}/{} ({:.1}%), Available: {}",
             self.activity_count,
             self.current_token_usage,
             self.token_ceiling,
-            self.utilization_ratio * 100.0
+            self.utilization_ratio * 100.0,
+            self.available_budget
         )
     }
 }
@@ -72,7 +74,9 @@ pub struct EphemeraContext {
     max_pinned_tokens: usize,
     total_token_floor: usize,
     total_token_ceiling: usize,
+    response_reserve_tokens: usize,
     min_activities: usize,
+    static_token_overhead: usize,
 }
 
 impl EphemeraContext {
@@ -89,7 +93,9 @@ impl EphemeraContext {
             max_pinned_tokens: config.max_pinned_tokens,
             total_token_floor: config.total_token_floor,
             total_token_ceiling: config.total_token_ceiling,
+            response_reserve_tokens: config.response_reserve_tokens,
             min_activities: config.min_activities,
+            static_token_overhead: 0,
             sync_sender,
             loom_client,
         }
@@ -186,6 +192,37 @@ impl EphemeraContext {
     /// Get max pinned tokens
     pub fn max_pinned_tokens(&self) -> usize {
         self.max_pinned_tokens
+    }
+
+    /// Set static token overhead (system prompt + tool definitions).
+    /// Called once at startup after tools are registered.
+    /// Panics if effective_floor would be ≤ 0.
+    pub fn set_static_overhead(&mut self, overhead: usize) {
+        let effective_floor = self
+            .total_token_floor
+            .saturating_sub(overhead + self.response_reserve_tokens);
+        assert!(
+            effective_floor > 0,
+            "total_token_floor ({}) must exceed static_overhead ({}) + response_reserve ({})",
+            self.total_token_floor,
+            overhead,
+            self.response_reserve_tokens
+        );
+        self.static_token_overhead = overhead;
+    }
+
+    /// Effective ceiling: total budget minus static overhead and response reserve.
+    /// This is the maximum token budget available for context (pinned + recent).
+    fn effective_ceiling(&self) -> usize {
+        self.total_token_ceiling
+            .saturating_sub(self.static_token_overhead + self.response_reserve_tokens)
+    }
+
+    /// Effective floor: total floor minus static overhead and response reserve.
+    /// Eviction stops when context tokens drop to this level.
+    fn effective_floor(&self) -> usize {
+        self.total_token_floor
+            .saturating_sub(self.static_token_overhead + self.response_reserve_tokens)
     }
 
     /// Add a pinned memory to local state (called after successful API pin)
@@ -336,11 +373,11 @@ impl EphemeraContext {
     }
 
     fn maintain_token_limit(&mut self) {
-        if self.current_token_usage < self.total_token_ceiling {
+        if self.current_token_usage < self.effective_ceiling() {
             return;
         }
 
-        while self.current_token_usage > self.total_token_floor
+        while self.current_token_usage > self.effective_floor()
             && self.recent_activities.len() > self.min_activities
         {
             self.recent_activities.pop_front();
@@ -356,7 +393,7 @@ impl EphemeraContext {
         let tokens_before = self.current_token_usage;
         let mut evicted_count = 0;
 
-        while self.current_token_usage > self.total_token_floor
+        while self.current_token_usage > self.effective_floor()
             && self.recent_activities.len() > self.min_activities
         {
             self.recent_activities.pop_front();
@@ -368,22 +405,28 @@ impl EphemeraContext {
     }
 
     pub fn get_queue_status(&self) -> QueueStatus {
+        let effective_ceiling = self.effective_ceiling();
         QueueStatus {
             activity_count: self.recent_activities.len(),
             current_token_usage: self.current_token_usage,
-            token_ceiling: self.total_token_ceiling,
-            utilization_ratio: self.current_token_usage as f64 / self.total_token_ceiling as f64,
+            token_ceiling: effective_ceiling,
+            utilization_ratio: if effective_ceiling > 0 {
+                self.current_token_usage as f64 / effective_ceiling as f64
+            } else {
+                1.0
+            },
+            available_budget: effective_ceiling.saturating_sub(self.current_token_usage),
         }
     }
 
-    /// Check if current token usage is below the ceiling (in safe zone)
+    /// Check if current token usage is below the effective ceiling (in safe zone)
     pub fn is_in_safe_zone(&self) -> bool {
-        self.current_token_usage < self.total_token_ceiling
+        self.current_token_usage < self.effective_ceiling()
     }
 
-    /// Get the total token ceiling
+    /// Get the effective token ceiling (total budget minus overhead and reserve)
     pub fn total_token_ceiling(&self) -> usize {
-        self.total_token_ceiling
+        self.effective_ceiling()
     }
 
     /// Restore recent activities from Loom on startup
@@ -485,6 +528,7 @@ mod test_utils {
             max_pinned_tokens: 10,
             total_token_floor: 4000,
             total_token_ceiling: 5000,
+            response_reserve_tokens: 1000,
             min_activities: 2,
         }
     }
@@ -716,6 +760,7 @@ mod restoration_tests {
             max_pinned_tokens: 10,
             total_token_floor: 400,
             total_token_ceiling: 800,
+            response_reserve_tokens: 100,
             min_activities: 1,
         };
         let mut ctx = create_test_context_with_config(mock, config.clone());
@@ -752,6 +797,7 @@ mod restoration_tests {
             max_pinned_tokens: 10,
             total_token_floor: 400,
             total_token_ceiling: 800,
+            response_reserve_tokens: 100,
             min_activities: 1,
         };
         let mut ctx = create_test_context_with_config(mock, config.clone());
@@ -866,6 +912,7 @@ mod restoration_tests {
             max_pinned_tokens: 10,
             total_token_floor: 200,
             total_token_ceiling: 800,
+            response_reserve_tokens: 100,
             min_activities: 1,
         };
         let mut ctx = create_test_context_with_config(mock, config.clone());
@@ -1088,6 +1135,7 @@ mod restoration_tests {
             max_pinned_tokens: 10,
             total_token_floor: 1000,
             total_token_ceiling: 3000,
+            response_reserve_tokens: 100,
             min_activities: MIN_ACTIVITIES,
         };
         let mut ctx = create_test_context_with_config(mock, config);
@@ -1160,6 +1208,7 @@ mod restoration_tests {
             max_pinned_tokens: 5,
             total_token_floor: 300,
             total_token_ceiling: 600,
+            response_reserve_tokens: 100,
             min_activities: 2,
         };
 
@@ -1880,6 +1929,7 @@ mod interval_window_tests {
             max_pinned_tokens: 10,
             total_token_floor: 200,
             total_token_ceiling: 400,
+            response_reserve_tokens: 50,
             min_activities: 1,
         };
         let mut ctx = create_test_context_with_config(mock, config.clone());
@@ -1915,6 +1965,7 @@ mod interval_window_tests {
             max_pinned_tokens: 10,
             total_token_floor: 1000,
             total_token_ceiling: 2000,
+            response_reserve_tokens: 100,
             min_activities: 1,
         };
         let mut ctx = create_test_context_with_config(mock, config.clone());
@@ -1941,6 +1992,7 @@ mod interval_window_tests {
             max_pinned_tokens: 10,
             total_token_floor: 100,
             total_token_ceiling: 5000,
+            response_reserve_tokens: 100,
             min_activities: 3,
         };
         let mut ctx = create_test_context_with_config(mock, config.clone());
@@ -2001,11 +2053,14 @@ mod interval_window_tests {
             max_pinned_tokens: 10,
             total_token_floor: 1000,
             total_token_ceiling: 2000,
+            response_reserve_tokens: 200,
             min_activities: 5,
         };
 
         let ctx = create_test_context_with_config(mock, custom.clone());
-        assert_eq!(ctx.total_token_ceiling(), 2000);
+        // total_token_ceiling() returns effective ceiling = total - overhead - reserve
+        // No overhead set (0), so effective = 2000 - 0 - 200 = 1800
+        assert_eq!(ctx.total_token_ceiling(), 1800);
     }
 }
 
@@ -2031,6 +2086,7 @@ mod evict_to_floor_tests {
                 max_pinned_tokens: 10,
                 total_token_floor: 50,
                 total_token_ceiling: 500_000,
+                response_reserve_tokens: 1000,
                 min_activities: 2,
             },
         )
@@ -2096,5 +2152,100 @@ mod evict_to_floor_tests {
         // min_activities = 2, so at most (20 - 2) = 18 should be evicted
         assert!(ctx.recent_activities().len() >= 2);
         assert!(evicted <= 18);
+    }
+}
+
+// ============================================================================
+// Static Overhead & Effective Threshold Tests
+// ============================================================================
+
+#[cfg(test)]
+mod static_overhead_tests {
+    use super::test_utils::*;
+    use super::*;
+    use crate::config::ContextConfig;
+    use loom_client::mock::MockLoomClient;
+    use loom_client::{MemoryResponse, PinnedMemoriesResponse};
+
+    fn make_config(floor: usize, ceiling: usize, reserve: usize) -> ContextConfig {
+        ContextConfig {
+            max_pinned_tokens: 10,
+            total_token_floor: floor,
+            total_token_ceiling: ceiling,
+            response_reserve_tokens: reserve,
+            min_activities: 1,
+        }
+    }
+
+    fn make_ctx(config: ContextConfig) -> EphemeraContext {
+        let mut mock = MockLoomClient::new();
+        mock.set_default_memory(MemoryResponse { fragments: vec![], total: 0 });
+        mock.set_default_pinned(PinnedMemoriesResponse { items: vec![] });
+        create_test_context_with_config(mock, config)
+    }
+
+    #[test]
+    #[should_panic(expected = "total_token_floor")]
+    fn set_static_overhead_panics_when_effective_floor_zero() {
+        let mut ctx = make_ctx(make_config(500, 1000, 500));
+        // floor=500, overhead=0, reserve=500 → effective_floor = 0 → panic
+        ctx.set_static_overhead(0);
+    }
+
+    #[test]
+    #[should_panic(expected = "total_token_floor")]
+    fn set_static_overhead_panics_when_effective_floor_negative() {
+        let mut ctx = make_ctx(make_config(500, 1000, 500));
+        // floor=500, overhead=600, reserve=500 → effective_floor = 0 (saturating) → panic
+        ctx.set_static_overhead(600);
+    }
+
+    #[test]
+    fn effective_thresholds_computed_correctly() {
+        let mut ctx = make_ctx(make_config(5000, 10000, 1000));
+        ctx.set_static_overhead(500);
+
+        // effective_ceiling = 10000 - 500 - 1000 = 8500
+        assert_eq!(ctx.total_token_ceiling(), 8500);
+
+        // effective_floor = 5000 - 500 - 1000 = 3500
+        // Verify via QueueStatus
+        let status = ctx.get_queue_status();
+        assert_eq!(status.token_ceiling, 8500);
+    }
+
+    #[test]
+    fn eviction_uses_effective_thresholds() {
+        let mut ctx = make_ctx(make_config(200, 500, 50));
+        ctx.set_static_overhead(50);
+        // effective_ceiling = 500 - 50 - 50 = 400
+        // effective_floor = 200 - 50 - 50 = 100
+
+        // Add enough content to exceed effective ceiling
+        let content = "x".repeat(2000); // ~500 tokens when serialized
+        for i in 0..3 {
+            ctx.add_activity(create_fragment(i, &format!("{}-{}", content, i)));
+        }
+
+        let status = ctx.get_queue_status();
+        assert!(
+            status.current_token_usage <= 400,
+            "Token usage {} should be <= effective ceiling 400",
+            status.current_token_usage
+        );
+    }
+
+    #[test]
+    fn queue_status_available_budget_reflects_effective() {
+        let mut ctx = make_ctx(make_config(1100, 5000, 500));
+        ctx.set_static_overhead(500);
+        // effective_ceiling = 5000 - 500 - 500 = 4000
+
+        // Add one small activity
+        ctx.add_activity(create_fragment(1, "hello"));
+        let status = ctx.get_queue_status();
+
+        assert_eq!(status.token_ceiling, 4000);
+        assert_eq!(status.available_budget, 4000 - status.current_token_usage);
     }
 }
