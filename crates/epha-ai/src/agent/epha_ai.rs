@@ -1,8 +1,8 @@
 use crate::agent::{CommonPrompt, State};
 use crate::context::EphemeraContext;
 use crate::context::{
-    ActionMemoryContent, SerializeContext, ThoughtContent, ToChatMessages, ToolCallRecord,
-    format_rfc3339, pending_memory,
+    ActionMemoryContent, ThoughtContent, ToChatMessages, TokenBudgetError, ToolCallRecord,
+    pending_memory, serialize_recalled_xml,
 };
 use crate::sync::{SyncSender, start_sync_task};
 use crate::tools::shell::{TmuxBackend, shell_tool_set};
@@ -22,7 +22,6 @@ use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-/// Serialize recalled memories as XML for temporary injection into chat_history.
 /// Try to parse a JSON string into a `serde_json::Value`.
 ///
 /// If the string is valid JSON (e.g. `{"key": "value"}`), `from_str` produces
@@ -39,27 +38,6 @@ fn compute_static_overhead(system_prompt: &str, tool_definitions: &[llm::chat::T
         "tools": tool_definitions,
     });
     tokenx_rs::estimate_token_count(&serde_json::to_string(&json).unwrap())
-}
-
-fn serialize_recalled_xml(fragments: &[loom_client::memory::MemoryFragment]) -> String {
-    let mut xml = format!("<recalled_memories count=\"{}\">\n", fragments.len());
-    for fragment in fragments {
-        let ts = format_rfc3339(&fragment.timestamp);
-        xml.push_str(&format!(
-            "  <memory id=\"{}\" timestamp=\"{}\" kind=\"{}\">\n",
-            fragment.id, ts, fragment.kind
-        ));
-        let inner = fragment.serialize_context();
-        for line in inner.split('\n') {
-            xml.push_str("    ");
-            xml.push_str(line);
-            xml.push('\n');
-        }
-        xml.push_str("  </memory>\n");
-    }
-    xml.push_str("  <instruction>Please reflect on these recalled memories and extract what is relevant. Use memory_pin to permanently retain any memories you wish to keep.</instruction>\n");
-    xml.push_str("</recalled_memories>");
-    xml
 }
 
 pub struct EphemeraAI {
@@ -245,23 +223,42 @@ impl EphemeraAI {
         let recent: Vec<MemoryFragment> = ctx.recent_activities().iter().cloned().collect();
         chat_history.extend(recent.iter().flat_map(|m| m.to_chat_messages()));
 
-        // 2c. Recalled memories → temporary user message (injected this cycle only)
-        if !ctx.recalled_memories().is_empty() {
-            let recall_text = serialize_recalled_xml(ctx.recalled_memories());
-            chat_history.push(ChatMessage::user().content(&recall_text).build());
-        }
-
         // Release the lock before entering the agent loop
         drop(ctx);
 
         // 3. Explicit multi-turn loop
         let mut current_prompt = String::new();
         let mut current_depth = 0;
+        // Only recalled memories and tool results need explicit tracking here —
+        // tool definitions are already excluded via effective_ceiling, and
+        // response_reserve_tokens absorbs the small per-turn overhead (user
+        // prompts, assistant tool_use wrappers).
+        let mut remaining_budget = self.context.lock().await.available_budget();
 
         loop {
             // 3.1 Append current prompt to chat history
             if !current_prompt.is_empty() {
                 chat_history.push(ChatMessage::user().content(&current_prompt).build());
+            }
+
+            // 3.1.1 Inject recalled memories with budget gate
+            {
+                let mut ctx = self.context.lock().await;
+                if !ctx.recalled_memories().is_empty() {
+                    let recall_text = serialize_recalled_xml(ctx.recalled_memories());
+                    let recall_tokens = tokenx_rs::estimate_token_count(&recall_text);
+                    if recall_tokens <= remaining_budget {
+                        chat_history.push(ChatMessage::user().content(&recall_text).build());
+                        remaining_budget -= recall_tokens;
+                    } else {
+                        let error = TokenBudgetError {
+                            requested_tokens: recall_tokens,
+                            available_tokens: remaining_budget,
+                        };
+                        chat_history.push(ChatMessage::user().content(error.to_string()).build());
+                    }
+                    ctx.clear_recalled_memories();
+                }
             }
 
             // 3.2 Call LLM with tools
@@ -339,7 +336,21 @@ impl EphemeraAI {
             // Save Action memory (one per LLM response, not per tool call)
             self.save_action(&tool_results);
 
-            // 3.7 Update chat history for next iteration
+            // 3.7 Budget gate on tool results
+            for record in &mut tool_results {
+                let tokens = tokenx_rs::estimate_token_count(&record.result);
+                if tokens <= remaining_budget {
+                    remaining_budget -= tokens;
+                } else {
+                    record.result = TokenBudgetError {
+                        requested_tokens: tokens,
+                        available_tokens: remaining_budget,
+                    }
+                    .to_string();
+                }
+            }
+
+            // 3.7.1 Update chat history for next iteration
             // Add assistant message with tool calls
             chat_history.push(
                 ChatMessage::assistant()
@@ -368,22 +379,9 @@ impl EphemeraAI {
                     .build(),
             );
 
-            // 3.7.1 Inject recalled memories if any tool populated them
-            {
-                let context_handle = self.context.clone();
-                let context_guard = context_handle.lock().await;
-                if !context_guard.recalled_memories().is_empty() {
-                    let recall_text = serialize_recalled_xml(context_guard.recalled_memories());
-                    chat_history.push(ChatMessage::user().content(&recall_text).build());
-                }
-            }
-
             // 3.8 Clear prompt for subsequent iterations
             current_prompt = String::new();
         }
-
-        // 4. Clear recall buffer for next cycle
-        self.context.lock().await.clear_recalled_memories();
 
         Ok(())
     }

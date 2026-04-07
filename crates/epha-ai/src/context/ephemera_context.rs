@@ -17,6 +17,28 @@ use tracing::error;
 // Re-export PinnedMemory for external use
 pub use loom_client::PinnedMemory;
 
+/// Serialize recalled memories as XML for temporary injection into chat_history.
+pub fn serialize_recalled_xml(fragments: &[MemoryFragment]) -> String {
+    let mut xml = format!("<recalled_memories count=\"{}\">\n", fragments.len());
+    for fragment in fragments {
+        let ts = format_rfc3339(&fragment.timestamp);
+        xml.push_str(&format!(
+            "  <memory id=\"{}\" timestamp=\"{}\" kind=\"{}\">\n",
+            fragment.id, ts, fragment.kind
+        ));
+        let inner = fragment.serialize_context();
+        for line in inner.split('\n') {
+            xml.push_str("    ");
+            xml.push_str(line);
+            xml.push('\n');
+        }
+        xml.push_str("  </memory>\n");
+    }
+    xml.push_str("  <instruction>Please reflect on these recalled memories and extract what is relevant. Use memory_pin to permanently retain any memories you wish to keep.</instruction>\n");
+    xml.push_str("</recalled_memories>");
+    xml
+}
+
 #[derive(Debug, Clone)]
 pub struct QueueStatus {
     pub activity_count: usize,
@@ -218,6 +240,12 @@ impl EphemeraContext {
             .saturating_sub(self.static_token_overhead + self.response_reserve_tokens)
     }
 
+    /// Remaining token budget for dynamic content (recalled memories, tool results).
+    pub fn available_budget(&self) -> usize {
+        self.effective_ceiling()
+            .saturating_sub(self.current_token_usage)
+    }
+
     /// Effective floor: total floor minus static overhead and response reserve.
     /// Eviction stops when context tokens drop to this level.
     fn effective_floor(&self) -> usize {
@@ -415,7 +443,7 @@ impl EphemeraContext {
             } else {
                 1.0
             },
-            available_budget: effective_ceiling.saturating_sub(self.current_token_usage),
+            available_budget: self.available_budget(),
         }
     }
 
@@ -2247,5 +2275,44 @@ mod static_overhead_tests {
 
         assert_eq!(status.token_ceiling, 4000);
         assert_eq!(status.available_budget, 4000 - status.current_token_usage);
+    }
+
+    #[test]
+    fn available_budget_computes_correctly() {
+        // floor(5000) > overhead(1000) + reserve(1000) ✓
+        let mut ctx = make_ctx(make_config(5000, 10000, 1000));
+        ctx.set_static_overhead(1000);
+        // effective_ceiling = 10000 - 1000 - 1000 = 8000
+
+        // No content yet
+        assert_eq!(ctx.available_budget(), 8000);
+
+        // Add activities to consume some budget
+        let content = "x".repeat(2000); // ~500 tokens
+        ctx.add_activity(create_fragment(1, &content));
+        ctx.add_activity(create_fragment(2, &content));
+
+        let budget = ctx.available_budget();
+        assert!(budget < 8000, "budget should decrease after adding content");
+        assert_eq!(budget, 8000 - ctx.current_token_usage);
+    }
+
+    #[test]
+    fn available_budget_non_negative_under_heavy_load() {
+        // floor(3000) > overhead(500) + reserve(500) ✓
+        // effective_ceiling = 10000 - 500 - 500 = 9000
+        let mut ctx = make_ctx(make_config(3000, 10000, 500));
+        ctx.set_static_overhead(500);
+
+        // Add far more content than the ceiling allows
+        let content = "x".repeat(10000);
+        for i in 0..30 {
+            ctx.add_activity(create_fragment(i, &content));
+        }
+
+        // Eviction keeps current_token_usage bounded, so budget must be >= 0
+        let budget = ctx.available_budget();
+        assert!(budget >= ctx.effective_ceiling() - ctx.current_token_usage);
+        assert_eq!(budget, ctx.get_queue_status().available_budget);
     }
 }
