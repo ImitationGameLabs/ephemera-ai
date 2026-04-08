@@ -311,16 +311,12 @@ pub struct MemoryPinArgs {
 }
 
 pub struct MemoryPin {
-    loom_client: Arc<dyn LoomClientTrait>,
     context: Arc<Mutex<EphemeraContext>>,
 }
 
 impl MemoryPin {
-    pub fn new(
-        loom_client: Arc<dyn LoomClientTrait>,
-        context: Arc<Mutex<EphemeraContext>>,
-    ) -> Self {
-        Self { loom_client, context }
+    pub fn new(context: Arc<Mutex<EphemeraContext>>) -> Self {
+        Self { context }
     }
 }
 
@@ -354,49 +350,24 @@ impl AgentTool for MemoryPin {
     async fn call(&self, args_json: &str) -> anyhow::Result<String> {
         let args: MemoryPinArgs = serde_json::from_str(args_json)?;
 
-        // Pre-check: validate constraints before calling Loom API
-        let max_count = {
-            let context = self.context.lock().await;
-
-            let already_pinned = context
-                .list_pinned()
-                .iter()
-                .any(|p| p.fragment.id == args.memory_id);
-            let max_count = context.max_pinned_tokens();
-            let current_count = context.list_pinned().len();
-
-            if already_pinned {
-                return Ok(format!("Memory {} is already pinned", args.memory_id));
-            }
-
-            if current_count >= max_count {
-                return Ok(format!(
-                    "Maximum pinned count ({}) reached, please unpin some content first",
-                    max_count
-                ));
-            }
-
-            max_count
-        };
-
-        // Call Loom API to pin the memory
-        let pinned = self
-            .loom_client
-            .pin_memory(args.memory_id, Some(args.reason.clone()))
-            .await
-            .context("Failed to pin memory")?;
-
-        // Update local context and get new count in single lock
-        let current_count = {
+        let result = {
             let mut context = self.context.lock().await;
-            context.add_pinned_memory(pinned);
-            context.list_pinned().len()
+            context.pin(args.memory_id, args.reason).await
         };
 
-        Ok(format!(
-            "Memory {} pinned successfully. Current pinned count: {}/{}",
-            args.memory_id, current_count, max_count
-        ))
+        match result {
+            Ok(()) => {
+                let (usage, max) = {
+                    let context = self.context.lock().await;
+                    (context.pinned_token_usage(), context.max_pinned_tokens())
+                };
+                Ok(format!(
+                    "Memory {} pinned successfully. Pinned token usage: {}/{}",
+                    args.memory_id, usage, max
+                ))
+            }
+            Err(e) => Ok(e.to_string()),
+        }
     }
 }
 

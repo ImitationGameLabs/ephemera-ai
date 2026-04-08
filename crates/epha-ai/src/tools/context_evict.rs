@@ -87,7 +87,7 @@ mod tests {
     async fn evict_reports_when_nothing_to_evict() {
         // floor=5000, only a tiny activity — nothing to evict
         let config = ContextConfig {
-            max_pinned_tokens: 10,
+            max_pinned_tokens: 50_000,
             total_token_floor: 5000,
             total_token_ceiling: 10_000,
             response_reserve_tokens: 1000,
@@ -104,7 +104,7 @@ mod tests {
     async fn evict_reports_count_and_tokens() {
         // Very low floor so eviction definitely triggers
         let config = ContextConfig {
-            max_pinned_tokens: 10,
+            max_pinned_tokens: 50_000,
             total_token_floor: 10,
             total_token_ceiling: 100_000,
             response_reserve_tokens: 1000,

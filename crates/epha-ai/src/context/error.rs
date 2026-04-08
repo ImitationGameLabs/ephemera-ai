@@ -6,6 +6,42 @@ pub struct TokenBudgetError {
     pub available_tokens: usize,
 }
 
+/// Error returned when pinning a memory would exceed the pinned token budget.
+#[derive(Debug)]
+pub struct PinnedTokenBudgetError {
+    pub over_tokens: usize,
+    pub used_tokens: usize,
+    pub max_tokens: usize,
+}
+
+impl fmt::Display for PinnedTokenBudgetError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Pinned memory budget exceeded: over by {} tokens (using {}/{}). Unpin some memories first.",
+            self.over_tokens, self.used_tokens, self.max_tokens
+        )
+    }
+}
+
+/// Error returned when pinning a memory fails.
+#[derive(Debug)]
+pub enum PinError {
+    AlreadyPinned,
+    ApiError(String),
+    BudgetExceeded(PinnedTokenBudgetError),
+}
+
+impl fmt::Display for PinError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PinError::AlreadyPinned => write!(f, "Memory is already pinned"),
+            PinError::ApiError(inner) => write!(f, "Failed to pin memory: {inner}"),
+            PinError::BudgetExceeded(e) => fmt::Display::fmt(e, f),
+        }
+    }
+}
+
 impl fmt::Display for TokenBudgetError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

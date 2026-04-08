@@ -1,4 +1,5 @@
 use super::MemoryFragmentList;
+use super::error::{PinError, PinnedTokenBudgetError};
 use super::memory_constructors::from_agora_event;
 use super::memory_content::{SerializeContext, ToChatMessages, format_rfc3339};
 use crate::config::ContextConfig;
@@ -123,23 +124,19 @@ impl EphemeraContext {
         }
     }
 
-    /// Pin a memory by ID via Loom API
-    /// This is an async operation that persists to the database
-    pub async fn pin(&mut self, memory_id: i64, reason: String) -> Result<(), String> {
-        if self.pinned_memories.len() >= self.max_pinned_tokens {
-            return Err(format!(
-                "Maximum pinned count ({}) reached, please unpin some content first",
-                self.max_pinned_tokens
-            ));
-        }
-
-        // Check if already pinned
+    /// Pin a memory by ID via Loom API.
+    /// This is an async operation that persists to the database.
+    ///
+    /// Budget check happens after the Loom API call: we need the full fragment
+    /// to estimate token cost, so we pin first, check budget, and rollback if exceeded.
+    pub async fn pin(&mut self, memory_id: i64, reason: String) -> Result<(), PinError> {
+        // Check if already pinned (avoid unnecessary API call)
         if self
             .pinned_memories
             .iter()
             .any(|p| p.fragment.id == memory_id)
         {
-            return Err(format!("Memory {} is already pinned", memory_id));
+            return Err(PinError::AlreadyPinned);
         }
 
         // Call Loom API to pin
@@ -147,10 +144,25 @@ impl EphemeraContext {
             .loom_client
             .pin_memory(memory_id, Some(reason))
             .await
-            .map_err(|e| format!("Failed to pin memory: {:?}", e))?;
+            .map_err(|e| PinError::ApiError(e.to_string()))?;
 
         self.pinned_memories.push(pinned);
         self.recalculate_token_usage();
+
+        // Check token budget after adding
+        let used = self.pinned_token_usage();
+        if used > self.max_pinned_tokens {
+            // Rollback: remove from local state and unpin via API
+            self.pinned_memories.retain(|p| p.fragment.id != memory_id);
+            self.recalculate_token_usage();
+            let _ = self.loom_client.unpin_memory(memory_id).await;
+            return Err(PinError::BudgetExceeded(PinnedTokenBudgetError {
+                over_tokens: used - self.max_pinned_tokens,
+                used_tokens: used,
+                max_tokens: self.max_pinned_tokens,
+            }));
+        }
+
         Ok(())
     }
 
@@ -214,6 +226,30 @@ impl EphemeraContext {
     /// Get max pinned tokens
     pub fn max_pinned_tokens(&self) -> usize {
         self.max_pinned_tokens
+    }
+
+    /// Compute current pinned token usage on-demand.
+    ///
+    /// Uses the same serialization pattern as `build_context_json`:
+    /// serialize pinned XML, wrap in OpenAI message format, then estimate tokens.
+    pub fn pinned_token_usage(&self) -> usize {
+        if let Some(pinned_xml) = self.serialize_pinned() {
+            let msg = OpenAIMessage {
+                role: "assistant",
+                content: Some(pinned_xml),
+                tool_calls: None,
+                tool_call_id: None,
+            };
+            estimate_token_count(&serde_json::to_string(&msg).unwrap())
+        } else {
+            0
+        }
+    }
+
+    /// Remaining token budget for pinned memories.
+    pub fn pinned_budget_remaining(&self) -> usize {
+        self.max_pinned_tokens
+            .saturating_sub(self.pinned_token_usage())
     }
 
     /// Set static token overhead (system prompt + tool definitions).
@@ -553,7 +589,7 @@ mod test_utils {
     /// Default test context config
     pub fn test_context_config() -> ContextConfig {
         ContextConfig {
-            max_pinned_tokens: 10,
+            max_pinned_tokens: 50_000,
             total_token_floor: 4000,
             total_token_ceiling: 5000,
             response_reserve_tokens: 1000,
@@ -785,7 +821,7 @@ mod restoration_tests {
 
         // Use a config with ceiling that forces eviction but allows one fragment
         let config = ContextConfig {
-            max_pinned_tokens: 10,
+            max_pinned_tokens: 50_000,
             total_token_floor: 400,
             total_token_ceiling: 800,
             response_reserve_tokens: 100,
@@ -822,7 +858,7 @@ mod restoration_tests {
         // Use a config with low ceiling to trigger eviction
         // Each fragment ~500 tokens when serialized
         let config = ContextConfig {
-            max_pinned_tokens: 10,
+            max_pinned_tokens: 50_000,
             total_token_floor: 400,
             total_token_ceiling: 800,
             response_reserve_tokens: 100,
@@ -937,7 +973,7 @@ mod restoration_tests {
         // Pinned: ~150 tokens (serialized), Recent: ~500 tokens each (serialized)
         // With ceiling 800, only pinned + 1 recent can fit
         let config = ContextConfig {
-            max_pinned_tokens: 10,
+            max_pinned_tokens: 50_000,
             total_token_floor: 200,
             total_token_ceiling: 800,
             response_reserve_tokens: 100,
@@ -1160,7 +1196,7 @@ mod restoration_tests {
         // Use aggressive eviction: each activity ~1200 tokens in OpenAI JSON format
         // With ceiling 3000 and floor 1000, eviction should leave 2-3 activities
         let config = ContextConfig {
-            max_pinned_tokens: 10,
+            max_pinned_tokens: 50_000,
             total_token_floor: 1000,
             total_token_ceiling: 3000,
             response_reserve_tokens: 100,
@@ -1233,7 +1269,7 @@ mod restoration_tests {
     async fn test_comprehensive_session_with_pin_unpin_eviction() {
         // Use low ceiling to trigger eviction frequently
         let config = ContextConfig {
-            max_pinned_tokens: 5,
+            max_pinned_tokens: 50_000,
             total_token_floor: 300,
             total_token_ceiling: 600,
             response_reserve_tokens: 100,
@@ -1954,7 +1990,7 @@ mod interval_window_tests {
         // Content will be ~250 tokens when serialized, so we 2 activities (500 tokens)
         // Ceiling at 400 means eviction triggers after second activity
         let config = ContextConfig {
-            max_pinned_tokens: 10,
+            max_pinned_tokens: 50_000,
             total_token_floor: 200,
             total_token_ceiling: 400,
             response_reserve_tokens: 50,
@@ -1990,7 +2026,7 @@ mod interval_window_tests {
         mock.set_default_pinned(PinnedMemoriesResponse { items: vec![] });
 
         let config = ContextConfig {
-            max_pinned_tokens: 10,
+            max_pinned_tokens: 50_000,
             total_token_floor: 1000,
             total_token_ceiling: 2000,
             response_reserve_tokens: 100,
@@ -2017,7 +2053,7 @@ mod interval_window_tests {
         mock.set_default_pinned(PinnedMemoriesResponse { items: vec![] });
 
         let config = ContextConfig {
-            max_pinned_tokens: 10,
+            max_pinned_tokens: 50_000,
             total_token_floor: 100,
             total_token_ceiling: 5000,
             response_reserve_tokens: 100,
@@ -2078,7 +2114,7 @@ mod interval_window_tests {
         mock.set_default_pinned(PinnedMemoriesResponse { items: vec![] });
 
         let custom = ContextConfig {
-            max_pinned_tokens: 10,
+            max_pinned_tokens: 50_000,
             total_token_floor: 1000,
             total_token_ceiling: 2000,
             response_reserve_tokens: 200,
@@ -2089,6 +2125,75 @@ mod interval_window_tests {
         // total_token_ceiling() returns effective ceiling = total - overhead - reserve
         // No overhead set (0), so effective = 2000 - 0 - 200 = 1800
         assert_eq!(ctx.total_token_ceiling(), 1800);
+    }
+}
+
+// ============================================================================
+// Pin Token Budget Tests
+// ============================================================================
+
+#[cfg(test)]
+mod pin_budget_tests {
+    use super::test_utils::*;
+    use super::*;
+    use crate::config::ContextConfig;
+    use crate::context::PinError;
+    use loom_client::mock::MockLoomClient;
+    use loom_client::{MemoryResponse, PinnedMemoriesResponse};
+
+    fn pin_budget_config(max_pinned_tokens: usize) -> ContextConfig {
+        ContextConfig {
+            max_pinned_tokens,
+            total_token_floor: 10_000,
+            total_token_ceiling: 100_000,
+            response_reserve_tokens: 1000,
+            min_activities: 1,
+        }
+    }
+
+    #[tokio::test]
+    async fn pin_fails_when_exceeding_budget() {
+        let large_content = "x".repeat(100_000); // Will far exceed budget
+        let mut mock = MockLoomClient::new();
+        mock.set_default_memory(MemoryResponse { fragments: vec![], total: 0 });
+        mock.set_default_pinned(PinnedMemoriesResponse { items: vec![] });
+        // push_empty for the rollback unpin call
+        mock.push_pinned_memory(create_pinned(1, &large_content, Some("reason")));
+        mock.push_empty();
+
+        let mut ctx = create_test_context_with_config(mock, pin_budget_config(100));
+        let result = ctx.pin(1, "reason".to_string()).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            PinError::BudgetExceeded(e) => {
+                assert!(
+                    e.used_tokens > e.max_tokens,
+                    "used {} should exceed max {}",
+                    e.used_tokens,
+                    e.max_tokens
+                );
+            }
+            other => panic!("expected BudgetExceeded, got {other:?}"),
+        }
+        // Should have been rolled back — not in local state
+        assert_eq!(ctx.list_pinned().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn pin_already_pinned_returns_error() {
+        let mut mock = MockLoomClient::new();
+        mock.set_default_memory(MemoryResponse { fragments: vec![], total: 0 });
+        mock.set_default_pinned(PinnedMemoriesResponse { items: vec![] });
+        mock.push_pinned_memory(create_pinned(1, "content", Some("first")));
+
+        let mut ctx = create_test_context_with_config(mock, pin_budget_config(50_000));
+        ctx.pin(1, "first".to_string()).await.unwrap();
+
+        // Re-pinning without unpin should fail
+        let result = ctx.pin(1, "again".to_string()).await;
+        assert!(matches!(result, Err(PinError::AlreadyPinned)));
     }
 }
 
@@ -2111,7 +2216,7 @@ mod evict_to_floor_tests {
         create_test_context_with_config(
             mock,
             ContextConfig {
-                max_pinned_tokens: 10,
+                max_pinned_tokens: 50_000,
                 total_token_floor: 50,
                 total_token_ceiling: 500_000,
                 response_reserve_tokens: 1000,
@@ -2197,7 +2302,7 @@ mod static_overhead_tests {
 
     fn make_config(floor: usize, ceiling: usize, reserve: usize) -> ContextConfig {
         ContextConfig {
-            max_pinned_tokens: 10,
+            max_pinned_tokens: 50_000,
             total_token_floor: floor,
             total_token_ceiling: ceiling,
             response_reserve_tokens: reserve,

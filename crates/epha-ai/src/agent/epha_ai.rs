@@ -131,10 +131,7 @@ impl EphemeraAI {
             loom_client.clone(),
             context_data.clone(),
         )));
-        tool_dispatch.add_tool(Box::new(MemoryPin::new(
-            loom_client.clone(),
-            context_data.clone(),
-        )));
+        tool_dispatch.add_tool(Box::new(MemoryPin::new(context_data.clone())));
         tool_dispatch.add_tool(Box::new(MemoryUnpin::new(
             loom_client.clone(),
             context_data.clone(),

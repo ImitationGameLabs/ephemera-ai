@@ -13,6 +13,8 @@ mod memory_fragment_list;
 
 // Re-export public types
 pub use ephemera_context::*;
+pub use error::PinError;
+pub use error::PinnedTokenBudgetError;
 pub use error::TokenBudgetError;
 pub use memory_content::*;
 pub use memory_fragment_list::*;
