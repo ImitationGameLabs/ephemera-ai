@@ -27,7 +27,7 @@
         "aarch64-darwin"
       ];
 
-      # Flake-level outputs (templates)
+      # Flake-level outputs
       flake = {
         # Export home-manager modules
         homeManagerModules.default = import ./nix/home-manager-modules { flake = self; };
