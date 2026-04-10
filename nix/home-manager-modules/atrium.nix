@@ -11,10 +11,13 @@ let
   mysqlCfg = config.services.ephemera.mysql;
   settingsFormat = pkgs.formats.json { };
 
-  # Build the MySQL URL from the referenced mysql instance
-  mysqlUrl = "mysql://${mysqlCfg.${cfg.mysql}.user}:${mysqlCfg.${cfg.mysql}.password}@localhost:${
-    toString mysqlCfg.${cfg.mysql}.port
-  }/${mysqlCfg.${cfg.mysql}.database}";
+  mysqlUrl =
+    if cfg.mysql != null then
+      "mysql://${mysqlCfg.${cfg.mysql}.user}:${mysqlCfg.${cfg.mysql}.password}@localhost:${
+        toString mysqlCfg.${cfg.mysql}.port
+      }/${mysqlCfg.${cfg.mysql}.database}"
+    else
+      cfg.mysql_url;
 in
 {
   options.services.ephemera.atrium = {
@@ -39,8 +42,15 @@ in
     };
 
     mysql = lib.mkOption {
-      type = lib.types.str;
+      type = lib.types.nullOr lib.types.str;
+      default = null;
       description = "Name of the MySQL instance to use (must be defined in services.ephemera.mysql)";
+    };
+
+    mysql_url = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Direct MySQL connection URL (used when mysql is null)";
     };
 
     settings = {
@@ -120,9 +130,9 @@ in
         Description = "Atrium Chat Service";
         After = [
           "network.target"
-          "${cfg.mysql}.service"
-        ];
-        Requires = [ "${cfg.mysql}.service" ];
+        ]
+        ++ lib.optionals (cfg.mysql != null) [ "${cfg.mysql}.service" ];
+        Requires = lib.optionals (cfg.mysql != null) [ "${cfg.mysql}.service" ];
       };
 
       Service = {
