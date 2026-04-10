@@ -58,6 +58,7 @@ let
   # Binary crates that produce executables (need to be built individually)
   binaryCratePaths = mapToAbsolute {
     epha-ai = "crates/epha-ai";
+    epha-ctl = "crates/epha-ctl";
     agora = "crates/agora";
     kairos = "crates/chronikos/kairos";
     kairos-cli = "crates/chronikos/kairos-cli";

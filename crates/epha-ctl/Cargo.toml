@@ -1,0 +1,12 @@
+[package]
+name = "epha-ctl"
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap = { workspace = true, features = ["env"] }
+dirs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true

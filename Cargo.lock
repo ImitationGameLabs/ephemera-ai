@@ -1727,6 +1727,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "epha-ctl"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dirs",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
