@@ -3,7 +3,7 @@ mod config;
 use anyhow::{Result, anyhow};
 use atrium_client::{AuthenticatedClient, GetMessagesQuery};
 use clap::{Parser, Subcommand};
-use config::{MissingConfig, resolve_config};
+use config::resolve_config;
 use reqwest::Client;
 use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -24,8 +24,6 @@ enum Commands {
         #[command(subcommand)]
         action: ConfigCommands,
     },
-    /// Check server connectivity
-    Ping,
     /// Send a message
     Send {
         /// Message content to send
@@ -91,12 +89,8 @@ fn build_http_client() -> Client {
         .expect("Failed to create HTTP client")
 }
 
-fn require_config() -> Result<config::ResolvedConfig> {
-    resolve_config().map_err(|missing: MissingConfig| anyhow!("{}", missing.to_error_message()))
-}
-
 async fn create_client() -> Result<AuthenticatedClient> {
-    let resolved = require_config()?;
+    let resolved = resolve_config()?;
     let bio = resolved.auth.bio.unwrap_or_default();
     let username = resolved.auth.username.clone();
     let server_url = resolved.server_url.clone();
@@ -133,7 +127,6 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Config { action } => handle_config(action)?,
-        Commands::Ping => handle_ping().await?,
         Commands::Send { message } => handle_send(message).await?,
         Commands::Messages { limit, since_id, sender, format } => {
             handle_messages(limit, since_id, sender, format).await?
@@ -161,34 +154,6 @@ fn handle_config(action: ConfigCommands) -> Result<()> {
             println!("{}", config::config_file_path());
         }
     }
-    Ok(())
-}
-
-async fn handle_ping() -> Result<()> {
-    let resolved = require_config()?;
-
-    let client = build_http_client();
-    let response = client
-        .get(format!("{}/health", resolved.server_url))
-        .send()
-        .await;
-
-    match response {
-        Ok(resp) if resp.status().is_success() => {
-            println!("pong! server-url: {}", resolved.server_url);
-        }
-        Ok(resp) => {
-            return Err(anyhow!("Server returned status: {}", resp.status()));
-        }
-        Err(e) => {
-            return Err(anyhow!(
-                "Failed to connect to {}: {}",
-                resolved.server_url,
-                e
-            ));
-        }
-    }
-
     Ok(())
 }
 

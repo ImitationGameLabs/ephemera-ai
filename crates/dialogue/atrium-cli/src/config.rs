@@ -5,8 +5,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const ENV_SERVER_URL: &str = "ATRIUM_SERVER_URL";
-const ENV_USERNAME: &str = "ATRIUM_USERNAME";
-const ENV_PASSWORD: &str = "ATRIUM_PASSWORD";
+const ENV_AUTH: &str = "ATRIUM_AUTH";
+const ENV_BIO: &str = "ATRIUM_BIO";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct AuthConfig {
@@ -30,7 +30,7 @@ pub struct ResolvedConfig {
 }
 
 #[derive(Debug, Default, PartialEq)]
-pub struct MissingConfig {
+struct MissingConfig {
     pub server_url: bool,
     pub auth: bool,
 }
@@ -59,6 +59,7 @@ impl MissingConfig {
         if self.auth {
             lines.push("    atrium-cli config set auth.username <name>".to_string());
             lines.push("    atrium-cli config set auth.password <password>".to_string());
+            lines.push(format!("    or set env: {}=username:password", ENV_AUTH));
         }
 
         lines.join("\n")
@@ -123,24 +124,35 @@ pub fn save_config(config: &Config) -> Result<()> {
     save_config_to(config, &config_path())
 }
 
+fn env_server_url() -> Option<String> {
+    env::var(ENV_SERVER_URL).ok().filter(|s| !s.is_empty())
+}
+
+fn file_server_url(config: &Config) -> Option<String> {
+    if config.server_url.is_empty() { None } else { Some(config.server_url.clone()) }
+}
+
+fn file_auth(config: &Config) -> Option<AuthConfig> {
+    config.auth.as_ref().and_then(|a| {
+        if a.username.is_empty() || a.password.is_empty() {
+            None
+        } else {
+            Some(AuthConfig {
+                username: a.username.clone(),
+                password: a.password.clone(),
+                bio: a.bio.clone(),
+            })
+        }
+    })
+}
+
 /// Resolve configuration with environment variable override support.
 ///
 /// Priority: environment variables > file configuration
-///
-/// Behavior:
-/// - Empty strings in environment variables are ignored (treated as not set)
-/// - Empty strings in file configuration are treated as missing
-/// - If both env and file provide a value, env takes precedence
-/// - Partial env override is supported (e.g., env provides server-url, file provides auth)
-///
-/// Returns ResolvedConfig if all required fields are present.
-/// Returns MissingConfig with details about what's missing.
-pub fn resolve_config_from(path: &Path) -> Result<ResolvedConfig, MissingConfig> {
-    // Load file config, with graceful error handling for corrupted files
+pub fn resolve_config_from(path: &Path) -> Result<ResolvedConfig> {
     let file_config = match load_config_from(path) {
         Ok(config) => config,
         Err(e) => {
-            // Only warn if the file exists (corrupted), not if it's missing
             if path.exists() {
                 eprintln!(
                     "Warning: Failed to load config file ({}): {}",
@@ -152,58 +164,40 @@ pub fn resolve_config_from(path: &Path) -> Result<ResolvedConfig, MissingConfig>
         }
     };
 
-    // Resolve server_url: env takes precedence over file
-    // Empty env vars are treated as "not set" and fall back to file config
-    let server_url = env::var(ENV_SERVER_URL)
-        .ok()
-        .filter(|s| !s.is_empty())
-        .or_else(|| {
-            if file_config.server_url.is_empty() {
-                None
-            } else {
-                Some(file_config.server_url.clone())
-            }
-        });
+    let server_url = env_server_url().or_else(|| file_server_url(&file_config));
 
-    // Resolve auth: both username and password must be provided together from env
-    // If only partial env vars are set, fall back to file config
-    let auth = if let (Some(u), Some(p)) = (
-        env::var(ENV_USERNAME).ok().filter(|s| !s.is_empty()),
-        env::var(ENV_PASSWORD).ok().filter(|s| !s.is_empty()),
-    ) {
-        // Both env vars are set and non-empty
+    let auth = if let Some(auth_str) = env::var(ENV_AUTH).ok().filter(|s| !s.is_empty()) {
+        let (username, password) = auth_str.split_once(':').ok_or_else(|| {
+            anyhow!(
+                "ATRIUM_AUTH format is invalid (expected username:password), got: {}",
+                auth_str
+            )
+        })?;
+        if username.is_empty() || password.is_empty() {
+            return Err(anyhow!(
+                "ATRIUM_AUTH format is invalid (expected username:password), got: {}",
+                auth_str
+            ));
+        }
         Some(AuthConfig {
-            username: u,
-            password: p,
-            bio: env::var("ATRIUM_BIO").ok().filter(|s| !s.is_empty()),
+            username: username.to_string(),
+            password: password.to_string(),
+            bio: env::var(ENV_BIO).ok().filter(|s| !s.is_empty()),
         })
     } else {
-        // Fall back to file config
-        // File auth is only valid if both username and password are non-empty
-        file_config.auth.as_ref().and_then(|a| {
-            if a.username.is_empty() || a.password.is_empty() {
-                None
-            } else {
-                Some(AuthConfig {
-                    username: a.username.clone(),
-                    password: a.password.clone(),
-                    bio: a.bio.clone(),
-                })
-            }
-        })
+        file_auth(&file_config)
     };
 
     let missing = MissingConfig { server_url: server_url.is_none(), auth: auth.is_none() };
-
     if !missing.is_empty() {
-        return Err(missing);
+        return Err(anyhow!("{}", missing.to_error_message()));
     }
 
     Ok(ResolvedConfig { server_url: server_url.unwrap(), auth: auth.unwrap() })
 }
 
 /// Resolve configuration from the default path
-pub fn resolve_config() -> Result<ResolvedConfig, MissingConfig> {
+pub fn resolve_config() -> Result<ResolvedConfig> {
     resolve_config_from(&config_path())
 }
 
@@ -292,24 +286,19 @@ mod tests {
     /// to ensure test isolation
     struct EnvGuard {
         server_url: Option<String>,
-        username: Option<String>,
-        password: Option<String>,
+        auth: Option<String>,
     }
 
     impl EnvGuard {
         fn new() -> Self {
             // Save current env vars
-            let guard = Self {
-                server_url: env::var(ENV_SERVER_URL).ok(),
-                username: env::var(ENV_USERNAME).ok(),
-                password: env::var(ENV_PASSWORD).ok(),
-            };
+            let guard =
+                Self { server_url: env::var(ENV_SERVER_URL).ok(), auth: env::var(ENV_AUTH).ok() };
             // Clear all env vars for test isolation
             // SAFETY: This is safe in single-threaded tests
             unsafe {
                 env::remove_var(ENV_SERVER_URL);
-                env::remove_var(ENV_USERNAME);
-                env::remove_var(ENV_PASSWORD);
+                env::remove_var(ENV_AUTH);
             }
             guard
         }
@@ -324,13 +313,9 @@ mod tests {
                     Some(v) => env::set_var(ENV_SERVER_URL, v),
                     None => env::remove_var(ENV_SERVER_URL),
                 }
-                match &self.username {
-                    Some(v) => env::set_var(ENV_USERNAME, v),
-                    None => env::remove_var(ENV_USERNAME),
-                }
-                match &self.password {
-                    Some(v) => env::set_var(ENV_PASSWORD, v),
-                    None => env::remove_var(ENV_PASSWORD),
+                match &self.auth {
+                    Some(v) => env::set_var(ENV_AUTH, v),
+                    None => env::remove_var(ENV_AUTH),
                 }
             }
         }
@@ -505,8 +490,7 @@ mod tests {
         // SAFETY: Single-threaded test with EnvGuard protection
         unsafe {
             env::set_var(ENV_SERVER_URL, "http://env.example.com");
-            env::set_var(ENV_USERNAME, "env_user");
-            env::set_var(ENV_PASSWORD, "env_pass");
+            env::set_var(ENV_AUTH, "env_user:env_pass");
         }
 
         let resolved = resolve_config_from(&config_path).unwrap();
@@ -558,8 +542,7 @@ mod tests {
         // SAFETY: Single-threaded test with EnvGuard protection
         unsafe {
             env::set_var(ENV_SERVER_URL, "http://env.example.com");
-            env::set_var(ENV_USERNAME, "env_user");
-            env::set_var(ENV_PASSWORD, "env_pass");
+            env::set_var(ENV_AUTH, "env_user:env_pass");
         }
 
         let resolved = resolve_config_from(&config_path).unwrap();
@@ -617,8 +600,7 @@ mod tests {
         // SAFETY: Single-threaded test with EnvGuard protection
         unsafe {
             env::set_var(ENV_SERVER_URL, "");
-            env::set_var(ENV_USERNAME, "");
-            env::set_var(ENV_PASSWORD, "");
+            env::set_var(ENV_AUTH, "");
         }
 
         let resolved = resolve_config_from(&config_path).unwrap();
@@ -638,16 +620,15 @@ mod tests {
         // SAFETY: Single-threaded test with EnvGuard protection
         unsafe {
             env::set_var(ENV_SERVER_URL, "");
-            env::set_var(ENV_USERNAME, "");
-            env::set_var(ENV_PASSWORD, "");
+            env::set_var(ENV_AUTH, "");
         }
 
         let result = resolve_config_from(&config_path);
 
         assert!(result.is_err());
-        let missing = result.unwrap_err();
-        assert!(missing.server_url);
-        assert!(missing.auth);
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("server-url is not configured"));
+        assert!(msg.contains("auth is not configured"));
     }
 
     // ==================== Missing Config Detection Tests ====================
@@ -664,9 +645,9 @@ mod tests {
         let result = resolve_config_from(&config_path);
 
         assert!(result.is_err());
-        let missing = result.unwrap_err();
-        assert!(missing.server_url);
-        assert!(!missing.auth);
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("server-url is not configured"));
+        assert!(!msg.contains("auth is not configured"));
     }
 
     #[test]
@@ -680,9 +661,9 @@ mod tests {
         let result = resolve_config_from(&config_path);
 
         assert!(result.is_err());
-        let missing = result.unwrap_err();
-        assert!(!missing.server_url);
-        assert!(missing.auth);
+        let msg = format!("{}", result.unwrap_err());
+        assert!(!msg.contains("server-url is not configured"));
+        assert!(msg.contains("auth is not configured"));
     }
 
     #[test]
@@ -694,9 +675,9 @@ mod tests {
         let result = resolve_config_from(&config_path);
 
         assert!(result.is_err());
-        let missing = result.unwrap_err();
-        assert!(missing.server_url);
-        assert!(missing.auth);
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("server-url is not configured"));
+        assert!(msg.contains("auth is not configured"));
     }
 
     #[test]
@@ -719,6 +700,7 @@ mod tests {
         assert!(msg.contains("auth is not configured"));
         assert!(msg.contains("atrium-cli config set auth.username"));
         assert!(msg.contains("atrium-cli config set auth.password"));
+        assert!(msg.contains(ENV_AUTH));
         assert!(!msg.contains("server-url is not configured"));
     }
 
@@ -767,8 +749,8 @@ mod tests {
         let result = resolve_config_from(&config_path);
 
         assert!(result.is_err());
-        let missing = result.unwrap_err();
-        assert!(missing.auth);
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("auth is not configured"));
     }
 
     #[test]
@@ -783,8 +765,8 @@ mod tests {
         let result = resolve_config_from(&config_path);
 
         assert!(result.is_err());
-        let missing = result.unwrap_err();
-        assert!(missing.auth);
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("auth is not configured"));
     }
 
     #[test]
@@ -817,6 +799,80 @@ mod tests {
             Some("http://example.com?foo=bar&baz=qux".to_string())
         );
         assert_eq!(password, Some("p@ssw0rd!#$%".to_string()));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_auth_env_with_colon_in_password() {
+        let _guard = EnvGuard::new();
+        let (_temp_dir, config_path) = setup_temp_config();
+
+        // SAFETY: Single-threaded test with EnvGuard protection
+        unsafe {
+            env::set_var(ENV_SERVER_URL, "http://example.com");
+            env::set_var(ENV_AUTH, "user:p@ss:word:with:colons");
+        }
+
+        let resolved = resolve_config_from(&config_path).unwrap();
+        assert_eq!(resolved.auth.username, "user");
+        assert_eq!(resolved.auth.password, "p@ss:word:with:colons");
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_auth_env_malformed_returns_error() {
+        let _guard = EnvGuard::new();
+        let (_temp_dir, config_path) = setup_temp_config();
+
+        set_config_value_to(&config_path, "server-url", "http://example.com").unwrap();
+        set_config_value_to(&config_path, "auth.username", "user").unwrap();
+        set_config_value_to(&config_path, "auth.password", "pass").unwrap();
+
+        // SAFETY: Single-threaded test with EnvGuard protection
+        unsafe {
+            env::set_var(ENV_AUTH, "nocolonhere");
+        }
+
+        let result = resolve_config_from(&config_path);
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("ATRIUM_AUTH format is invalid"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_auth_env_empty_username_returns_error() {
+        let _guard = EnvGuard::new();
+        let (_temp_dir, config_path) = setup_temp_config();
+
+        // SAFETY: Single-threaded test with EnvGuard protection
+        unsafe {
+            env::set_var(ENV_SERVER_URL, "http://example.com");
+            env::set_var(ENV_AUTH, ":password");
+        }
+
+        let result = resolve_config_from(&config_path);
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("ATRIUM_AUTH format is invalid"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_auth_env_empty_password_returns_error() {
+        let _guard = EnvGuard::new();
+        let (_temp_dir, config_path) = setup_temp_config();
+
+        // SAFETY: Single-threaded test with EnvGuard protection
+        unsafe {
+            env::set_var(ENV_SERVER_URL, "http://example.com");
+            env::set_var(ENV_AUTH, "username:");
+        }
+
+        let result = resolve_config_from(&config_path);
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("ATRIUM_AUTH format is invalid"));
     }
 
     #[test]
