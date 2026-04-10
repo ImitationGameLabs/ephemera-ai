@@ -1,4 +1,4 @@
-{ config, ... }:
+{ config, username, ... }:
 {
   # Ephemera AI - Main Agent
   services.ephemera.epha-ai = {
@@ -90,15 +90,18 @@
       port = 3002;
     };
 
-    heraldSettings = {
-      atrium_url = "http://localhost:3002";
+    # Auth used by atrium-herald, also serves as atrium-cli default config
+    auth = {
+      username = username;
+      password = "goodluck";
+      bio = "";
+    };
+
+    herald = {
       agora_url = "http://localhost:3000";
-      username = "epha";
-      password = "your-secure-password";
       poll_interval_ms = 1000;
       heartbeat_interval_ms = 30000;
       atrium_heartbeat_interval_ms = 30000;
-      bio = "";
     };
   };
 
