@@ -278,18 +278,30 @@ impl EphemeraAI {
                 _ => break, // No tool calls -> done
             };
 
-            // 3.5 Check depth limit
-            current_depth += 1;
-            if current_depth > self.config.llm.max_turns {
-                warn!("Max depth {} reached, continuing next cycle", current_depth);
-                break;
-            }
-
-            // 3.6 Execute tools and build results
+            // 3.6 Execute tools and build results (depth tracked per tool call)
             let mut tool_results: Vec<ToolCallRecord> = vec![];
             let mut failed_tool_name: Option<String> = None;
+            let mut depth_exceeded = false;
 
             for tc in &tool_calls {
+                current_depth += 1;
+                if current_depth > self.config.llm.max_turns {
+                    depth_exceeded = true;
+                    warn!(
+                        "Max tool calls {} reached, deferring remaining",
+                        current_depth
+                    );
+                    tool_results.push(ToolCallRecord {
+                        id: tc.id.clone(),
+                        tool: tc.function.name.clone(),
+                        args: preserve_raw_json(&tc.function.arguments),
+                        result: format!(
+                            "Deferred: max tool calls ({}) reached in this cycle",
+                            self.config.llm.max_turns
+                        ),
+                    });
+                    continue;
+                }
                 let tool_name = &tc.function.name;
                 let args_str = &tc.function.arguments;
 
@@ -332,6 +344,10 @@ impl EphemeraAI {
 
             // Save Action memory (one per LLM response, not per tool call)
             self.save_action(&tool_results);
+
+            if depth_exceeded {
+                break;
+            }
 
             // 3.7 Budget gate on tool results
             for record in &mut tool_results {

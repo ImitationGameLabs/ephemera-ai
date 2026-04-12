@@ -8,7 +8,7 @@
       llm = {
         base_url = "https://api.deepseek.com";
         model = "deepseek-chat";
-        max_turns = 10;
+        max_turns = 20;
         api_key = "sk-xxx";
       };
 
