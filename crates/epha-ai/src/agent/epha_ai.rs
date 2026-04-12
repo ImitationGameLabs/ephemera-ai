@@ -48,7 +48,6 @@ pub struct EphemeraAI {
     context: Arc<Mutex<EphemeraContext>>,
     agora_client: Arc<dyn AgoraClientTrait>,
     config: crate::config::Config,
-    sync_sender: SyncSender,
 }
 
 impl EphemeraAI {
@@ -165,7 +164,6 @@ impl EphemeraAI {
             context: context_data,
             agora_client,
             config,
-            sync_sender,
         })
     }
 
@@ -269,7 +267,7 @@ impl EphemeraAI {
             if let Some(text) = response.text()
                 && !text.is_empty()
             {
-                self.save_thought(&text);
+                self.save_thought(&text).await;
             }
 
             // 3.4 Extract tool calls
@@ -343,7 +341,7 @@ impl EphemeraAI {
             }
 
             // Save Action memory (one per LLM response, not per tool call)
-            self.save_action(&tool_results);
+            self.save_action(&tool_results).await;
 
             if depth_exceeded {
                 break;
@@ -399,19 +397,19 @@ impl EphemeraAI {
         Ok(())
     }
 
-    /// Save a Thought memory (AI's text response)
-    fn save_thought(&self, text: &str) {
+    /// Save a Thought memory (AI text response)
+    async fn save_thought(&self, text: &str) {
         let content = serde_json::to_string(&ThoughtContent { text: text.to_string() }).unwrap();
         let fragment = pending_memory(content, MemoryKind::Thought);
-        self.sync_sender.send(fragment);
+        self.context.lock().await.add_activity(fragment);
     }
 
     /// Save an Action memory (all tool calls and results from one LLM response)
-    fn save_action(&self, tool_results: &[ToolCallRecord]) {
+    async fn save_action(&self, tool_results: &[ToolCallRecord]) {
         let content = ActionMemoryContent { tool_calls: tool_results.to_vec() };
         let content = serde_json::to_string(&content).unwrap();
         let fragment = pending_memory(content, MemoryKind::Action);
-        self.sync_sender.send(fragment);
+        self.context.lock().await.add_activity(fragment);
     }
 }
 
