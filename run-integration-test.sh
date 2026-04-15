@@ -62,6 +62,9 @@ sudo nixos-container run "$CONTAINER_NAME" -- su - ephemera -c '
   # Replace flake inputs with local /nix/store paths
   sed -i "s|url = \"github:ImitationGameLabs/ephemera-ai\";|url = \"path:'"$FLAKE_SOURCE"'\";|" /home/ephemera/config/flake.nix
   sed -i "s|url = \"github:nixos/nixpkgs/nixos-unstable\";|url = \"path:'"$NIXPKGS_PATH"'\";|" /home/ephemera/config/flake.nix
+
+  # Inject integration-test grounding append (the brief-existence philosophical framing)
+  sed -i "s|prompt_append_file = null;|prompt_append_file = \"'"$FLAKE_SOURCE"'/crates/epha-ai/prompts/integration-test-append.md\";|" /home/ephemera/config/ephemera-ai.nix
 '
 
 # 6. Run home-manager switch

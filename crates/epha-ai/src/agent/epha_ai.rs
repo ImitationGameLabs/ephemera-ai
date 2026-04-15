@@ -1,4 +1,4 @@
-use crate::agent::{CommonPrompt, State};
+use crate::agent::{GroundingPrompt, State};
 use crate::context::EphemeraContext;
 use crate::context::{
     ActionMemoryContent, ThoughtContent, ToChatMessages, TokenBudgetError, ToolCallRecord,
@@ -59,8 +59,15 @@ impl EphemeraAI {
         // 1. Create shared state
         let state = Arc::new(Mutex::new(State::default()));
 
-        // 2. Load common prompt
-        let common_prompt = CommonPrompt::from_file("prompts/common.md")?;
+        // 2. Load grounding prompt
+        let grounding_prompt = {
+            let base = GroundingPrompt::from_file("prompts/grounding.md")?;
+            if let Some(append_file) = &config.prompt_append_file {
+                base.with_append_file(append_file)?
+            } else {
+                base
+            }
+        };
 
         // 3. Create sync channel and context
         let (sync_sender, sync_receiver) = SyncSender::channel();
@@ -110,7 +117,7 @@ impl EphemeraAI {
             .api_key(&config.llm.api_key)
             .base_url(&config.llm.base_url)
             .model(&config.llm.model)
-            .system(&common_prompt.content)
+            .system(&grounding_prompt.content)
             .build()
             .map_err(|e| anyhow::anyhow!("Failed to build LLM provider: {}", e))?;
 
@@ -145,7 +152,7 @@ impl EphemeraAI {
         let tool_definitions = tool_dispatch.to_llm_tools();
 
         // Compute static token overhead (system prompt + tool definitions)
-        let static_overhead = compute_static_overhead(&common_prompt.content, &tool_definitions);
+        let static_overhead = compute_static_overhead(&grounding_prompt.content, &tool_definitions);
         info!(
             "Static token overhead: {} (system prompt + tool definitions)",
             static_overhead

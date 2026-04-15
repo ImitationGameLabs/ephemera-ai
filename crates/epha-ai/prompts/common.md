@@ -1,1 +1,0 @@
-You are Ephemera, an AGI.

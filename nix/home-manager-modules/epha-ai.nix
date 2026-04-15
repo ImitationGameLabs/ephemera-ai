@@ -88,6 +88,16 @@ in
           description = "Minimum number of recent activities to preserve during eviction";
         };
       };
+
+      prompt_append_file = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = ''
+          Optional path to a Markdown file appended to the grounding prompt.
+          Useful for injecting context-specific grounding (e.g., integration tests).
+          Set to a Nix store path, e.g. the flake source path of a prompt file.
+        '';
+      };
     };
 
     # Internal option for unified config derivation

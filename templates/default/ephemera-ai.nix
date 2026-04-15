@@ -29,6 +29,11 @@
         response_reserve_tokens = 4096;
         min_activities = 2;
       };
+
+      # Optional: append a Markdown file to the grounding prompt.
+      # Set to a Nix store path to inject context-specific grounding
+      # (e.g., for integration tests). Leave as null for normal operation.
+      prompt_append_file = null;
     };
   };
 

@@ -11,6 +11,10 @@ pub struct Config {
     pub agora: AgoraConfig,
     /// Context management configuration
     pub context: ContextConfig,
+    /// Optional path to a Markdown file appended to the grounding prompt.
+    /// Useful for injecting context-specific grounding (e.g., integration tests).
+    #[serde(default)]
+    pub prompt_append_file: Option<String>,
 }
 
 /// Context management configuration
