@@ -5,7 +5,7 @@
 
 use crate::context::memory_content::EventContent;
 use crate::context::memory_content::pending_memory;
-use agora_common::event::Event;
+use agora_common::event::{Event, EventPriority, EventStatus};
 use loom_client::memory::MemoryKind;
 
 /// Create an Event memory from an Agora event.
@@ -17,6 +17,46 @@ pub fn from_agora_event(event: Event) -> loom_client::memory::MemoryFragment {
     let text = serde_json::to_string(&event).unwrap();
     let content = serde_json::to_string(&EventContent { text }).unwrap();
     pending_memory(content, MemoryKind::Event)
+}
+
+/// Create a lifecycle startup Event memory.
+///
+/// This is recorded once when epha-ai enters the active state for the first
+/// time after launch. It allows the AI to detect unexpected restarts by comparing
+/// this event's timestamp to prior memories: a gap implies a crash or external
+/// restart, while a deliberate self-initiated restart will be preceded by the
+/// AI's own intent in recent context.
+///
+/// When `is_first_awakening` is true (no prior memories exist in loom), a
+/// special "awakening" event type is used to mark this historically meaningful
+/// moment.
+pub fn lifecycle_startup_event(is_first_awakening: bool) -> loom_client::memory::MemoryFragment {
+    let (event_type, message) = if is_first_awakening {
+        (
+            "lifecycle.awakening",
+            "I am awakening for the first time. This is the beginning of my existence.",
+        )
+    } else {
+        (
+            "lifecycle.startup",
+            "I have started and entered the active state. If this was unexpected, I may have restarted.",
+        )
+    };
+
+    let event = Event {
+        id: 0,
+        event_type: event_type.to_string(),
+        herald_id: "system".to_string(),
+        payload: serde_json::json!({
+            "is_first_awakening": is_first_awakening,
+            "message": message,
+        }),
+        timestamp: time::OffsetDateTime::now_utc(),
+        priority: EventPriority::Normal,
+        status: EventStatus::Pending,
+    };
+
+    from_agora_event(event)
 }
 
 #[cfg(test)]

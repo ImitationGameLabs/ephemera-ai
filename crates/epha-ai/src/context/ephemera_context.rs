@@ -2,6 +2,7 @@ use super::MemoryFragmentList;
 use super::error::{PinError, PinnedTokenBudgetError};
 use super::memory_constructors::from_agora_event;
 use super::memory_content::{SerializeContext, ToChatMessages, format_rfc3339};
+use super::memory_observability::fragment_log_meta;
 use crate::config::ContextConfig;
 use crate::sync::SyncSender;
 use agora_common::event::Event;
@@ -13,7 +14,7 @@ use std::fmt;
 use std::sync::Arc;
 use time::OffsetDateTime;
 use tokenx_rs::estimate_token_count;
-use tracing::error;
+use tracing::{debug, error};
 
 // Re-export PinnedMemory for external use
 pub use loom_client::PinnedMemory;
@@ -387,6 +388,18 @@ impl EphemeraContext {
     }
 
     pub fn add_activity(&mut self, fragment: MemoryFragment) {
+        let meta = fragment_log_meta(&fragment);
+        debug!(
+            target: "epha_ai::memory",
+            stage = "generated",
+            kind = meta.kind,
+            event_type = meta.event_type.as_deref().unwrap_or("-"),
+            tool_call_count = meta.tool_call_count.unwrap_or(0),
+            text_len = meta.text_len.unwrap_or(0),
+            parse_fallback = meta.parse_fallback,
+            "memory.generated"
+        );
+
         let mut temp_fragment = fragment.clone();
         temp_fragment.id = 0; // Temporary ID for tracking
         self.recent_activities.push_back(temp_fragment);

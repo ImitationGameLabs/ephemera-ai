@@ -2,7 +2,7 @@ use crate::agent::{GroundingPrompt, State};
 use crate::context::EphemeraContext;
 use crate::context::{
     ActionMemoryContent, ThoughtContent, ToChatMessages, TokenBudgetError, ToolCallRecord,
-    pending_memory, serialize_recalled_xml,
+    lifecycle_startup_event, pending_memory, serialize_recalled_xml,
 };
 use crate::sync::{SyncSender, start_sync_task};
 use crate::tools::shell::{TmuxBackend, shell_tool_set};
@@ -19,7 +19,7 @@ use loom_client::memory::{MemoryFragment, MemoryKind};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, trace, warn};
 use uuid::Uuid;
 
 /// Try to parse a JSON string into a `serde_json::Value`.
@@ -48,6 +48,8 @@ pub struct EphemeraAI {
     context: Arc<Mutex<EphemeraContext>>,
     agora_client: Arc<dyn AgoraClientTrait>,
     config: crate::config::Config,
+    /// True when no prior memories existed in loom at startup (first ever run).
+    is_first_awakening: bool,
 }
 
 impl EphemeraAI {
@@ -95,6 +97,13 @@ impl EphemeraAI {
                 warn!("Failed to restore pinned memories from Loom: {}", e);
             }
         }
+
+        // Determine whether this is the first ever awakening. If no memories existed
+        // in loom after restoration, the AI has no prior history — this is its birth.
+        let is_first_awakening = {
+            let ctx = context_data.lock().await;
+            ctx.recent_activities().is_empty() && ctx.list_pinned().is_empty()
+        };
 
         // 4. Initialize shell backend
         let session_name = format!("ephemera-ai-{}", Uuid::new_v4().simple());
@@ -171,10 +180,12 @@ impl EphemeraAI {
             context: context_data,
             agora_client,
             config,
+            is_first_awakening,
         })
     }
 
     pub async fn live(&mut self) -> anyhow::Result<()> {
+        self.record_startup_event().await;
         loop {
             let state = *self.state.lock().await;
             match state {
@@ -193,6 +204,16 @@ impl EphemeraAI {
                 }
             }
         }
+    }
+
+    /// Record a lifecycle startup event as the first memory of this run.
+    ///
+    /// Called once at the start of `live()`, after all memories have been
+    /// restored from loom. The event's timestamp marks when the active state
+    /// began, allowing the AI to reason about restart gaps in its memory.
+    async fn record_startup_event(&self) {
+        let fragment = lifecycle_startup_event(self.is_first_awakening);
+        self.context.lock().await.add_activity(fragment);
     }
 
     async fn cognitive_cycle(&mut self) -> anyhow::Result<()> {
@@ -274,8 +295,8 @@ impl EphemeraAI {
             if let Some(text) = response.text()
                 && !text.is_empty()
             {
-                // WARNING: This log may contain sensitive data. Only enable debug logging in trusted environments.
-                debug!("Thought: {}", text);
+                // WARNING: This log may contain sensitive data. Only enable trace logging in trusted environments.
+                trace!("Thought: {}", text);
                 self.save_thought(&text).await;
             }
 
@@ -323,7 +344,7 @@ impl EphemeraAI {
                 }
 
                 // WARNING: This log may contain sensitive tool arguments. Enable only in trusted environments.
-                debug!("Calling tool '{}' with args: {}", tool_name, args_str);
+                trace!("Calling tool '{}' with args: {}", tool_name, args_str);
                 let result = match self.tool_dispatch.call_tool(tool_name, args_str).await {
                     Ok(result) => result,
                     Err(e) => {
@@ -343,7 +364,7 @@ impl EphemeraAI {
                     }
                 };
                 // WARNING: This log may contain sensitive tool results. Enable only in trusted environments.
-                debug!("Tool '{}' returned: {}", tool_name, result);
+                trace!("Tool '{}' returned: {}", tool_name, result);
 
                 tool_results.push(ToolCallRecord {
                     id: tc.id.clone(),

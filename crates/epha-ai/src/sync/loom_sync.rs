@@ -1,3 +1,4 @@
+use crate::context::{fragment_log_meta, summarize_batch_log_meta};
 use loom_client::memory::MemoryFragment;
 use loom_client::{CreateMemoryRequest, LoomClientTrait};
 use std::sync::Arc;
@@ -26,15 +27,35 @@ impl SyncSender {
     /// Send a memory fragment to the sync queue
     /// Returns immediately, does not block
     pub fn send(&self, fragment: MemoryFragment) {
+        let meta = fragment_log_meta(&fragment);
+
         // Use try_send to avoid blocking
         match self.sender.try_send(fragment) {
-            Ok(()) => {}
-            Err(mpsc::error::TrySendError::Full(fragment)) => {
+            Ok(()) => {
+                debug!(
+                    target: "epha_ai::memory",
+                    stage = "enqueued",
+                    kind = meta.kind,
+                    event_type = meta.event_type.as_deref().unwrap_or("-"),
+                    tool_call_count = meta.tool_call_count.unwrap_or(0),
+                    text_len = meta.text_len.unwrap_or(0),
+                    parse_fallback = meta.parse_fallback,
+                    "memory.enqueued"
+                );
+            }
+            Err(mpsc::error::TrySendError::Full(_fragment)) => {
                 // Queue is full, log warning and drop the fragment
                 // This is acceptable per the design: Loom is the source of truth
                 warn!(
-                    "Sync queue full, dropping memory fragment (kind={:?}): {}. Loom will be source of truth on restart.",
-                    fragment.kind, fragment.content,
+                    target: "epha_ai::memory",
+                    stage = "dropped",
+                    reason = "queue_full",
+                    kind = meta.kind,
+                    event_type = meta.event_type.as_deref().unwrap_or("-"),
+                    tool_call_count = meta.tool_call_count.unwrap_or(0),
+                    text_len = meta.text_len.unwrap_or(0),
+                    parse_fallback = meta.parse_fallback,
+                    "memory.dropped"
                 );
             }
             Err(mpsc::error::TrySendError::Closed(_)) => {
@@ -98,18 +119,40 @@ async fn sync_batch(loom_client: &dyn LoomClientTrait, fragments: &[MemoryFragme
         return;
     }
 
-    debug!("Syncing {} memory fragments to Loom", fragments.len());
+    let summary = summarize_batch_log_meta(fragments);
+    debug!(
+        target: "epha_ai::memory",
+        stage = "syncing",
+        total = summary.total,
+        kind_counts = ?summary.kind_counts,
+        event_type_counts = ?summary.event_type_counts,
+        parse_fallback_count = summary.parse_fallback_count,
+        "memory.syncing"
+    );
 
     let request = CreateMemoryRequest::multiple(fragments.to_vec());
     match loom_client.create_memory(request).await {
         Ok(_) => {
-            debug!("Successfully synced {} memories to Loom", fragments.len());
+            debug!(
+                target: "epha_ai::memory",
+                stage = "synced",
+                total = summary.total,
+                kind_counts = ?summary.kind_counts,
+                event_type_counts = ?summary.event_type_counts,
+                parse_fallback_count = summary.parse_fallback_count,
+                "memory.synced"
+            );
         }
         Err(e) => {
             error!(
-                "Failed to sync {} memories to Loom: {:?}",
-                fragments.len(),
-                e
+                target: "epha_ai::memory",
+                stage = "sync_failed",
+                total = summary.total,
+                kind_counts = ?summary.kind_counts,
+                event_type_counts = ?summary.event_type_counts,
+                parse_fallback_count = summary.parse_fallback_count,
+                error = ?e,
+                "memory.sync_failed"
             );
             // Per design: we accept data loss on sync failure
             // Loom is the source of truth, lost fragments will be recovered on restart
