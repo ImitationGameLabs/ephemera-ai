@@ -20,6 +20,17 @@ in
       description = "The agora package to use";
     };
 
+    log_level = lib.mkOption {
+      type = lib.types.str;
+      default = "info";
+      description = ''
+        Log filter directive passed as RUST_LOG to the service process.
+        Accepts a plain level ("info", "debug", "warn") or a comma-separated
+        EnvFilter directive for fine-grained per-crate control
+        (e.g. "debug,hyper=warn,sqlx=warn").
+      '';
+    };
+
     settings = {
       port = lib.mkOption {
         type = lib.types.port;
@@ -82,6 +93,7 @@ in
       };
 
       Service = {
+        Environment = [ "RUST_LOG=${cfg.log_level}" ];
         # Ensure parent directory exists before starting the service
         ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p ${dirOf cfg.settings.database_path}";
         ExecStart = "${cfg.package}/bin/agora --config-dir ${config.services.ephemera._configDir}/agora";

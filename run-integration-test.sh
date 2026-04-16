@@ -65,6 +65,9 @@ sudo nixos-container run "$CONTAINER_NAME" -- su - ephemera -c '
 
   # Inject integration-test grounding append (the brief-existence philosophical framing)
   sed -i "s|prompt_append_file = null;|prompt_append_file = \"'"$FLAKE_SOURCE"'/crates/epha-ai/prompts/integration-test-append.md\";|" /home/ephemera/config/ephemera-ai.nix
+
+  # Enable debug logging for all ephemera services (scoped: debug for our code, warn for third-party crates)
+  sed -i "s|log_level = \"info\";|log_level = \"debug,hyper=warn,reqwest=warn,h2=warn,tower=warn,sqlx=warn\";|g" /home/ephemera/config/ephemera-ai.nix
 '
 
 # 6. Run home-manager switch

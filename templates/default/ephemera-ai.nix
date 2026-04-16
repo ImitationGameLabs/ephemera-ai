@@ -3,6 +3,7 @@
   # Ephemera AI - Main Agent
   services.ephemera.epha-ai = {
     enable = true;
+    log_level = "info";
 
     settings = {
       llm = {
@@ -40,6 +41,7 @@
   # Loom - Memory Service
   services.ephemera.loom = {
     enable = true;
+    log_level = "info";
     mysql = "loom-mysql";
 
     settings = {
@@ -53,6 +55,7 @@
   # Agora - Event Hub
   services.ephemera.agora = {
     enable = true;
+    log_level = "info";
 
     settings = {
       port = 3000;
@@ -71,6 +74,7 @@
   # Kairos - Time Service
   services.ephemera.kairos = {
     enable = true;
+    log_level = "info";
 
     settings = {
       port = 3003;
@@ -89,6 +93,7 @@
   # Atrium - Chat Service
   services.ephemera.atrium = {
     enable = true;
+    log_level = "info";
     mysql = "atrium-mysql";
 
     settings = {

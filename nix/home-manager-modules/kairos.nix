@@ -32,6 +32,17 @@ in
       description = "The kairos-herald package to use";
     };
 
+    log_level = lib.mkOption {
+      type = lib.types.str;
+      default = "info";
+      description = ''
+        Log filter directive passed as RUST_LOG to all kairos service processes
+        (kairos and kairos-herald). Accepts a plain level ("info", "debug", "warn")
+        or a comma-separated EnvFilter directive for fine-grained per-crate control
+        (e.g. "debug,hyper=warn,sqlx=warn").
+      '';
+    };
+
     settings = {
       port = lib.mkOption {
         type = lib.types.port;
@@ -105,6 +116,7 @@ in
       };
 
       Service = {
+        Environment = [ "RUST_LOG=${cfg.log_level}" ];
         # Ensure parent directory exists before starting the service
         ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p ${dirOf cfg.settings.database_path}";
         ExecStart = "${cfg.package}/bin/kairos --config-dir ${config.services.ephemera._configDir}/kairos";
@@ -129,6 +141,7 @@ in
       };
 
       Service = {
+        Environment = [ "RUST_LOG=${cfg.log_level}" ];
         ExecStart = "${cfg.heraldPackage}/bin/kairos-herald --config-dir ${config.services.ephemera._configDir}/kairos-herald";
         Restart = "on-failure";
         RestartSec = "5";

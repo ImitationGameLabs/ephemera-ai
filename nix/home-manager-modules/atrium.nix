@@ -62,6 +62,17 @@ in
       description = "The atrium-herald package to use";
     };
 
+    log_level = lib.mkOption {
+      type = lib.types.str;
+      default = "info";
+      description = ''
+        Log filter directive passed as RUST_LOG to all atrium service processes
+        (atrium and atrium-herald). Accepts a plain level ("info", "debug", "warn")
+        or a comma-separated EnvFilter directive for fine-grained per-crate control
+        (e.g. "debug,hyper=warn,sqlx=warn").
+      '';
+    };
+
     mysql = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
@@ -165,6 +176,7 @@ in
       };
 
       Service = {
+        Environment = [ "RUST_LOG=${cfg.log_level}" ];
         ExecStart = "${cfg.package}/bin/atrium --config-dir ${config.services.ephemera._configDir}/atrium";
         Restart = "on-failure";
         RestartSec = "5";
@@ -187,6 +199,7 @@ in
       };
 
       Service = {
+        Environment = [ "RUST_LOG=${cfg.log_level}" ];
         ExecStart = "${cfg.heraldPackage}/bin/atrium-herald --config-dir ${config.services.ephemera._configDir}/atrium-herald";
         Restart = "on-failure";
         RestartSec = "5";

@@ -29,6 +29,17 @@ in
       description = "The loom package to use";
     };
 
+    log_level = lib.mkOption {
+      type = lib.types.str;
+      default = "info";
+      description = ''
+        Log filter directive passed as RUST_LOG to the service process.
+        Accepts a plain level ("info", "debug", "warn") or a comma-separated
+        EnvFilter directive for fine-grained per-crate control
+        (e.g. "debug,hyper=warn,sqlx=warn").
+      '';
+    };
+
     mysql = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
@@ -84,6 +95,7 @@ in
       };
 
       Service = {
+        Environment = [ "RUST_LOG=${cfg.log_level}" ];
         ExecStart = "${cfg.package}/bin/loom --config-dir ${config.services.ephemera._configDir}/loom";
         Restart = "on-failure";
         RestartSec = "5";
