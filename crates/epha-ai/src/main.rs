@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::info;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod agent;
 mod config;
@@ -31,7 +32,12 @@ async fn main() -> anyhow::Result<()> {
     let config_path = args.config_dir.join("epha-ai.json");
     let config = Config::load(&config_path);
 
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
     let http_client = build_http_client();
     let loom_client = init_loom_client(&config.services.loom_url, http_client.clone())

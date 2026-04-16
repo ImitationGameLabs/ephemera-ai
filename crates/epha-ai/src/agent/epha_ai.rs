@@ -19,7 +19,7 @@ use loom_client::memory::{MemoryFragment, MemoryKind};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Try to parse a JSON string into a `serde_json::Value`.
@@ -274,6 +274,8 @@ impl EphemeraAI {
             if let Some(text) = response.text()
                 && !text.is_empty()
             {
+                // WARNING: This log may contain sensitive data. Only enable debug logging in trusted environments.
+                debug!("Thought: {}", text);
                 self.save_thought(&text).await;
             }
 
@@ -320,6 +322,8 @@ impl EphemeraAI {
                     continue;
                 }
 
+                // WARNING: This log may contain sensitive tool arguments. Enable only in trusted environments.
+                debug!("Calling tool '{}' with args: {}", tool_name, args_str);
                 let result = match self.tool_dispatch.call_tool(tool_name, args_str).await {
                     Ok(result) => result,
                     Err(e) => {
@@ -338,6 +342,8 @@ impl EphemeraAI {
                         continue;
                     }
                 };
+                // WARNING: This log may contain sensitive tool results. Enable only in trusted environments.
+                debug!("Tool '{}' returned: {}", tool_name, result);
 
                 tool_results.push(ToolCallRecord {
                     id: tc.id.clone(),
