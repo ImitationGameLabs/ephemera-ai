@@ -157,7 +157,7 @@ in
 
     # Write default atrium-cli config if not already present
     home.activation.atriumCliConfig = lib.mkIf cfg.enable (
-      lib.dag.entryAfter [ "writeBoundary" ] ''
+      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         if [ ! -f "$HOME/.config/atrium-cli/config.json" ]; then
           mkdir -p "$HOME/.config/atrium-cli"
           cp ${cliDefaultConfig} "$HOME/.config/atrium-cli/config.json"
