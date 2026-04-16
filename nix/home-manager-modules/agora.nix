@@ -90,6 +90,9 @@ in
       Unit = {
         Description = "Agora Event Hub";
         After = [ "network.target" ];
+        # Allow fast recovery during startup dependency races, but still bound restart loops.
+        StartLimitIntervalSec = "300";
+        StartLimitBurst = "20";
       };
 
       Service = {
@@ -98,7 +101,7 @@ in
         ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p ${dirOf cfg.settings.database_path}";
         ExecStart = "${cfg.package}/bin/agora --config-dir ${config.services.ephemera._configDir}/agora";
         Restart = "on-failure";
-        RestartSec = "5";
+        RestartSec = "3";
       };
 
       Install = {

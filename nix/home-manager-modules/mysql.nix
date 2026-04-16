@@ -76,13 +76,16 @@ in
             Description = "MySQL container for ${name}";
             After = [ "podman.socket" ];
             Requires = [ "podman.socket" ];
+            # Allow fast recovery during startup dependency races, but still bound restart loops.
+            StartLimitIntervalSec = "300";
+            StartLimitBurst = "20";
           };
 
           Service = {
             ExecStart = "${pkgs.podman}/bin/podman run --rm --name ${name} -p ${toString mysqlCfg.port}:3306 -v ${mysqlCfg.volume}:/var/lib/mysql --env-file ${envFile} ${mysqlCfg.image}";
             ExecStop = "${pkgs.podman}/bin/podman stop -t 10 ${name}";
             Restart = "on-failure";
-            RestartSec = "5";
+            RestartSec = "3";
           };
 
           Install = {

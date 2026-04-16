@@ -130,6 +130,9 @@ in
           "agora.service"
         ];
         Requires = [ "loom.service" ];
+        # Cap restart storms so repeated failures don't flood LLM providers and trigger abuse defenses.
+        StartLimitIntervalSec = "3600";
+        StartLimitBurst = "5";
       };
 
       Service = {

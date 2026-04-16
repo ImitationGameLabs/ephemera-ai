@@ -37,7 +37,8 @@ let
     auth = {
       username = cfg.auth.username;
       password = cfg.auth.password;
-    } // lib.optionalAttrs (cfg.auth.bio != "") { bio = cfg.auth.bio; };
+    }
+    // lib.optionalAttrs (cfg.auth.bio != "") { bio = cfg.auth.bio; };
   };
 in
 {
@@ -173,13 +174,16 @@ in
         ]
         ++ lib.optionals (cfg.mysql != null) [ "${cfg.mysql}.service" ];
         Requires = lib.optionals (cfg.mysql != null) [ "${cfg.mysql}.service" ];
+        # Allow fast recovery during startup dependency races, but still bound restart loops.
+        StartLimitIntervalSec = "300";
+        StartLimitBurst = "20";
       };
 
       Service = {
         Environment = [ "RUST_LOG=${cfg.log_level}" ];
         ExecStart = "${cfg.package}/bin/atrium --config-dir ${config.services.ephemera._configDir}/atrium";
         Restart = "on-failure";
-        RestartSec = "5";
+        RestartSec = "3";
       };
 
       Install = {
@@ -196,13 +200,16 @@ in
           "agora.service"
         ];
         Requires = [ "atrium.service" ];
+        # Keep herald resilient during startup ordering hiccups while still limiting storms.
+        StartLimitIntervalSec = "300";
+        StartLimitBurst = "20";
       };
 
       Service = {
         Environment = [ "RUST_LOG=${cfg.log_level}" ];
         ExecStart = "${cfg.heraldPackage}/bin/atrium-herald --config-dir ${config.services.ephemera._configDir}/atrium-herald";
         Restart = "on-failure";
-        RestartSec = "5";
+        RestartSec = "3";
       };
 
       Install = {

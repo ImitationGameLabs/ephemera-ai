@@ -113,6 +113,9 @@ in
       Unit = {
         Description = "Kairos Time Service";
         After = [ "network.target" ];
+        # Allow fast recovery during startup dependency races, but still bound restart loops.
+        StartLimitIntervalSec = "300";
+        StartLimitBurst = "20";
       };
 
       Service = {
@@ -121,7 +124,7 @@ in
         ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p ${dirOf cfg.settings.database_path}";
         ExecStart = "${cfg.package}/bin/kairos --config-dir ${config.services.ephemera._configDir}/kairos";
         Restart = "on-failure";
-        RestartSec = "5";
+        RestartSec = "3";
       };
 
       Install = {
@@ -138,13 +141,16 @@ in
           "agora.service"
         ];
         Requires = [ "kairos.service" ];
+        # Keep herald resilient during startup ordering hiccups while still limiting storms.
+        StartLimitIntervalSec = "300";
+        StartLimitBurst = "20";
       };
 
       Service = {
         Environment = [ "RUST_LOG=${cfg.log_level}" ];
         ExecStart = "${cfg.heraldPackage}/bin/kairos-herald --config-dir ${config.services.ephemera._configDir}/kairos-herald";
         Restart = "on-failure";
-        RestartSec = "5";
+        RestartSec = "3";
       };
 
       Install = {
