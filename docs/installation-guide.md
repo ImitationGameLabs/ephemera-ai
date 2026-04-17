@@ -179,7 +179,8 @@ home-manager switch
 After a successful `home-manager switch`, all Ephemera AI services should be running as systemd user services. Verify with:
 
 ```bash
-systemctl --user status 'ephemera-*'
+epha-ctl status
 ```
+
 
 See [Development Guide](development-guide.md) for next steps on building and developing Ephemera AI.

@@ -20,6 +20,24 @@ in
       description = "The epha-ai package to use";
     };
 
+    ctlPackage = lib.mkOption {
+      type = lib.types.package;
+      default = ephaPkgs.epha-ctl;
+      description = "The epha-ctl package to use";
+    };
+
+    installCtlPackage = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether to auto-install epha-ctl in home.packages when epha-ai is enabled";
+    };
+
+    tmuxPackage = lib.mkOption {
+      type = lib.types.package;
+      default = pkgs.tmux;
+      description = "The tmux package used by epha-ai shell sessions";
+    };
+
     log_level = lib.mkOption {
       type = lib.types.str;
       default = "info";
@@ -121,30 +139,40 @@ in
   config = {
     services.ephemera.epha-ai._configJson = settingsFormat.generate "epha-ai.json" cfg.settings;
 
-    systemd.user.services.epha-ai = lib.mkIf cfg.enable {
-      Unit = {
-        Description = "Ephemera AI Agent";
-        After = [
-          "network.target"
-          "loom.service"
-          "agora.service"
-        ];
-        Requires = [ "loom.service" ];
-        # Cap restart storms so repeated failures don't flood LLM providers and trigger abuse defenses.
-        StartLimitIntervalSec = "3600";
-        StartLimitBurst = "5";
-      };
+    home.packages = lib.mkIf (cfg.enable && cfg.installCtlPackage) [ cfg.ctlPackage ];
 
-      Service = {
-        Environment = [ "RUST_LOG=${cfg.log_level}" ];
-        ExecStart = "${cfg.package}/bin/epha-ai --config-dir ${config.services.ephemera._configDir}/epha-ai";
-        Restart = "on-failure";
-        RestartSec = "5";
-      };
+    systemd.user.services.epha-ai = lib.mkIf cfg.enable (
+      let
+        runScript = pkgs.writeShellScript "epha-ai-run" ''
+          export PATH="${lib.makeBinPath [ cfg.tmuxPackage ]}:$PATH"
+          exec ${cfg.package}/bin/epha-ai --config-dir ${config.services.ephemera._configDir}/epha-ai
+        '';
+      in
+      {
+        Unit = {
+          Description = "Ephemera AI Agent";
+          After = [
+            "network.target"
+            "loom.service"
+            "agora.service"
+          ];
+          Requires = [ "loom.service" ];
+          # Cap restart storms so repeated failures don't flood LLM providers and trigger abuse defenses.
+          StartLimitIntervalSec = "3600";
+          StartLimitBurst = "5";
+        };
 
-      Install = {
-        WantedBy = [ "default.target" ];
-      };
-    };
+        Service = {
+          Environment = [ "RUST_LOG=${cfg.log_level}" ];
+          ExecStart = "${runScript}";
+          Restart = "on-failure";
+          RestartSec = "5";
+        };
+
+        Install = {
+          WantedBy = [ "default.target" ];
+        };
+      }
+    );
   };
 }

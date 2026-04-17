@@ -2,6 +2,9 @@
 {
   # Ephemera AI - Main Agent
   services.ephemera.epha-ai = {
+    # epha-ctl is auto-installed by the module when epha-ai is enabled.
+    # tmux is injected into the epha-ai service runtime PATH; add tmux to
+    # home.packages only if you also want to use tmux directly in your shell.
     enable = true;
     log_level = "info";
 
