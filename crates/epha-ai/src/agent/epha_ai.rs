@@ -11,6 +11,7 @@ use crate::tools::{
     ToolDispatch,
 };
 use agora_client::{AgoraClient, AgoraClientTrait};
+use anyhow::Context;
 use llm::builder::{LLMBackend, LLMBuilder};
 use llm::chat::ChatMessage;
 use llm::{FunctionCall, LLMProvider, ToolCall};
@@ -62,10 +63,17 @@ impl EphemeraAI {
         let state = Arc::new(Mutex::new(State::default()));
 
         // 2. Load grounding prompt
+        info!("Loading grounding prompt (embedded base)");
         let grounding_prompt = {
-            let base = GroundingPrompt::from_file("prompts/grounding.md")?;
+            let base = GroundingPrompt::from_embedded_base();
             if let Some(append_file) = &config.prompt_append_file {
-                base.with_append_file(append_file)?
+                info!("Applying grounding prompt append file: {}", append_file);
+                base.with_append_file(append_file).with_context(|| {
+                    format!(
+                        "Failed to apply config 'prompt_append_file' with value '{}'",
+                        append_file
+                    )
+                })?
             } else {
                 base
             }

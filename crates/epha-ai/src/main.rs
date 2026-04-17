@@ -42,16 +42,23 @@ async fn main() -> anyhow::Result<()> {
     let http_client = build_http_client();
     let loom_client = init_loom_client(&config.services.loom_url, http_client.clone())
         .await
-        .expect("Failed to init loom client");
+        .map_err(|e| anyhow::anyhow!("Startup step failed (loom connectivity): {:#}", e))?;
 
     // Validate LLM credentials before starting
     validate_llm_config(&config.llm)
         .await
-        .expect("LLM validation failed");
+        .map_err(|e| anyhow::anyhow!("Startup step failed (LLM credential validation): {:#}", e))?;
 
     let loom_client = Arc::new(loom_client);
 
-    let mut ai = EphemeraAI::new(config, loom_client.clone(), http_client).await?;
+    let mut ai = EphemeraAI::new(config, loom_client.clone(), http_client)
+        .await
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Startup step failed (EphemeraAI initialization after LLM validation): {:#}",
+                e
+            )
+        })?;
     ai.live().await?;
 
     Ok(())

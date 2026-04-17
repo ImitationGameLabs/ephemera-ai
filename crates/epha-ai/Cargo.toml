@@ -29,3 +29,6 @@ agora-common = { path = "../agora-common" }
 clap = { workspace = true }
 uuid = { workspace = true }
 tokenx-rs = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
