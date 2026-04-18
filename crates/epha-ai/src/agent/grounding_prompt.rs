@@ -9,7 +9,7 @@ impl GroundingPrompt {
     /// Load built-in grounding prompt compiled into the binary.
     #[must_use]
     pub fn from_embedded_base() -> Self {
-        Self { content: include_str!("../../prompts/grounding.md").to_string() }
+        Self { content: include_str!("grounding.md").to_string() }
     }
 
     /// Append additional context from a file, separated by a horizontal rule.

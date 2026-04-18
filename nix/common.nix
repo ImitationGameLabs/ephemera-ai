@@ -21,7 +21,16 @@ let
     }
   );
 
-  src = craneLib.cleanCargoSource root;
+  # Embedded prompt assets loaded via include_str! are not part of
+  # crane's commonCargoSources by default, so we add them explicitly.
+  extraWorkspaceSources = [
+    (root + "/crates/epha-ai/src/agent/grounding.md")
+  ];
+
+  src = lib.fileset.toSource {
+    inherit root;
+    fileset = lib.fileset.unions ([ (craneLib.fileset.commonCargoSources root) ] ++ extraWorkspaceSources);
+  };
 
   # Use git shortRev as version, fallback to "dirty" if working tree is dirty
   gitVersion = inputs.self.shortRev or "dirty";
@@ -87,6 +96,12 @@ let
     cratePaths:
     lib.mapAttrsToList (_: cratepath: craneLib.fileset.commonCargoSources cratepath) cratePaths;
 
+  extraCrateSources =
+    cratepath:
+    lib.optionals (cratepath == binaryCratePaths.epha-ai) [
+      (root + "/crates/epha-ai/src/agent/grounding.md")
+    ];
+
   # All workspace crates combined (for fileset generation)
   allCratePaths = binaryCratePaths // libraryCratePaths;
 
@@ -104,6 +119,7 @@ let
           (root + "/Cargo.lock")
         ]
         ++ mkCrateSources allCratePaths
+        ++ extraCrateSources cratepath
         ++ [ (craneLib.fileset.commonCargoSources cratepath) ]
       );
     };
