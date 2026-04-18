@@ -31,7 +31,7 @@ nix build "$REPO_ROOT#default" -L
 
 # 3. Create & start container
 echo "Creating NixOS container..."
-sudo nixos-container create "$CONTAINER_NAME" --config-file "$REPO_ROOT/nix/integration-test/configuration.nix"
+sudo nixos-container create "$CONTAINER_NAME" --config-file "$REPO_ROOT/metadata/integration-tests/configuration.nix"
 
 echo "Starting container..."
 sudo nixos-container start "$CONTAINER_NAME"
