@@ -1,8 +1,9 @@
 [package]
 name = "kairos-herald"
-version = "0.1.0"
-edition = "2024"
 description = "Bridge service between Kairos and Agora - pushes triggered schedules to the event hub"
+edition = "2024"
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 agora-client = { path = "../../agora-client" }

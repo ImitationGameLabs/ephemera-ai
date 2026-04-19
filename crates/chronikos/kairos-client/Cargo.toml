@@ -1,8 +1,9 @@
 [package]
 name = "kairos-client"
-version = "0.1.0"
-edition = "2024"
 description = "Client library for Kairos time management service"
+edition = "2024"
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 # Shared schedule types

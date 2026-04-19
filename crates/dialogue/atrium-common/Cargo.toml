@@ -1,7 +1,9 @@
 [package]
 name = "atrium-common"
-version = "0.1.0"
+description = "Common types for Dialogue Atrium chat system"
 edition = "2024"
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 serde = { workspace = true }

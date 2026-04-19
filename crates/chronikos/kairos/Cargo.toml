@@ -1,8 +1,9 @@
 [package]
 name = "kairos"
-version = "0.1.0"
-edition = "2024"
 description = "Time management service for Ephemera AI - the brain of time"
+edition = "2024"
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 kairos-common = { path = "../kairos-common" }

@@ -118,7 +118,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "agora"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "agora-common",
  "anyhow",
@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "agora-client"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "agora-common",
  "async-trait",
@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "agora-common"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -356,7 +356,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "atrium"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "atrium-common",
@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "atrium-cli"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "atrium-client",
@@ -401,7 +401,7 @@ dependencies = [
 
 [[package]]
 name = "atrium-client"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "atrium-common",
  "reqwest",
@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "atrium-common"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -424,7 +424,7 @@ dependencies = [
 
 [[package]]
 name = "atrium-herald"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "atrium-client",
@@ -1700,7 +1700,7 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
 name = "epha-ai"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "agora-client",
  "agora-common",
@@ -2654,7 +2654,7 @@ dependencies = [
 
 [[package]]
 name = "kairos"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "axum 0.8.8",
@@ -2675,7 +2675,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-cli"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2691,7 +2691,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-client"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "kairos-common",
  "reqwest",
@@ -2705,7 +2705,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-common"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2714,7 +2714,7 @@ dependencies = [
 
 [[package]]
 name = "kairos-herald"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "agora-client",
  "anyhow",
@@ -2866,7 +2866,7 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "loom"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2891,7 +2891,7 @@ dependencies = [
 
 [[package]]
 name = "loom-client"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "async-trait",
  "loom-common",
@@ -2906,7 +2906,7 @@ dependencies = [
 
 [[package]]
 name = "loom-common"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "serde",
  "serde_json",

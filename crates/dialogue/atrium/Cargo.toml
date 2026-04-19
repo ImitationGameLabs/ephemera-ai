@@ -1,8 +1,9 @@
 [package]
 name = "atrium"
-version = "0.1.0"
-edition = "2024"
 description = "Asynchronous communication interface for Ephemera AI autonomous agent interactions - Server implementation"
+edition = "2024"
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }

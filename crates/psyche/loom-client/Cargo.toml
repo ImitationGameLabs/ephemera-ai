@@ -1,8 +1,9 @@
 [package]
 name = "loom-client"
-version = "0.1.0"
-edition = "2024"
 description = "Client library for Loom memory service"
+edition = "2024"
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 # Loom common types (no server dependency needed)

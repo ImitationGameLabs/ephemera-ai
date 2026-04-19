@@ -1,7 +1,9 @@
 [package]
 name = "loom-common"
-version = "0.1.0"
+description = "Common types for Loom memory service"
 edition = "2024"
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 serde = { workspace = true }

@@ -1,8 +1,9 @@
 [package]
 name = "atrium-client"
-version = "0.1.0"
-edition = "2024"
 description = "Client library for Dialogue Atrium chat system"
+edition = "2024"
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 atrium-common = { path = "../atrium-common" }

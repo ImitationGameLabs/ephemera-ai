@@ -1,6 +1,8 @@
 [package]
 name = "epha-ctl"
+description = "CLI for Ephemera AI"
 edition = "2024"
+license.workspace = true
 version.workspace = true
 
 [dependencies]

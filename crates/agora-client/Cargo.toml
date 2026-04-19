@@ -1,8 +1,9 @@
 [package]
 name = "agora-client"
-version = "0.1.0"
-edition = "2024"
 description = "Client library for Agora event hub"
+edition = "2024"
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 # Agora server dependency for shared types

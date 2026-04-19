@@ -1,8 +1,9 @@
 [package]
 name = "agora"
-version = "0.1.0"
-edition = "2024"
 description = "Event hub for Ephemera AI"
+edition = "2024"
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 agora-common = { path = "../agora-common" }

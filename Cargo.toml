@@ -28,6 +28,7 @@ resolver = "3"
 
 [workspace.package]
 version = "0.0.0"
+license = "MIT"
 
 [workspace.metadata.crane]
 name = "ephemera-ai-workspace"

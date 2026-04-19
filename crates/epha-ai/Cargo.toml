@@ -1,8 +1,9 @@
 [package]
 name = "epha-ai"
-version = "0.1.0"
+description = "Main application binary for Ephemera AI"
 edition = "2024"
-
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }

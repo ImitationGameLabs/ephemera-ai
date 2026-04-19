@@ -1,8 +1,9 @@
 [package]
 name = "atrium-herald"
-version = "0.1.0"
-edition = "2024"
 description = "Atrium herald for Agora event hub"
+edition = "2024"
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 atrium-client = { path = "../atrium-client" }

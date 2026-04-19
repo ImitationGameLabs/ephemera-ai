@@ -1,7 +1,9 @@
 [package]
 name = "loom"
-version = "0.1.0"
+description = "Memory service for Ephemera AI"
 edition = "2024"
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 loom-common = { path = "../loom-common" }
