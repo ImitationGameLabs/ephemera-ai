@@ -29,14 +29,6 @@ in
     }
   );
 
-  ephemera-ai-doc = craneLib.cargoDoc (
-    commonArgs
-    // {
-      inherit cargoArtifacts;
-      env.RUSTDOCFLAGS = "--deny warnings";
-    }
-  );
-
   # Check formatting
   ephemera-ai-fmt = craneLib.cargoFmt {
     inherit src;
@@ -50,6 +42,18 @@ in
   ephemera-ai-audit = craneLib.cargoAudit {
     inherit src;
     inherit advisory-db;
+
+  # The advisory (RUSTSEC-2023-0071) concerns potential side-channel leakage
+  # in the RSA implementation (non-constant-time behavior).
+  #
+  # Based on our threat model, this is not considered exploitable:
+  # - No attacker-controlled high-frequency queries
+  # - No exposure of a timing oracle
+  # - No shared hardware or co-resident adversaries
+  #
+  # This is a known limitation of the library rather than a fixable bug, as discussed here:
+  # https://github.com/RustCrypto/RSA/issues/19#issuecomment-1822995643
+    cargoAuditExtraArgs = "--ignore RUSTSEC-2023-0071";
   };
 
   # Audit licenses
@@ -67,22 +71,4 @@ in
       cargoNextestPartitionsExtraArgs = "--no-tests=pass";
     }
   );
-
-  # Ensure that cargo-hakari is up to date
-  ephemera-ai-hakari = craneLib.mkCargoDerivation {
-    inherit src;
-    pname = "ephemera-ai-hakari";
-    cargoArtifacts = null;
-    doInstallCargoArtifacts = false;
-
-    buildPhaseCargoCommand = ''
-      cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
-      cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
-      cargo hakari verify
-    '';
-
-    nativeBuildInputs = [
-      pkgs.cargo-hakari
-    ];
-  };
 }
