@@ -2,14 +2,14 @@ mod fixtures;
 
 use atrium::db::message_manager::{CreateMessageDto, MessageError};
 use atrium::db::user_manager::CreateUserDto;
-use fixtures::{create_message_manager, create_user_manager, setup_test_db};
+use fixtures::{create_user_manager, setup_test_db};
 
 /// 测试消息 CRUD 场景
 #[tokio::test]
 async fn test_message_crud() {
     let (_container, db) = setup_test_db().await;
     let user_manager = create_user_manager(&db);
-    let message_manager = create_message_manager(&db);
+    let message_manager = atrium::db::message_manager::MessageManager::new(db.clone());
 
     // Setup: 创建用户
     let user_dto = CreateUserDto {
@@ -51,7 +51,7 @@ async fn test_message_crud() {
 async fn test_message_query() {
     let (_container, db) = setup_test_db().await;
     let user_manager = create_user_manager(&db);
-    let message_manager = create_message_manager(&db);
+    let message_manager = atrium::db::message_manager::MessageManager::new(db.clone());
 
     // Setup: 创建用户
     for name in ["alice", "bob"] {
@@ -126,7 +126,7 @@ async fn test_message_query() {
 async fn test_message_incremental_sync() {
     let (_container, db) = setup_test_db().await;
     let user_manager = create_user_manager(&db);
-    let message_manager = create_message_manager(&db);
+    let message_manager = atrium::db::message_manager::MessageManager::new(db.clone());
 
     // Setup
     user_manager

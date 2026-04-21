@@ -1833,9 +1833,8 @@ mod restoration_tests {
         assert_eq!(ctx.get_queue_status().activity_count, 3);
 
         // Simulate partial sync: process only first 2 items from sync queue
-        let mut synced_fragments = Vec::new();
-        synced_fragments.push(sync_receiver.try_recv().unwrap());
-        synced_fragments.push(sync_receiver.try_recv().unwrap());
+        let synced_fragments =
+            vec![sync_receiver.try_recv().unwrap(), sync_receiver.try_recv().unwrap()];
 
         // Verify third item exists and receive it (simulating it will be lost in crash)
         let _lost_item = sync_receiver
@@ -2246,7 +2245,7 @@ mod evict_to_floor_tests {
         let (evicted, freed) = ctx.evict_to_floor();
         assert_eq!(evicted, 0);
         assert_eq!(freed, 0);
-        assert!(ctx.recent_activities().len() >= 1);
+        assert!(!ctx.recent_activities().is_empty());
     }
 
     #[test]

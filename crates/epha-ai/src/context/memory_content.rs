@@ -428,7 +428,7 @@ mod tests {
         );
         let thought2 = make_fragment(MemoryKind::Thought, r#"{"text":"t2"}"#);
 
-        let memories = vec![thought, event, action, thought2];
+        let memories = [thought, event, action, thought2];
         let msgs: Vec<ChatMessage> = memories.iter().flat_map(|m| m.to_chat_messages()).collect();
 
         // thought → 1 msg, event → 1 msg, action → 2 msgs, thought2 → 1 msg = 5 total

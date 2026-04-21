@@ -86,7 +86,7 @@ mod tests {
     async fn test_list_sessions_default() {
         let (tool, _) = create_tool_with_mock();
 
-        let args = ListSessionsArgs::default();
+        let args = ListSessionsArgs;
         let result: ListSessionsOutput = serde_json::from_str(
             &tool
                 .call(&serde_json::to_string(&args).unwrap())
@@ -109,7 +109,7 @@ mod tests {
             backend.add_session("test");
         }
 
-        let args = ListSessionsArgs::default();
+        let args = ListSessionsArgs;
         let result: ListSessionsOutput = serde_json::from_str(
             &tool
                 .call(&serde_json::to_string(&args).unwrap())
@@ -131,7 +131,7 @@ mod tests {
             backend.kill_session("main").await.ok();
         }
 
-        let args = ListSessionsArgs::default();
+        let args = ListSessionsArgs;
         let _result = tool
             .call(&serde_json::to_string(&args).unwrap())
             .await
@@ -142,7 +142,7 @@ mod tests {
     async fn test_list_sessions_serialization() {
         let (tool, _) = create_tool_with_mock();
 
-        let args = ListSessionsArgs::default();
+        let args = ListSessionsArgs;
         let result = tool
             .call(&serde_json::to_string(&args).unwrap())
             .await

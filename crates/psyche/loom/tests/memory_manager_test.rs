@@ -1,34 +1,8 @@
+mod fixtures;
+
+use fixtures::{create_memory_manager, setup_test_db};
 use loom::memory::types::{MemoryFragment, MemoryKind};
-use loom::services::db_migration::Migrator;
-use loom::services::memory::manager::MemoryManager;
-use sea_orm::Database;
-use sea_orm_migration::MigratorTrait;
-use testcontainers_modules::{mysql::Mysql, testcontainers::runners::AsyncRunner};
 use time::OffsetDateTime;
-
-async fn setup_test_db() -> (
-    testcontainers::ContainerAsync<Mysql>,
-    sea_orm::DatabaseConnection,
-) {
-    let container = Mysql::default()
-        .start()
-        .await
-        .expect("Failed to start MySQL container");
-
-    let host_port = container.get_host_port_ipv4(3306).await.unwrap();
-    let connection_string = format!("mysql://root@127.0.0.1:{}/test", host_port);
-
-    let db = Database::connect(&connection_string)
-        .await
-        .expect("Failed to connect to test database");
-
-    // Run migrations
-    Migrator::up(&db, None)
-        .await
-        .expect("Failed to run migrations");
-
-    (container, db)
-}
 
 fn create_test_fragment(content: &str, kind: MemoryKind) -> MemoryFragment {
     MemoryFragment {
@@ -42,10 +16,10 @@ fn create_test_fragment(content: &str, kind: MemoryKind) -> MemoryFragment {
 #[tokio::test]
 async fn test_save_and_get_memory() {
     let (_container, db) = setup_test_db().await;
-    let manager = MemoryManager::new(db, 0);
+    let manager = create_memory_manager(&db);
 
     let fragment = create_test_fragment("Test memory content", MemoryKind::Event);
-    let ids = manager.append(&mut vec![fragment.clone()]).await.unwrap();
+    let ids = manager.append(&mut [fragment.clone()]).await.unwrap();
 
     assert_eq!(ids.len(), 1);
     let saved_id = ids[0];
@@ -60,7 +34,7 @@ async fn test_save_and_get_memory() {
 #[tokio::test]
 async fn test_save_multiple_memories() {
     let (_container, db) = setup_test_db().await;
-    let manager = MemoryManager::new(db, 0);
+    let manager = create_memory_manager(&db);
 
     let mut fragments = vec![
         create_test_fragment("First thought", MemoryKind::Thought),
@@ -80,7 +54,7 @@ async fn test_save_multiple_memories() {
 #[tokio::test]
 async fn test_get_recent_memories() {
     let (_container, db) = setup_test_db().await;
-    let manager = MemoryManager::new(db, 0);
+    let manager = create_memory_manager(&db);
 
     // Create multiple memories with small delays to ensure different timestamps
     let mut fragments = vec![
@@ -99,10 +73,10 @@ async fn test_get_recent_memories() {
 #[tokio::test]
 async fn test_delete_memory() {
     let (_container, db) = setup_test_db().await;
-    let manager = MemoryManager::new(db, 0);
+    let manager = create_memory_manager(&db);
 
     let fragment = create_test_fragment("To be deleted", MemoryKind::Event);
-    let ids = manager.append(&mut vec![fragment.clone()]).await.unwrap();
+    let ids = manager.append(&mut [fragment.clone()]).await.unwrap();
     let saved_id = ids[0];
 
     // Verify it exists
@@ -119,7 +93,7 @@ async fn test_delete_memory() {
 #[tokio::test]
 async fn test_get_range() {
     let (_container, db) = setup_test_db().await;
-    let manager = MemoryManager::new(db, 0);
+    let manager = create_memory_manager(&db);
 
     let now = OffsetDateTime::now_utc();
     let start = now - time::Duration::hours(1);
@@ -140,7 +114,7 @@ async fn test_get_range() {
 #[tokio::test]
 async fn test_get_range_with_pagination() {
     let (_container, db) = setup_test_db().await;
-    let manager = MemoryManager::new(db, 0);
+    let manager = create_memory_manager(&db);
 
     let now = OffsetDateTime::now_utc();
     let start = now - time::Duration::hours(1);
@@ -172,7 +146,7 @@ use loom::services::memory::manager::MemoryError;
 #[tokio::test]
 async fn test_pin_operations() {
     let (_container, db) = setup_test_db().await;
-    let manager = MemoryManager::new(db, 0);
+    let manager = create_memory_manager(&db);
 
     // 1. pin 不存在的 memory 应该报错
     let result = manager.pin(99999, Some("Nonexistent".to_string())).await;
@@ -206,7 +180,7 @@ async fn test_pin_operations() {
 #[tokio::test]
 async fn test_unpin_operations() {
     let (_container, db) = setup_test_db().await;
-    let manager = MemoryManager::new(db, 0);
+    let manager = create_memory_manager(&db);
 
     // 1. unpin 不存在的 pinned 应该报错
     let result = manager.unpin(99999).await;
@@ -235,7 +209,7 @@ async fn test_unpin_operations() {
 #[tokio::test]
 async fn test_pinned_queries_and_protection() {
     let (_container, db) = setup_test_db().await;
-    let manager = MemoryManager::new(db, 0);
+    let manager = create_memory_manager(&db);
 
     // 1. 初始状态: get_pinned 应返回空
     let pinned = manager.get_pinned().await.unwrap();

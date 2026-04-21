@@ -2,7 +2,6 @@ use sea_orm::Database;
 use sea_orm_migration::MigratorTrait;
 use testcontainers_modules::{mysql::Mysql, testcontainers::runners::AsyncRunner};
 
-use atrium::db::message_manager::MessageManager;
 use atrium::db::user_manager::UserManager;
 use atrium::migration::Migrator;
 
@@ -36,9 +35,4 @@ pub async fn setup_test_db() -> (
 /// Create UserManager from a database connection
 pub fn create_user_manager(db: &sea_orm::DatabaseConnection) -> UserManager {
     UserManager::new(db.clone())
-}
-
-/// Create MessageManager from a database connection
-pub fn create_message_manager(db: &sea_orm::DatabaseConnection) -> MessageManager {
-    MessageManager::new(db.clone())
 }

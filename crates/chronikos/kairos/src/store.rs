@@ -451,6 +451,122 @@ fn parse_status(s: &str) -> Result<ScheduleStatus> {
     }
 }
 
+/// Adds one month to the given datetime, clamping day if next month is shorter.
+fn add_one_month(dt: OffsetDateTime) -> OffsetDateTime {
+    let next_month = dt.month().next();
+    let next_year = if dt.month() == Month::December { dt.year() + 1 } else { dt.year() };
+
+    // Clamp day to max days in next month BEFORE changing month
+    // (e.g., Jan 31 -> Feb 28/29)
+    let max_day = next_month.length(next_year);
+    let day = dt.day().min(max_day);
+
+    // Build new date: first set year and day, then month
+    // This order matters because replace_month validates day
+    dt.replace_year(next_year)
+        .and_then(|d| d.replace_day(day))
+        .and_then(|d| d.replace_month(next_month))
+        .expect("valid date components")
+}
+
+/// Adds one year to the given datetime, handling Feb 29 on non-leap years.
+fn add_one_year(dt: OffsetDateTime) -> OffsetDateTime {
+    let next_year = dt.year() + 1;
+
+    // Handle Feb 29 -> Feb 28 on non-leap years
+    if dt.month() == Month::February && dt.day() == 29 && !is_leap_year(next_year) {
+        dt.replace_day(28)
+            .and_then(|d| d.replace_year(next_year))
+            .expect("valid date components")
+    } else {
+        dt.replace_year(next_year).expect("valid year")
+    }
+}
+
+/// Calculates the next fire time for a recurring schedule.
+pub fn calculate_next_fire(
+    period: &Period,
+    at_time: &Option<String>,
+    from: OffsetDateTime,
+) -> Result<OffsetDateTime> {
+    // Parse at_time if provided (e.g., "09:00")
+    // When at_time is None, preserve the original time including seconds
+    let (hour, minute, second) = if let Some(time_str) = at_time {
+        let parts: Vec<&str> = time_str.split(':').collect();
+        if parts.len() != 2 {
+            return Err(anyhow::anyhow!("Invalid at_time format: {}", time_str));
+        }
+        (
+            parts[0].parse::<u8>()?,
+            parts[1].parse::<u8>()?,
+            0u8, // Reset seconds when explicit time is provided
+        )
+    } else {
+        (from.hour(), from.minute(), from.second())
+    };
+
+    let next = match period {
+        Period::Minutely => {
+            // Next minute
+            from + time::Duration::minutes(1)
+        }
+        Period::Hourly => {
+            // Next hour at the same minute
+            from + time::Duration::hours(1)
+        }
+        Period::Daily => {
+            // Next day at the specified time
+            let candidate = from
+                .replace_hour(hour)?
+                .replace_minute(minute)?
+                .replace_second(second)?;
+            if candidate > from { candidate } else { candidate + time::Duration::days(1) }
+        }
+        Period::Weekly => {
+            // Next week at the specified time
+            let candidate = from
+                .replace_hour(hour)?
+                .replace_minute(minute)?
+                .replace_second(second)?;
+            if candidate > from { candidate } else { candidate + time::Duration::weeks(1) }
+        }
+        Period::Monthly => {
+            let candidate = from
+                .replace_hour(hour)?
+                .replace_minute(minute)?
+                .replace_second(second)?;
+            if candidate > from { candidate } else { add_one_month(candidate) }
+        }
+        Period::Yearly => {
+            let candidate = from
+                .replace_hour(hour)?
+                .replace_minute(minute)?
+                .replace_second(second)?;
+            if candidate > from { candidate } else { add_one_year(candidate) }
+        }
+    };
+
+    Ok(next)
+}
+
+/// Calculates the initial next_fire time for a new schedule.
+pub fn calculate_initial_next_fire(
+    trigger: &TriggerSpec,
+    now: OffsetDateTime,
+) -> Result<OffsetDateTime> {
+    match trigger {
+        TriggerSpec::Once { at } => Ok(*at),
+        TriggerSpec::In { duration_seconds } => {
+            Ok(now + time::Duration::seconds(*duration_seconds as i64))
+        }
+        TriggerSpec::Every { period, at_time } => calculate_next_fire(period, at_time, now),
+        TriggerSpec::Cron { .. } => {
+            // v2: implement cron parsing
+            Err(anyhow::anyhow!("Cron expressions not yet supported"))
+        }
+    }
+}
+
 #[cfg(test)]
 mod store_tests {
     use super::*;
@@ -568,121 +684,5 @@ mod store_tests {
         assert_eq!(updated.status, ScheduleStatus::Active);
         // next_fire should remain unchanged (already calculated at trigger time)
         assert_eq!(updated.next_fire, Some(datetime!(2025-03-12 10:00 UTC)));
-    }
-}
-
-/// Adds one month to the given datetime, clamping day if next month is shorter.
-fn add_one_month(dt: OffsetDateTime) -> OffsetDateTime {
-    let next_month = dt.month().next();
-    let next_year = if dt.month() == Month::December { dt.year() + 1 } else { dt.year() };
-
-    // Clamp day to max days in next month BEFORE changing month
-    // (e.g., Jan 31 -> Feb 28/29)
-    let max_day = next_month.length(next_year);
-    let day = dt.day().min(max_day);
-
-    // Build new date: first set year and day, then month
-    // This order matters because replace_month validates day
-    dt.replace_year(next_year)
-        .and_then(|d| d.replace_day(day))
-        .and_then(|d| d.replace_month(next_month))
-        .expect("valid date components")
-}
-
-/// Adds one year to the given datetime, handling Feb 29 on non-leap years.
-fn add_one_year(dt: OffsetDateTime) -> OffsetDateTime {
-    let next_year = dt.year() + 1;
-
-    // Handle Feb 29 -> Feb 28 on non-leap years
-    if dt.month() == Month::February && dt.day() == 29 && !is_leap_year(next_year) {
-        dt.replace_day(28)
-            .and_then(|d| d.replace_year(next_year))
-            .expect("valid date components")
-    } else {
-        dt.replace_year(next_year).expect("valid year")
-    }
-}
-
-/// Calculates the next fire time for a recurring schedule.
-pub fn calculate_next_fire(
-    period: &Period,
-    at_time: &Option<String>,
-    from: OffsetDateTime,
-) -> Result<OffsetDateTime> {
-    // Parse at_time if provided (e.g., "09:00")
-    // When at_time is None, preserve the original time including seconds
-    let (hour, minute, second) = if let Some(time_str) = at_time {
-        let parts: Vec<&str> = time_str.split(':').collect();
-        if parts.len() != 2 {
-            return Err(anyhow::anyhow!("Invalid at_time format: {}", time_str));
-        }
-        (
-            parts[0].parse::<u8>()?,
-            parts[1].parse::<u8>()?,
-            0u8, // Reset seconds when explicit time is provided
-        )
-    } else {
-        (from.hour(), from.minute(), from.second())
-    };
-
-    let next = match period {
-        Period::Minutely => {
-            // Next minute
-            from + time::Duration::minutes(1)
-        }
-        Period::Hourly => {
-            // Next hour at the same minute
-            from + time::Duration::hours(1)
-        }
-        Period::Daily => {
-            // Next day at the specified time
-            let candidate = from
-                .replace_hour(hour)?
-                .replace_minute(minute)?
-                .replace_second(second)?;
-            if candidate > from { candidate } else { candidate + time::Duration::days(1) }
-        }
-        Period::Weekly => {
-            // Next week at the specified time
-            let candidate = from
-                .replace_hour(hour)?
-                .replace_minute(minute)?
-                .replace_second(second)?;
-            if candidate > from { candidate } else { candidate + time::Duration::weeks(1) }
-        }
-        Period::Monthly => {
-            let candidate = from
-                .replace_hour(hour)?
-                .replace_minute(minute)?
-                .replace_second(second)?;
-            if candidate > from { candidate } else { add_one_month(candidate) }
-        }
-        Period::Yearly => {
-            let candidate = from
-                .replace_hour(hour)?
-                .replace_minute(minute)?
-                .replace_second(second)?;
-            if candidate > from { candidate } else { add_one_year(candidate) }
-        }
-    };
-
-    Ok(next)
-}
-
-/// Calculates the initial next_fire time for a new schedule.
-pub fn calculate_initial_next_fire(
-    trigger: &TriggerSpec,
-    now: OffsetDateTime,
-) -> Result<OffsetDateTime> {
-    match trigger {
-        TriggerSpec::Once { at } => Ok(*at),
-        TriggerSpec::In { duration_seconds } => {
-            Ok(now + time::Duration::seconds(*duration_seconds as i64))
-        }
-        TriggerSpec::Every { period, at_time } => calculate_next_fire(period, at_time, now),
-        TriggerSpec::Cron { .. } => {
-            // v2: implement cron parsing
-            Err(anyhow::anyhow!("Cron expressions not yet supported"))
-        }
     }
 }

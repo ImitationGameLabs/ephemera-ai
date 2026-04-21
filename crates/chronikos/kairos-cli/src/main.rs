@@ -521,7 +521,7 @@ mod cli_tests {
         let dt = result.unwrap();
         let now = OffsetDateTime::now_utc();
         let diff = (dt - now).whole_seconds();
-        assert!(diff >= 3599 && diff <= 3601); // ~1 hour
+        assert!((3599..=3601).contains(&diff)); // ~1 hour
     }
 
     #[test]
