@@ -5,7 +5,7 @@ use reqwest::Client;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod agent;
@@ -68,14 +68,24 @@ fn build_http_client() -> Client {
 async fn init_loom_client(loom_url: &str, http_client: Client) -> anyhow::Result<LoomClient> {
     info!("Connecting to loom service at: {}", loom_url);
 
-    // Test connection with health check
     let client = LoomClient::new(loom_url, http_client);
-    client
-        .health_check()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to connect to loom service: {}", e))?;
-
-    info!("Successfully connected to loom service!");
-
-    Ok(client)
+    let mut attempt = 0u32;
+    let mut delay = Duration::from_secs(1);
+    loop {
+        match client.health_check().await {
+            Ok(_) => {
+                info!("Successfully connected to loom service!");
+                return Ok(client);
+            }
+            Err(e) => {
+                attempt += 1;
+                warn!(
+                    "Loom health check failed (attempt {attempt}): {e}. Retrying in {}s...",
+                    delay.as_secs()
+                );
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(Duration::from_secs(30));
+            }
+        }
+    }
 }

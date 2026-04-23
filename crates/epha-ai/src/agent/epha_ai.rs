@@ -123,10 +123,25 @@ impl EphemeraAI {
         // 5. Initialize Agora client with health check
         let agora_client = Arc::new(AgoraClient::new(&config.agora.url, http_client));
         info!("Initializing Agora client: {}", config.agora.url);
-        agora_client.health_check().await.map_err(|e| {
-            anyhow::anyhow!("Agora service unavailable at '{}': {}", config.agora.url, e)
-        })?;
-        info!("Agora service is available");
+        let mut attempt = 0u32;
+        let mut delay = Duration::from_secs(1);
+        loop {
+            match agora_client.health_check().await {
+                Ok(_) => {
+                    info!("Agora service is available");
+                    break;
+                }
+                Err(e) => {
+                    attempt += 1;
+                    warn!(
+                        "Agora health check failed (attempt {attempt}): {e}. Retrying in {}s...",
+                        delay.as_secs()
+                    );
+                    tokio::time::sleep(delay).await;
+                    delay = (delay * 2).min(Duration::from_secs(30));
+                }
+            }
+        }
 
         // 6. Build LLM provider
         let llm = LLMBuilder::new()
@@ -199,26 +214,42 @@ impl EphemeraAI {
             self.config.llm.base_url
         );
 
-        let llm = LLMBuilder::new()
-            .backend(LLMBackend::Groq)
-            .api_key(&self.config.llm.api_key)
-            .base_url(&self.config.llm.base_url)
-            .model(&self.config.llm.model)
-            .system("Reply ok.")
-            .build()
-            .map_err(|e| anyhow::anyhow!("Failed to build LLM client: {}", e))?;
+        let mut attempt = 0u32;
+        let mut delay = Duration::from_secs(2);
+        loop {
+            let llm = LLMBuilder::new()
+                .backend(LLMBackend::Groq)
+                .api_key(&self.config.llm.api_key)
+                .base_url(&self.config.llm.base_url)
+                .model(&self.config.llm.model)
+                .system("Reply ok.")
+                .build()
+                .map_err(|e| anyhow::anyhow!("Failed to build LLM client: {}", e))?;
 
-        let response = llm
-            .chat(&[ChatMessage::user().content("hi").build()])
-            .await
-            .map_err(|e| anyhow::anyhow!("LLM API validation failed: {}", e))?;
-
-        info!(
-            "LLM credentials validated successfully. Response: {}",
-            response.text().unwrap_or_default()
-        );
-
-        Ok(())
+            match llm.chat(&[ChatMessage::user().content("hi").build()]).await {
+                Ok(response) => {
+                    info!(
+                        "LLM credentials validated. Response: {}",
+                        response.text().unwrap_or_default()
+                    );
+                    return Ok(());
+                }
+                Err(e) => {
+                    attempt += 1;
+                    if attempt >= 5 {
+                        return Err(anyhow::anyhow!(
+                            "LLM API validation failed after {attempt} attempts: {e}"
+                        ));
+                    }
+                    warn!(
+                        "LLM validation failed (attempt {attempt}/5): {e}. Retrying in {}s...",
+                        delay.as_secs()
+                    );
+                    tokio::time::sleep(delay).await;
+                    delay = (delay * 2).min(Duration::from_secs(30));
+                }
+            }
+        }
     }
 
     pub async fn live(&mut self) -> anyhow::Result<()> {

@@ -9,7 +9,7 @@ use clap::Parser;
 use reqwest::Client;
 use std::path::PathBuf;
 use std::time::Duration;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::prelude::*;
 
 use crate::config::Config;
@@ -66,16 +66,33 @@ async fn main() -> anyhow::Result<()> {
 
     // Login or register to atrium
     info!("Connecting to atrium...");
-    let atrium_client = atrium_client::AuthenticatedClient::connect_and_login_or_register(
-        &config.atrium_url,
-        config.username.clone(),
-        config.password.clone(),
-        config.bio.clone().unwrap_or_default(),
-        http_client.clone(),
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("Failed to connect to atrium: {}", e))?;
-    info!("Successfully connected to atrium");
+    let mut attempt = 0u32;
+    let mut delay = Duration::from_secs(1);
+    let atrium_client = loop {
+        match atrium_client::AuthenticatedClient::connect_and_login_or_register(
+            &config.atrium_url,
+            config.username.clone(),
+            config.password.clone(),
+            config.bio.clone().unwrap_or_default(),
+            http_client.clone(),
+        )
+        .await
+        {
+            Ok(client) => {
+                info!("Successfully connected to atrium");
+                break client;
+            }
+            Err(e) => {
+                attempt += 1;
+                warn!(
+                    "Atrium connection failed (attempt {attempt}): {e}. Retrying in {}s...",
+                    delay.as_secs()
+                );
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(Duration::from_secs(30));
+            }
+        }
+    };
 
     // Create poller
     let mut poller = Poller::new(

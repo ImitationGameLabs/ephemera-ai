@@ -10,6 +10,7 @@ use clap::Parser;
 use sea_orm::{Database, DatabaseConnection};
 use sea_orm_migration::MigratorTrait;
 use std::path::PathBuf;
+use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
@@ -40,14 +41,31 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     // Connect to database
-    let conn: DatabaseConnection = Database::connect(&config.mysql_url).await?;
-    tracing::info!("Connected to database");
+    let mut attempt = 0u32;
+    let mut delay = Duration::from_secs(1);
+    let conn: DatabaseConnection = loop {
+        match Database::connect(&config.mysql_url).await {
+            Ok(db) => {
+                tracing::info!("Connected to database");
+                break db;
+            }
+            Err(e) => {
+                attempt += 1;
+                tracing::warn!(
+                    "MySQL connection failed (attempt {attempt}): {e}. Retrying in {}s...",
+                    delay.as_secs()
+                );
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(Duration::from_secs(30));
+            }
+        }
+    };
 
     // Run migrations
     Migrator::up(&conn, None).await?;
     tracing::info!("Database migrations completed");
 
-    // Create separate managers for users and messages with their own connections
+    // Create separate managers with their own connections
     let user_conn: DatabaseConnection = Database::connect(&config.mysql_url).await?;
     let message_conn: DatabaseConnection = Database::connect(&config.mysql_url).await?;
 

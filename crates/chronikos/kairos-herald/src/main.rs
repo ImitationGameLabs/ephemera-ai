@@ -66,7 +66,22 @@ async fn main() -> Result<()> {
     let kairos_client = KairosClient::new(&config.kairos_url, http_client.clone());
 
     // Register with Agora
-    register_herald(&http_client, &config.agora_url).await?;
+    let mut attempt = 0u32;
+    let mut delay = Duration::from_secs(1);
+    loop {
+        match register_herald(&http_client, &config.agora_url).await {
+            Ok(_) => break,
+            Err(e) => {
+                attempt += 1;
+                warn!(
+                    "Agora registration failed (attempt {attempt}): {e}. Retrying in {}s...",
+                    delay.as_secs()
+                );
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(Duration::from_secs(30));
+            }
+        }
+    }
 
     // Run main loop
     let poll_interval = Duration::from_millis(config.poll_interval_ms);

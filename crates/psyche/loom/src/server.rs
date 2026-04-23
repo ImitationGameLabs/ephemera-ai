@@ -3,7 +3,8 @@ use sea_orm::{Database, DatabaseConnection};
 use sea_orm_migration::MigratorTrait;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tracing::info;
+use std::time::Duration;
+use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
@@ -104,13 +105,27 @@ async fn init_memory_service(config: &Config) -> anyhow::Result<MemoryManager> {
 }
 
 async fn connect_db(config: &Config) -> anyhow::Result<DatabaseConnection> {
-    let mut db_options = sea_orm::ConnectOptions::new(config.mysql.url.clone());
-
-    if let Some(max_conn) = config.mysql.max_connections {
-        db_options.max_connections(max_conn);
+    let mut attempt = 0u32;
+    let mut delay = Duration::from_secs(1);
+    loop {
+        let mut db_options = sea_orm::ConnectOptions::new(config.mysql.url.clone());
+        if let Some(max_conn) = config.mysql.max_connections {
+            db_options.max_connections(max_conn);
+        }
+        match Database::connect(db_options).await {
+            Ok(db) => {
+                info!("Connected to MySQL database");
+                return Ok(db);
+            }
+            Err(e) => {
+                attempt += 1;
+                warn!(
+                    "MySQL connection failed (attempt {attempt}): {e}. Retrying in {}s...",
+                    delay.as_secs()
+                );
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(Duration::from_secs(30));
+            }
+        }
     }
-
-    let db = Database::connect(db_options).await?;
-    info!("Connected to MySQL database");
-    Ok(db)
 }
