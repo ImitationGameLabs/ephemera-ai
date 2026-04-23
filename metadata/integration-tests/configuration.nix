@@ -1,6 +1,11 @@
 { pkgs, ... }:
 {
-  boot.isContainer = true;
+  # Why isNspawnContainer (not isContainer):
+  #   1. --config-file auto-injects container boot settings; --flake uses our
+  #      own config, so we must set this explicitly.
+  #   2. nixos-container uses systemd-nspawn.  isNspawnContainer (which implies
+  #      isContainer) is the correct, more specific option.
+  boot.isNspawnContainer = true;
 
   system.stateVersion = "25.11";
 
