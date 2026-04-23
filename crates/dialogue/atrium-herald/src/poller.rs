@@ -98,7 +98,7 @@ impl Poller {
         debug!("Sending heartbeat to Agora");
 
         let url = format!("{}/heralds/{}/heartbeat", self.agora_url, self.herald_id);
-        let response = self.http_client.put(&url).send().await?;
+        let response = self.http_client.post(&url).send().await?;
 
         if response.status().is_success() {
             debug!("Agora heartbeat sent successfully");
