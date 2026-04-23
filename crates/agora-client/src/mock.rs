@@ -26,7 +26,7 @@ pub enum MockCall {
 /// Mock response types
 #[derive(Debug, Clone)]
 pub enum MockResponse {
-    HealthCheck(String),
+    HealthCheck,
     Events(Vec<Event>),
     Event(Event),
     AckCount(usize),
@@ -79,12 +79,12 @@ impl MockAgoraClient {
     }
 
     /// Add a health check response to the queue
-    pub fn push_health_check(&mut self, response: impl Into<String>) -> &mut Self {
+    pub fn push_health_check(&mut self) -> &mut Self {
         self.state
             .lock()
             .unwrap()
             .responses
-            .push_back(Ok(MockResponse::HealthCheck(response.into())));
+            .push_back(Ok(MockResponse::HealthCheck));
         self
     }
 
@@ -203,12 +203,12 @@ impl MockAgoraClient {
 
 #[async_trait]
 impl AgoraClientTrait for MockAgoraClient {
-    async fn health_check(&self) -> Result<String, AgoraClientError> {
+    async fn health_check(&self) -> Result<(), AgoraClientError> {
         self.record_call(MockCall::HealthCheck);
         match self.pop_response() {
-            Some(Ok(MockResponse::HealthCheck(s))) => Ok(s),
+            Some(Ok(MockResponse::HealthCheck)) => Ok(()),
             Some(Err(e)) => Err(AgoraClientError::ApiError(e)),
-            _ => Ok("OK".to_string()),
+            _ => Ok(()),
         }
     }
 
@@ -315,10 +315,9 @@ mod tests {
     #[tokio::test]
     async fn test_mock_health_check() {
         let mut mock = MockAgoraClient::new();
-        mock.push_health_check("healthy");
+        mock.push_health_check();
 
-        let result = mock.health_check().await.unwrap();
-        assert_eq!(result, "healthy");
+        mock.health_check().await.unwrap();
 
         assert!(mock.was_called(|c| matches!(c, MockCall::HealthCheck)));
     }
@@ -409,7 +408,7 @@ mod tests {
     #[tokio::test]
     async fn test_mock_clear_calls() {
         let mut mock = MockAgoraClient::new();
-        mock.push_health_check("ok");
+        mock.push_health_check();
 
         let _ = mock.health_check().await;
         assert_eq!(mock.get_calls().len(), 1);
@@ -446,12 +445,11 @@ mod tests {
     async fn test_mock_with_trait_object() {
         // Test that mock works through Arc<dyn AgoraClientTrait>
         let mut mock = MockAgoraClient::new();
-        mock.push_health_check("healthy");
+        mock.push_health_check();
 
         let client: Arc<dyn AgoraClientTrait> = Arc::new(mock);
 
-        let result = client.health_check().await.unwrap();
-        assert_eq!(result, "healthy");
+        client.health_check().await.unwrap();
     }
 
     #[tokio::test]
@@ -492,11 +490,11 @@ mod tests {
     #[tokio::test]
     async fn test_mock_chain_configuration() {
         let mut mock = MockAgoraClient::new();
-        mock.push_health_check("ok")
+        mock.push_health_check()
             .push_events(vec![create_test_event(1)])
             .push_ack_count(1);
 
-        let _ = mock.health_check().await.unwrap();
+        mock.health_check().await.unwrap();
         let _ = mock.fetch_events(None).await.unwrap();
         let _ = mock.ack_events(vec![1]).await.unwrap();
 

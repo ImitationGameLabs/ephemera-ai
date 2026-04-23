@@ -12,7 +12,7 @@ use crate::AgoraClientError;
 #[async_trait]
 pub trait AgoraClientTrait: Send + Sync {
     /// Health check - verifies the service is running
-    async fn health_check(&self) -> Result<String, AgoraClientError>;
+    async fn health_check(&self) -> Result<(), AgoraClientError>;
 
     /// Fetches events for delivery (POST /events/fetch)
     /// This changes state: Pending → Delivered

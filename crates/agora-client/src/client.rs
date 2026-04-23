@@ -83,13 +83,23 @@ impl AgoraClient {
 
     /// Health check - verifies the service is running.
     #[instrument(skip(self))]
-    pub async fn health_check(&self) -> Result<String, AgoraClientError> {
+    pub async fn health_check(&self) -> Result<(), AgoraClientError> {
         let url = format!("{}/health", self.base_url);
         debug!("Making health check request to: {}", url);
 
         let response = self.client.get(&url).send().await?;
-        let result: String = Self::handle_response(response).await?;
-        Ok(result)
+        let status = response.status();
+        debug!("Received response from {}: {}", url, status);
+
+        if !status.is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(AgoraClientError::ApiError(format!(
+                "HTTP {}: {}",
+                status, error_text
+            )));
+        }
+
+        Ok(())
     }
 
     // === Event operations ===
@@ -172,7 +182,7 @@ impl AgoraClient {
 
 #[async_trait]
 impl AgoraClientTrait for AgoraClient {
-    async fn health_check(&self) -> Result<String, AgoraClientError> {
+    async fn health_check(&self) -> Result<(), AgoraClientError> {
         AgoraClient::health_check(self).await
     }
 
