@@ -139,7 +139,12 @@ in
   config = {
     services.ephemera.epha-ai._configJson = settingsFormat.generate "epha-ai.json" cfg.settings;
 
-    home.packages = lib.mkIf (cfg.enable && cfg.installCtlPackage) [ cfg.ctlPackage ];
+    home.packages = lib.mkIf (cfg.enable && cfg.installCtlPackage) [
+      (pkgs.writeShellScriptBin "epha-ctl" ''
+        export EPHA_CONFIG_DIR=${config.services.ephemera._configDir}
+        exec ${cfg.ctlPackage}/bin/epha-ctl "$@"
+      '')
+    ];
 
     systemd.user.services.epha-ai = lib.mkIf cfg.enable (
       let
