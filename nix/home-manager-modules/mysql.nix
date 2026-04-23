@@ -35,7 +35,7 @@ in
 
           image = lib.mkOption {
             type = lib.types.str;
-            default = "docker.io/mysql:8.0";
+            default = "docker.io/mysql:8.4";
             description = "MySQL container image";
           };
 

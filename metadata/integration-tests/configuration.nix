@@ -29,7 +29,7 @@
   # MySQL for integration test (shared server for loom + atrium)
   services.mysql = {
     enable = true;
-    package = pkgs.mysql80;
+    package = pkgs.mysql84;
     initialScript = pkgs.writeText "mysql-init.sql" ''
       CREATE DATABASE IF NOT EXISTS psyche_loom;
       CREATE DATABASE IF NOT EXISTS dialogue_atrium;

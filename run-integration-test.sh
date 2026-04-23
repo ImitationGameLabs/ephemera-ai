@@ -21,9 +21,11 @@ done
 # 1. Resolve flake source and nixpkgs to /nix/store paths (shared with container)
 FLAKE_SOURCE=$(nix flake metadata --json "$REPO_ROOT" | jq -r '.path')
 NIXPKGS_PATH=$(nix flake archive --json "$REPO_ROOT" | jq -r '.inputs.nixpkgs.path')
+HM_PATH=$(nix flake archive --json "$REPO_ROOT/templates/default" | jq -r '.inputs."home-manager".path')
 
 echo "FLAKE_SOURCE=$FLAKE_SOURCE"
 echo "NIXPKGS_PATH=$NIXPKGS_PATH"
+echo "HM_PATH=$HM_PATH"
 
 # 2. Pre-build packages on host
 echo "Building ephemera-ai packages..."
@@ -31,7 +33,7 @@ nix build "$REPO_ROOT#default" -L
 
 # 3. Create & start container
 echo "Creating NixOS container..."
-sudo nixos-container create "$CONTAINER_NAME" --config-file "$REPO_ROOT/metadata/integration-tests/configuration.nix"
+sudo nixos-container create "$CONTAINER_NAME" --flake "$REPO_ROOT/metadata/integration-tests"
 
 echo "Starting container..."
 sudo nixos-container start "$CONTAINER_NAME"
@@ -62,6 +64,7 @@ sudo nixos-container run "$CONTAINER_NAME" -- su - ephemera -c '
   # Replace flake inputs with local /nix/store paths
   sed -i "s|url = \"github:ImitationGameLabs/ephemera-ai\";|url = \"path:'"$FLAKE_SOURCE"'\";|" /home/ephemera/config/flake.nix
   sed -i "s|url = \"github:nixos/nixpkgs/nixos-unstable\";|url = \"path:'"$NIXPKGS_PATH"'\";|" /home/ephemera/config/flake.nix
+  sed -i "s|url = \"github:nix-community/home-manager\";|url = \"path:'"$HM_PATH"'\";|" /home/ephemera/config/flake.nix
 
   # Inject integration-test grounding append (the brief-existence philosophical framing)
   sed -i "s|prompt_append_file = null;|prompt_append_file = \"'"$FLAKE_SOURCE"'/metadata/integration-tests/prompts/integration-test-append.md\";|" /home/ephemera/config/ephemera-ai.nix
