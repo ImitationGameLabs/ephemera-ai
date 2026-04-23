@@ -192,6 +192,35 @@ impl EphemeraAI {
         })
     }
 
+    /// Validate LLM credentials by sending a test message through a temporary client.
+    pub async fn validate_llm_access(&self) -> anyhow::Result<()> {
+        info!(
+            "Validating LLM credentials at: {}",
+            self.config.llm.base_url
+        );
+
+        let llm = LLMBuilder::new()
+            .backend(LLMBackend::Groq)
+            .api_key(&self.config.llm.api_key)
+            .base_url(&self.config.llm.base_url)
+            .model(&self.config.llm.model)
+            .system("Reply ok.")
+            .build()
+            .map_err(|e| anyhow::anyhow!("Failed to build LLM client: {}", e))?;
+
+        let response = llm
+            .chat(&[ChatMessage::user().content("hi").build()])
+            .await
+            .map_err(|e| anyhow::anyhow!("LLM API validation failed: {}", e))?;
+
+        info!(
+            "LLM credentials validated successfully. Response: {}",
+            response.text().unwrap_or_default()
+        );
+
+        Ok(())
+    }
+
     pub async fn live(&mut self) -> anyhow::Result<()> {
         self.record_startup_event().await;
         loop {

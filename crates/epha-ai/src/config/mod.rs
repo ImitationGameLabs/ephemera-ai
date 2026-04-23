@@ -1,3 +1,3 @@
 mod schema;
 
-pub use schema::{Config, ContextConfig, LlmConfig};
+pub use schema::{Config, ContextConfig};
