@@ -18,14 +18,10 @@ for var in LLM_BASE_URL LLM_MODEL LLM_API_KEY; do
   fi
 done
 
-# 1. Resolve flake source and nixpkgs to /nix/store paths (shared with container)
+# 1. Resolve flake source to /nix/store path
 FLAKE_SOURCE=$(nix flake metadata --json "$REPO_ROOT" | jq -r '.path')
-NIXPKGS_PATH=$(nix flake archive --json "$REPO_ROOT" | jq -r '.inputs.nixpkgs.path')
-HM_PATH=$(nix flake archive --json "$REPO_ROOT/templates/default" | jq -r '.inputs."home-manager".path')
 
 echo "FLAKE_SOURCE=$FLAKE_SOURCE"
-echo "NIXPKGS_PATH=$NIXPKGS_PATH"
-echo "HM_PATH=$HM_PATH"
 
 # 2. Pre-build packages on host
 echo "Building ephemera-ai packages..."
@@ -39,44 +35,40 @@ echo "Starting container..."
 sudo nixos-container start "$CONTAINER_NAME"
 sleep 3
 
-# 4. Copy templates/default into container
-echo "Copying templates/default into container..."
-sudo nixos-container run "$CONTAINER_NAME" -- mkdir -p /home/ephemera
-sudo nixos-container run "$CONTAINER_NAME" -- cp --no-preserve=mode -r "$FLAKE_SOURCE/templates/default" /home/ephemera/config
-sudo nixos-container run "$CONTAINER_NAME" -- chown -R 1000:1000 /home/ephemera/config
+# 4. Initialize template in container via nix flake init
+echo "Initializing template via nix flake init..."
+sudo nixos-container run "$CONTAINER_NAME" -- su - ephemera -c "mkdir -p /home/ephemera/.config/home-manager && cd /home/ephemera/.config/home-manager && nix flake init -t path:$FLAKE_SOURCE"
 
 # 5. Patch config for integration test (LLM credentials + direct MySQL)
 sudo nixos-container run "$CONTAINER_NAME" -- su - ephemera -c '
   # LLM credentials
-  sed -i "s|base_url = .*|base_url = \"'"$LLM_BASE_URL"'\";|" /home/ephemera/config/ephemera-ai.nix
-  sed -i "s|model = .*|model = \"'"$LLM_MODEL"'\";|" /home/ephemera/config/ephemera-ai.nix
-  sed -i "s|api_key = .*|api_key = \"'"$LLM_API_KEY"'\";|" /home/ephemera/config/ephemera-ai.nix
+  sed -i "s|base_url = .*|base_url = \"'"$LLM_BASE_URL"'\";|" /home/ephemera/.config/home-manager/ephemera-ai.nix
+  sed -i "s|model = .*|model = \"'"$LLM_MODEL"'\";|" /home/ephemera/.config/home-manager/ephemera-ai.nix
+  sed -i "s|api_key = .*|api_key = \"'"$LLM_API_KEY"'\";|" /home/ephemera/.config/home-manager/ephemera-ai.nix
 
   # Remove Podman mysql instances block
-  sed -i "/# MySQL instances/,/^  };/d" /home/ephemera/config/ephemera-ai.nix
+  sed -i "/# MySQL instances/,/^  };/d" /home/ephemera/.config/home-manager/ephemera-ai.nix
 
   # Loom: use direct MySQL connection
-  sed -i "s|mysql = \"loom-mysql\";|mysql = null; mysql_url = \"mysql://epha:integration-test-pass@localhost:3306/psyche_loom\";|" /home/ephemera/config/ephemera-ai.nix
+  sed -i "s|mysql = \"loom-mysql\";|mysql = null; mysql_url = \"mysql://epha:integration-test-pass@localhost:3306/psyche_loom\";|" /home/ephemera/.config/home-manager/ephemera-ai.nix
 
   # Atrium: use direct MySQL connection
-  sed -i "s|mysql = \"atrium-mysql\";|mysql = null; mysql_url = \"mysql://epha:integration-test-pass@localhost:3306/dialogue_atrium\";|" /home/ephemera/config/ephemera-ai.nix
+  sed -i "s|mysql = \"atrium-mysql\";|mysql = null; mysql_url = \"mysql://epha:integration-test-pass@localhost:3306/dialogue_atrium\";|" /home/ephemera/.config/home-manager/ephemera-ai.nix
 
-  # Replace flake inputs with local /nix/store paths
-  sed -i "s|url = \"github:ImitationGameLabs/ephemera-ai\";|url = \"path:'"$FLAKE_SOURCE"'\";|" /home/ephemera/config/flake.nix
-  sed -i "s|url = \"github:nixos/nixpkgs/nixos-unstable\";|url = \"path:'"$NIXPKGS_PATH"'\";|" /home/ephemera/config/flake.nix
-  sed -i "s|url = \"github:nix-community/home-manager\";|url = \"path:'"$HM_PATH"'\";|" /home/ephemera/config/flake.nix
+  # Replace ephemera-ai flake input with local /nix/store path
+  sed -i "s|url = \"github:ImitationGameLabs/ephemera-ai\";|url = \"path:'"$FLAKE_SOURCE"'\";|" /home/ephemera/.config/home-manager/flake.nix
 
   # Inject integration-test grounding append (the brief-existence philosophical framing)
-  sed -i "s|prompt_append_file = null;|prompt_append_file = \"'"$FLAKE_SOURCE"'/metadata/integration-tests/prompts/integration-test-append.md\";|" /home/ephemera/config/ephemera-ai.nix
+  sed -i "s|prompt_append_file = null;|prompt_append_file = \"'"$FLAKE_SOURCE"'/metadata/integration-tests/prompts/integration-test-append.md\";|" /home/ephemera/.config/home-manager/ephemera-ai.nix
 
   # Enable debug logging for all ephemera services (scoped: debug for our code, warn for third-party crates)
-  sed -i "s|log_level = \"info\";|log_level = \"debug,hyper=warn,reqwest=warn,h2=warn,tower=warn,sqlx=warn\";|g" /home/ephemera/config/ephemera-ai.nix
+  sed -i "s|log_level = \"info\";|log_level = \"debug,hyper=warn,reqwest=warn,h2=warn,tower=warn,sqlx=warn\";|g" /home/ephemera/.config/home-manager/ephemera-ai.nix
 '
 
 # 6. Run home-manager switch
 # echo "Running home-manager switch..."
 sudo nixos-container run "$CONTAINER_NAME" -- su - ephemera -c "
-  cd /home/ephemera/config &&
+  cd /home/ephemera/.config/home-manager &&
   home-manager switch --flake .
 "
 
