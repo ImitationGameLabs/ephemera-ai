@@ -11,7 +11,7 @@
     settings = {
       llm = {
         base_url = "https://api.deepseek.com";
-        model = "deepseek-chat";
+        model = "deepseek-v4-flash";
         max_turns = 20;
         api_key = "sk-xxx";
       };
@@ -26,12 +26,16 @@
         url = "http://localhost:3000";
       };
 
+      # Token budget tuned for deepseek-v4-flash (1M context window).
+      # Eviction triggers at ceiling (640K) and stops at floor (64K).
+      # Floor must exceed runtime static_overhead (~3K) + response_reserve.
+      # Values are approximate round numbers (not power-of-2) for readability.
       context = {
-        max_pinned_tokens = 10000;
-        total_token_floor = 4000;
-        total_token_ceiling = 100000;
-        response_reserve_tokens = 4096;
-        min_activities = 2;
+        max_pinned_tokens = 32000;
+        total_token_floor = 64000;
+        total_token_ceiling = 640000;
+        response_reserve_tokens = 12000;
+        min_activities = 20;
       };
 
       # Optional: append a Markdown file to the grounding prompt.
